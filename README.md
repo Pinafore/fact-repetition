@@ -1,5 +1,13 @@
 # fact-repetition
 
+## Running Allennlp reader
+
+This command will test that the model and data load correctly, then output some statistics
+about the dataset.
+```python
+$ allennlp dry-run --include-package fact configs/baseline.jsonnet
+```
+
 ## Data
 ### Question-Oriented Data
 
