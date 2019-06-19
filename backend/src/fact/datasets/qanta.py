@@ -28,7 +28,7 @@ QANTA_TRAIN = 'data/expanded.qanta.train.2018.04.18.json'
 QANTA_DEV = 'data/expanded.qanta.dev.2018.04.18.json'
 QANTA_TEST = 'data/expanded.qanta.test.2018.04.18.json'
 
-USER_HASH = 'data/protobowl_byuser_hash'
+USER_HASH = 'data/protobowl_byuser_hash.json'
 
 @DatasetReader.register('qanta')
 class QantaReader(DatasetReader):
@@ -52,20 +52,21 @@ class QantaReader(DatasetReader):
         with open(USER_HASH) as user_file:
             user_hash = json.load(user_file)['data']
 
+        #the following code opens an expanded QANTA file containing questions along with
+        #statistics for those questions.  It then sees what user is answering the question 
+        #and integrates relevant information for that user.
         with open(file_path) as f:
             for q in json.load(f)['questions']:
                 relevant_users = q['questions_stats']['users_per_question']
                 for user in relevant_users:
                     user_data = user_hash[user]
-
                     if q['page'] is not None and q['fold'] == self._fold:
-
                         #logic to calculate how much of question the user had seen
                         index_of_user = q['question_stats']['users_per_questions'].index(user)
                         question_percent_seen = q['question_stats']['length_per_question'][index_of_user]
                         index =  math.floor(len(q['text'] ) * question_percent_seen)
-
                         seen_data = q['text'][0:index]
+                        #extract relevant features from the expanded QANTA data and the user data
                         instance = self.text_to_instance(seen_data, answer=q['page'], qanta_id=q['qanta_id'],
                                                              #question features
                                                              length_per_question = q['question_stats']['length_per_question'],
