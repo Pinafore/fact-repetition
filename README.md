@@ -2,11 +2,19 @@
 
 ## Running Allennlp reader
 
+To not depend on the model, this should run without error:
+```python
+from fact.datasets.qanta import QantaReader, QANTA_TRAIN
+
+instances = QantaReader().read(QANTA_TRAIN)
+```
+
 This command will test that the model and data load correctly, then output some statistics
 about the dataset.
 ```python
 $ allennlp dry-run --include-package fact configs/baseline.jsonnet
 ```
+
 
 ## Data
 ### Question-Oriented Data
