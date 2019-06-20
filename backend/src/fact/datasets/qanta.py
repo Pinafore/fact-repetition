@@ -19,10 +19,10 @@ from allennlp.data.tokenizers.word_stemmer import PassThroughWordStemmer
 from allennlp.data.tokenizers.word_filter import PassThroughWordFilter
 from allennlp.data.token_indexers.elmo_indexer import ELMoTokenCharactersIndexer
 
-#from fact.util import get_logger
+from fact.util import get_logger
 
 
-#log = get_logger(__name__)
+log = get_logger(__name__)
 
 QANTA_TRAIN = 'data/expanded.qanta.train.2018.04.18.json'
 QANTA_DEV = 'data/expanded.qanta.dev.2018.04.18.json'
@@ -33,15 +33,11 @@ USER_HASH = 'data/protobowl_byuser_hash.json'
 @DatasetReader.register('qanta')
 class QantaReader(DatasetReader):
     def __init__(self,
-                 fold: str,
-                 break_questions: bool,
                  lazy: bool = False,
                  tokenizer: Tokenizer = None,
                  token_indexers: Dict[str, TokenIndexer] = None):
         super().__init__(lazy)
         # guesstrain, guessdev, guesstest, buzztrain, buzzdev, buzztest
-        self._fold = fold
-        self._break_questions = break_questions
         self._tokenizer = tokenizer or WordTokenizer(SpacyWordSplitter())
         # TODO: Add character indexer
         self._token_indexers = token_indexers or {'tokens': SingleIdTokenIndexer()}
@@ -57,12 +53,12 @@ class QantaReader(DatasetReader):
         #and integrates relevant information for that user.
         with open(file_path) as f:
             for q in json.load(f)['questions']:
-                relevant_users = q['questions_stats']['users_per_question']
+                relevant_users = q['question_stats']['users_per_question']
                 for user in relevant_users:
                     user_data = user_hash[user]
-                    if q['page'] is not None and q['fold'] == self._fold:
+                    if q['page'] is not None:
                         #logic to calculate how much of question the user had seen
-                        index_of_user = q['question_stats']['users_per_questions'].index(user)
+                        index_of_user = q['question_stats']['users_per_question'].index(user)
                         question_percent_seen = q['question_stats']['length_per_question'][index_of_user]
                         index =  math.floor(len(q['text'] ) * question_percent_seen)
                         seen_data = q['text'][0:index]
@@ -75,8 +71,8 @@ class QantaReader(DatasetReader):
                                                              accuracy_per_question = q['question_stats']['accuracy_per_question'],
 
                                                              #user features
-                                                             user_length_ratios = user_data['length_per_user'],
-                                                             overall_length = user_data['overall_length_per_user'],
+                                                             length_per_user = user_data['length_per_user'],
+                                                             overall_length_per_user = user_data['overall_length_per_user'],
                                                              accuracy_per_user = user_data['accuracy_per_user'],
                                                              overall_accuracy_per_user = user_data['overall_accuracy_per_user']
                                                              )
@@ -87,16 +83,16 @@ class QantaReader(DatasetReader):
                          text: str,
                          answer: str = None,
                          qanta_id: int = None,
-                         length_per_question: List[float] = None,
-                         overall_length_per_question: float = None,
-                         accuracy_per_question: float= None,
-                         overall_accuracy_per_question: List[bool] = None,
+                         length_per_question: List[float] = [1],
+                         overall_length_per_question: float = 1,
+                         accuracy_per_question: List[bool] = [True],
+                         overall_accuracy_per_question: float = 1,
 
                          # user features
-                         length_per_user: float = None,
-                         overall_length_per_user: List[float] = None,
-                         accuracy_per_user: List[bool] = None,
-                         overall_accuracy_per_user: bool = None
+                         length_per_user: List[float] = [1],
+                         overall_length_per_user: float = 1,
+                         accuracy_per_user: List[bool] = [True],
+                         overall_accuracy_per_user: float = 1
                         ):
 
         fields: Dict[str, Field] = {}
@@ -106,18 +102,7 @@ class QantaReader(DatasetReader):
         fields['text'] = TextField(tokenized_text, token_indexers=self._token_indexers)
         if answer is not None:
             fields['answer'] = LabelField(answer, label_namespace='answer_labels')
-
         fields['metadata'] = MetadataField({'qanta_id': qanta_id})
-
-        field['question_features'] = ArrayField({'length_per_question':length_per_question,
-                                            'overall_length_per_question': overall_length_per_question,
-                                           'overall_accuracy_per_question':overall_accuracy_per_question,
-                                           'individual_accuracy_per_question':accuracy_per_question})
-
-        field['user_features'] = ArrayField({'length_per_user': length_per_user,
-                                            'overall_length_per_user': overall_length_per_user,
-                                             'accuracy_per_user':accuracy_per_user,
-                                            'overall accuracy_per_user': overall_accuracy_per_user
-                                           })
-
+        fields['question_features'] = ArrayField(np.array([overall_length_per_question, overall_accuracy_per_question]))
+        fields['user_features'] = ArrayField(np.array([overall_length_per_user, overall_accuracy_per_user]))
         return Instance(fields)
