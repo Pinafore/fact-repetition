@@ -11,12 +11,12 @@ instances = QantaReader().read(QANTA_TRAIN)
 
 This command will test that the model and data load correctly, then output some statistics
 about the dataset.
-```python
+```bash
 $ allennlp dry-run --include-package fact configs/baseline.jsonnet
 ```
 
 ## Training model
-```python
+```bash
 $ allennlp train --include-package fact -s trained-models/baseline configs/baseline.jsonnet
 ```
 
