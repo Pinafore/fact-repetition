@@ -15,6 +15,11 @@ about the dataset.
 $ allennlp dry-run --include-package fact configs/baseline.jsonnet
 ```
 
+## Training model
+```python
+$ allennlp train --include-package fact -s trained-models/baseline configs/baseline.jsonnet
+```
+
 
 ## Data
 ### Question-Oriented Data
