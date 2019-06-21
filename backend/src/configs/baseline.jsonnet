@@ -11,4 +11,15 @@
         # This matches the name registered in fact/models/baseline.py
         type: 'baseline'
     },
+    iterator: {
+        type: 'bucket',
+        batch_size: 128
+    },
+    trainer: {
+        optimizer: {'type': 'adam'},
+        num_serialized_models_to_keep: 2,
+        num_epochs: 50,
+        patience: 3,
+        cuda_device: 0
+    },
 }
