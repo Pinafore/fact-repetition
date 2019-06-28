@@ -17,7 +17,7 @@ def condense():
                 if data['object']['qid'] == 'question_id':
                     continue
                 #time_remaining is ACTUAL total time in the original log
-                guess_ratio = round(data['object']['time_elapsed'] /data['object']['time_remaining'],4)
+                guess_ratio = round(data['object']['time_elapsed'] / data['object']['time_remaining'],4)
                 #pull out relevant variables
                 output.append({'qid':data['object']['qid'], 
                                'user_id':data['object']['user']['id'], 
