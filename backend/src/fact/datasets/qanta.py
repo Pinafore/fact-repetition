@@ -54,7 +54,9 @@ class QantaReader(DatasetReader):
         with open(file_path) as f:
             for q in json.load(f)['questions']:
                 relevant_users = q['question_stats']['users_per_question']
-                for user in relevant_users:
+                # for user in relevant_users:
+                for i in range of (len(relevant_users)):
+                    user = relevant_users[i]
                     user_data = user_hash[user]
                     if q['page'] is not None:
                         #logic to calculate how much of question the user had seen
@@ -75,6 +77,7 @@ class QantaReader(DatasetReader):
                                                              overall_length_per_user = user_data['overall_length_per_user'],
                                                              accuracy_per_user = user_data['accuracy_per_user'],
                                                              overall_accuracy_per_user = user_data['overall_accuracy_per_user']
+                                                             ruling = q['question_stats']['accuracy_per_question'][i]
                                                              )
                         if instance is not None:
                              yield instance
@@ -93,6 +96,7 @@ class QantaReader(DatasetReader):
                          overall_length_per_user: float = 1,
                          accuracy_per_user: List[bool] = [True],
                          overall_accuracy_per_user: float = 1
+                         ruling: bool = True,
                         ):
 
         fields: Dict[str, Field] = {}
@@ -105,4 +109,6 @@ class QantaReader(DatasetReader):
         fields['metadata'] = MetadataField({'qanta_id': qanta_id})
         fields['question_features'] = ArrayField(np.array([overall_length_per_question, overall_accuracy_per_question]))
         fields['user_features'] = ArrayField(np.array([overall_length_per_user, overall_accuracy_per_user]))
+        fields['overall_accuracy_per_user'] = ArrayField(np.array([overall_accuracy_per_user]))
+        fields['ruling'] = 
         return Instance(fields)
