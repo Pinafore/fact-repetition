@@ -54,7 +54,9 @@ class QantaReader(DatasetReader):
         with open(file_path) as f:
             for q in json.load(f)['questions']:
                 relevant_users = q['question_stats']['users_per_question']
-                for user in relevant_users:
+                # for user in relevant_users:
+                for i in range of (len(relevant_users)):
+                    user = relevant_users[i]
                     user_data = user_hash[user]
                     if q['page'] is not None:
                         #logic to calculate how much of question the user had seen
@@ -62,6 +64,7 @@ class QantaReader(DatasetReader):
                         question_percent_seen = q['question_stats']['length_per_question'][index_of_user]
                         index =  math.floor(len(q['text'] ) * question_percent_seen)
                         seen_data = q['text'][0:index]
+                        ruling = q['question_stats']['accuracy_per_question'][i]
                         #extract relevant features from the expanded QANTA data and the user data
                         instance = self.text_to_instance(seen_data, answer=q['page'], qanta_id=q['qanta_id'],
                                                              #question features
