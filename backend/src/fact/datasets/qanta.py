@@ -105,4 +105,5 @@ class QantaReader(DatasetReader):
         fields['metadata'] = MetadataField({'qanta_id': qanta_id})
         fields['question_features'] = ArrayField(np.array([overall_length_per_question, overall_accuracy_per_question]))
         fields['user_features'] = ArrayField(np.array([overall_length_per_user, overall_accuracy_per_user]))
+        fields['overall_accuracy_per_user'] = ArrayField(np.array([overall_accuracy_per_user]))
         return Instance(fields)
