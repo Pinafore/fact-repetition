@@ -32,7 +32,7 @@ class Baseline(Model):
         word_embeddings = BasicTextFieldEmbedder({"tokens": token_embedding})
         self._text_field_embedder = word_embeddings
         self._seq2vec_encoder = seq2vec_encoder
-        self._classifier_input_dim = self._seq2vec_encoder.get_output_dim()
+        self._classifier_input_dim = self._seq2vec_encoder.get_output_dim() + 4
         
         if dropout != 0:
             self._dropout = nn.Dropout(dropout)
@@ -68,7 +68,11 @@ class Baseline(Model):
         embedded_text = self._dropout(embedded_text)
         embedded_text = self._seq2vec_encoder(embedded_text, mask=mask)
         print("embedded_text: ", type(embedded_text), 'dim ', embedded_text.dim(), 'size', embedded_text.size())
-        logits = self._classification_layer(embedded_text)
+        # features = torch.cat((question_features, user_features), dim=0)
+        # print("features: ", features.size())
+        embeddings = torch.cat((embedded_text, question_features, user_features), dim=1)
+        print("embeddings: ", embeddings.size())
+        logits = self._classification_layer(embeddings)
         probs = torch.nn.functional.softmax(logits, dim=-1)
         output_dict = {'logits': logits, 'probs': probs}
 
