@@ -2,10 +2,12 @@ from typing import Dict
 import numpy as np
 import torch
 from torch import nn
+from allennlp.nn import InitializerApplicator
 from allennlp.data import Vocabulary
 from allennlp.models import Model
 from allennlp.modules import (
-    Seq2VecEncoder, TextFieldEmbedder, 
+    Seq2SeqEncoder, Seq2VecEncoder, 
+    TextFieldEmbedder
 )
 from allennlp.modules.seq2vec_encoders.boe_encoder import BagOfEmbeddingsEncoder
 from allennlp.modules.text_field_embedders import TextFieldEmbedder, BasicTextFieldEmbedder
@@ -17,24 +19,35 @@ from allennlp.training.metrics import CategoricalAccuracy
 class Baseline(Model):
     def __init__(self, 
                 vocab: Vocabulary,
-                # text_field_embedder: TextFieldEmbedder,
-                # seq2vec_encoder: Seq2VecEncoder
-):
+                text_field_embedder: TextFieldEmbedder,
+                seq2vec_encoder: Seq2VecEncoder,
+                dropout: float,
+                num_labels: int = None,
+                initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
 
-        EMBEDDING_DIM = 50
-        HIDDEN_DIM = 6
+        EMBEDDING_DIM = 100
         token_embedding = Embedding(num_embeddings=vocab.get_vocab_size('tokens'),
                             embedding_dim=EMBEDDING_DIM)
         word_embeddings = BasicTextFieldEmbedder({"tokens": token_embedding})
-        dan = BagOfEmbeddingsEncoder(embedding_dim=EMBEDDING_DIM, averaged=True)
-
         self._text_field_embedder = word_embeddings
-        self._seq2vec_encoder = dan
-        self._classification_layer = torch.nn.Linear(in_features =self._text_field_embedder.get_output_dim(),
-                                            out_features = 1)
-        self._loss = nn.BCEWithLogitsLoss()
+        self._seq2vec_encoder = seq2vec_encoder
+        self._classifier_input_dim = self._seq2vec_encoder.get_output_dim()
+        
+        if dropout != 0:
+            self._dropout = nn.Dropout(dropout)
+        else:
+            self._dropout = lambda x: x
+
+        self._num_labels = 2
+
+        classification_layer = [nn.Linear(self._classifier_input_dim, self._num_labels)]
+        if dropout != 0:
+            classification_layer.append(nn.Dropout(dropout))
+        self._classification_layer = nn.Sequential(*classification_layer)
         self._accuracy = CategoricalAccuracy()
+        self._loss = torch.nn.CrossEntropyLoss()
+        initializer(self)
 
     # Change these to match the text_to_instance argument names
     def forward(self,
@@ -43,33 +56,32 @@ class Baseline(Model):
                 metadata: Dict,
                 question_features: np.ndarray,
                 user_features: np.ndarray,
-                overall_accuracy_per_user: np.ndarray,
+                label: torch.Tensor = None,
                 ):
         # This is where all the modeling stuff goes
         # AllenNLP requires that if there are training labels,
         # that a dictionary with key "loss" be returned.
         # You can stuff anything else in the dictionary that might be helpful
         # later.
-        mask = get_text_field_mask(text)
-        question_embeddings = self._text_field_embedder(text)
-        question_encoder_out = self._seq2vec_encoder(question_embeddings, mask)
-        # encoder_out = torch.cat((question_encoder_out.detach, question_features, user_features), 0)
-        encoder_out = question_encoder_out
-        logits = self._classification_layer(encoder_out)
-        output = {"logits": logits}
-        if overall_accuracy_per_user is not None:
-            print("logits: ", logits)
-            print("logits type: ", type(logits))
-            print("logits size: ", logits.size())
-            print("logits dim: ", logits.dim())
-            print("overall_accuracy_per_user: ", overall_accuracy_per_user)
-            print("overall_accuracy_per_user type: ", type(overall_accuracy_per_user))
-            print("overall_accuracy_per_user size: ", overall_accuracy_per_user.size())
-            print("overall_accuracy_per_user dim: ", overall_accuracy_per_user.dim())
-            # self._accuracy(logits, overall_accuracy_per_user, mask)
-            output["loss"] = self._loss(logits, overall_accuracy_per_user)
-        output["loss"] = self._loss(logits, overall_accuracy_per_user)
-        return output
+        embedded_text = self._text_field_embedder(text)
+        mask = get_text_field_mask(text).float()
+        embedded_text = self._dropout(embedded_text)
+        embedded_text = self._seq2vec_encoder(embedded_text, mask=mask)
+        print("embedded_text: ", type(embedded_text), 'dim ', embedded_text.dim(), 'size', embedded_text.size())
+        logits = self._classification_layer(embedded_text)
+        probs = torch.nn.functional.softmax(logits, dim=-1)
+        output_dict = {'logits': logits, 'probs': probs}
+
+        if label is not None:
+            loss = self._loss(
+                # Empirically we have found dropping out after logits works better
+                self._dropout(logits),
+                label.long().view(-1)
+            )
+            output_dict['loss'] = loss
+            self._accuracy(logits, label)
+
+        return output_dict
 
     # def get_metrics(self, reset: bool = False) -> Dict[str, float]:
     #     return {"accuracy": self.accuracy.get_metric(reset)}    
