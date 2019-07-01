@@ -67,11 +67,11 @@ class Baseline(Model):
         mask = get_text_field_mask(text).float()
         embedded_text = self._dropout(embedded_text)
         embedded_text = self._seq2vec_encoder(embedded_text, mask=mask)
-        print("embedded_text: ", type(embedded_text), 'dim ', embedded_text.dim(), 'size', embedded_text.size())
+        # print("embedded_text: ", type(embedded_text), 'dim ', embedded_text.dim(), 'size', embedded_text.size())
         # features = torch.cat((question_features, user_features), dim=0)
         # print("features: ", features.size())
         embeddings = torch.cat((embedded_text, question_features, user_features), dim=1)
-        print("embeddings: ", embeddings.size())
+        # print("embeddings: ", embeddings.size())
         logits = self._classification_layer(embeddings)
         probs = torch.nn.functional.softmax(logits, dim=-1)
         output_dict = {'logits': logits, 'probs': probs}
@@ -87,5 +87,5 @@ class Baseline(Model):
 
         return output_dict
 
-    # def get_metrics(self, reset: bool = False) -> Dict[str, float]:
-    #     return {"accuracy": self.accuracy.get_metric(reset)}    
+    def get_metrics(self, reset: bool = False) -> Dict[str, float]:
+        return {"accuracy": self.accuracy.get_metric(reset)}    
