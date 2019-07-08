@@ -88,4 +88,5 @@ class Baseline(Model):
         return output_dict
 
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
-        return {"accuracy": self.accuracy.get_metric(reset)}    
+        metrics = {'accuracy': self._accuracy.get_metric(reset)}
+        return metrics 
