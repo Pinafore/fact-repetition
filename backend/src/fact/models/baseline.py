@@ -26,36 +26,39 @@ class Baseline(Model):
                 initializer: InitializerApplicator = InitializerApplicator()):
         super().__init__(vocab)
 
-        EMBEDDING_DIM = 100
-        token_embedding = Embedding(num_embeddings=vocab.get_vocab_size('tokens'),
-                            embedding_dim=EMBEDDING_DIM)
-        word_embeddings = BasicTextFieldEmbedder({"tokens": token_embedding})
-        self._text_field_embedder = word_embeddings
-        self._seq2vec_encoder = seq2vec_encoder
-        self._classifier_input_dim = self._seq2vec_encoder.get_output_dim() + 4
+        # EMBEDDING_DIM = 100
+        # token_embedding = Embedding(num_embeddings=vocab.get_vocab_size('tokens'),
+        #                     embedding_dim=EMBEDDING_DIM)
+        # word_embeddings = BasicTextFieldEmbedder({"tokens": token_embedding})
+        # self._text_field_embedder = word_embeddings
+        # self._seq2vec_encoder = seq2vec_encoder
+        # self._classifier_input_dim = self._seq2vec_encoder.get_output_dim() + 4
+        self._classifier_input_dim = 1
         
-        if dropout != 0:
-            self._dropout = nn.Dropout(dropout)
-        else:
-            self._dropout = lambda x: x
+        # if dropout != 0:
+        #     self._dropout = nn.Dropout(dropout)
+        # else:
+        #     self._dropout = lambda x: x
 
         self._num_labels = 2
 
-        classification_layer = [nn.Linear(self._classifier_input_dim, self._num_labels)]
-        if dropout != 0:
-            classification_layer.append(nn.Dropout(dropout))
-        self._classification_layer = nn.Sequential(*classification_layer)
+        # classification_layer = [nn.Linear(self._classifier_input_dim, self._num_labels)]
+        classification_layer = nn.Linear(self._classifier_input_dim, self._num_labels)
+        # if dropout != 0:
+        #     classification_layer.append(nn.Dropout(dropout))
+        # self._classification_layer = nn.Sequential(*classification_layer)
+        self._classification_layer = classification_layer
         self._accuracy = CategoricalAccuracy()
         self._loss = torch.nn.CrossEntropyLoss()
         initializer(self)
 
     # Change these to match the text_to_instance argument names
     def forward(self,
-                text: Dict[str, torch.Tensor],
-                answer: torch.Tensor,
-                metadata: Dict,
+                # text: Dict[str, torch.Tensor],
+                # answer: torch.Tensor,
+                # metadata: Dict,
                 question_features: np.ndarray,
-                user_features: np.ndarray,
+                # user_features: np.ndarray,
                 label: torch.Tensor = None,
                 ):
         # This is where all the modeling stuff goes
@@ -63,25 +66,19 @@ class Baseline(Model):
         # that a dictionary with key "loss" be returned.
         # You can stuff anything else in the dictionary that might be helpful
         # later.
-        embedded_text = self._text_field_embedder(text)
-        mask = get_text_field_mask(text).float()
-        embedded_text = self._dropout(embedded_text)
-        embedded_text = self._seq2vec_encoder(embedded_text, mask=mask)
-        # print("embedded_text: ", type(embedded_text), 'dim ', embedded_text.dim(), 'size', embedded_text.size())
-        # features = torch.cat((question_features, user_features), dim=0)
-        # print("features: ", features.size())
-        embeddings = torch.cat((embedded_text, question_features, user_features), dim=1)
-        # print("embeddings: ", embeddings.size())
+        # embedded_text = self._text_field_embedder(text)
+        # mask = get_text_field_mask(text).float()
+        # embedded_text = self._dropout(embedded_text)
+        # embedded_text = self._seq2vec_encoder(embedded_text, mask=mask)
+        # # print("embedded_text: ", type(embedded_text), 'dim ', embedded_text.dim(), 'size', embedded_text.size())
+        # # features = torch.cat((question_features, user_features), dim=0)
+        embeddings = question_features
         logits = self._classification_layer(embeddings)
         probs = torch.nn.functional.softmax(logits, dim=-1)
         output_dict = {'logits': logits, 'probs': probs}
 
         if label is not None:
-            loss = self._loss(
-                # Empirically we have found dropping out after logits works better
-                self._dropout(logits),
-                label.long().view(-1)
-            )
+            loss = self._loss(logits, label.long().view(-1))
             output_dict['loss'] = loss
             self._accuracy(logits, label)
 

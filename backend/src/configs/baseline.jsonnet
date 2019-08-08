@@ -16,8 +16,8 @@ local boe = {
         'type': 'qanta'
     },
     # This gets passed into Reader.read() method
-    train_data_path: 'data/expanded.qanta.train.2018.04.18.json',
-    validation_data_path: 'data/expanded.qanta.dev.2018.04.18.json',
+    train_data_path: 'data/train.qanta.record.json',
+    validation_data_path: 'data/dev.qanta.record.json',
     model: {
         # This matches the name registered in fact/models/baseline.py
         type: 'baseline',
@@ -48,9 +48,7 @@ local boe = {
     num_labels: 2,
     },
     iterator: {
-        type: 'bucket',
-        batch_size: 128,
-        sorting_keys: [["text", "num_tokens"]]
+        type: 'basic'
     },
     trainer: {
         optimizer: {'type': 'adam'},
