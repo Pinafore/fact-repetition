@@ -26,11 +26,8 @@ from fact.util import get_logger
 
 log = get_logger(__name__)
 
-QANTA_TRAIN = 'data/train.qanta.record.json'
-QANTA_DEV = 'data/dev.qanta.record.json'
-QANTA_TEST = 'data/test.qanta.record.json'
-
-QANTA_QUESTION = 'data/qanta.question.json'
+TRAIN_RECORD = 'data/train.record.json'
+QUESTION_FILE = 'data/question.json'
 
 # TODO: Read this from data instead of hard code
 # Accuracy of users on questions
@@ -46,49 +43,46 @@ class QantaReader(DatasetReader):
                  token_indexers: Dict[str, TokenIndexer] = None):
         super().__init__(lazy)
         # guesstrain, guessdev, guesstest, buzztrain, buzzdev, buzztest
-        # self._tokenizer = tokenizer or WordTokenizer(SpacyWordSplitter())
+        self._tokenizer = tokenizer or WordTokenizer(SpacyWordSplitter())
         # # TODO: Add character indexer
-        # self._token_indexers = token_indexers or {'tokens': SingleIdTokenIndexer()}
+        self._token_indexers = token_indexers or {'tokens': SingleIdTokenIndexer()}
 
     @overrides
     def _read(self, file_path:str):
         with open(file_path) as f:
-            record_data = json.load(f)
-        with open(QANTA_TRAIN) as f:
-            train_record_data = json.load(f)
+            data = json.load(f)
+        with open(TRAIN_RECORD) as f:
+            train_record = json.load(f)
+        with open(QUESTION_FILE) as f:
+            question_data = json.load(f)
 
-        df = pd.DataFrame(train_record_data)
-        # qid_enc = self.qid_encoding(df)
-        # train_qid_list = [[record['qid']] for record in train_record_data]
-        # train_qid_feature = qid_enc.transform(train_qid_list)
-        accuracy_per_question_feature = self.accuracy_per_question(df)
-        # average_buzz_ratio_per_question_feature = self.average_buzz_ratio_per_question(df)
+        num = len(data)
+        train_df = pd.DataFrame(train_record)
+        question_df = pd.DataFrame(question_data)
+        accuracy_per_question_feature = self.accuracy_per_question(train_df)
         
-        for i in range(len(record_data)):
-            # qid_encoding = train_qid_feature[i]
-            qid = record_data[i]['qid']
+        for i in range(num):
+            qid = data[i]['qid']
+            text = question_df.loc[question_df['qid'] == qid]['text']
             if qid in accuracy_per_question_feature:
                 question_accuracy = accuracy_per_question_feature[qid]
-                # question_buzz_ratio = average_buzz_ratio_per_question_feature[qid]
             else:
                 question_accuracy = accuracy_per_question_feature['<UKN>']
-                # question_buzz_ratio = average_buzz_ratio_per_question_feature['<UKN>']
-            label = record_data[i]['ruling']
+            label = data[i]['ruling']
             instance = self.text_to_instance(
-                # text = '',
-                # qid_encoding=qid_encoding,
+                tokens=[Token(word) for word in text],
                 question_accuracy=question_accuracy,
-                # question_buzz_ratio=question_buzz_ratio,
                 label=label
                 )
-
-        if instance is not None:
+            print('====', i, '====')
+            if i >= 100:
+                break
             yield instance
 
 
     @overrides
     def text_to_instance(self,
-                        #  text: str, 
+                         tokens: List[Token], 
                         # answer: str,
                         #  frac_seen: float = AVG_FRAC_SEEN,
                         #  qid_encoding: np.ndarray,
@@ -99,8 +93,8 @@ class QantaReader(DatasetReader):
                         #  user_avg_accuracy: float = AVG_ACCURACY,
                         #  qanta_id: int = None,
                          label: bool = None):
-
-        fields: Dict[str, Field] = {}
+        sentence_field = TextField(tokens, self._token_indexers)
+        fields: Dict[str, Field] = {"tokens": sentence_field}
         # tokenized_text = self._tokenizer.tokenize(text)
         # if len(tokenized_text) == 0:
         #     return None
@@ -126,21 +120,3 @@ class QantaReader(DatasetReader):
         feature = dict(zip(qid, value))
         feature['<UKN>'] = avg
         return feature
-
-    def average_buzz_ratio_pesr_question(self, df):
-        avg = df['buzz_ratio'].mean()
-        buzz_ratio_series = df.groupby(['qid']).mean()['buzz_ratio']
-        value = []
-        for i in range(len(buzz_ratio_series)):
-            value.append(buzz_ratio_series[i])
-        qid =  list(buzz_ratio_series.keys())
-        feature = dict(zip(qid, value))
-        feature['<UKN>'] = avg
-        return feature
-
-    def qid_encoding(self, df):
-        qid_list = list(df.groupby('qid').groups.keys())
-        qid_list = [[qid] for qid in qid_list]
-        qid_enc = OneHotEncoder(handle_unknown='ignore')
-        qid_enc.fit(qid_list)
-        return qid_enc

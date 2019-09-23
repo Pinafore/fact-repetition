@@ -54,7 +54,7 @@ class Baseline(Model):
 
     # Change these to match the text_to_instance argument names
     def forward(self,
-                # text: Dict[str, torch.Tensor],
+                tokens: Dict[str, torch.Tensor],
                 # answer: torch.Tensor,
                 # metadata: Dict,
                 question_features: np.ndarray,
@@ -78,9 +78,9 @@ class Baseline(Model):
         output_dict = {'logits': logits, 'probs': probs}
 
         if label is not None:
+            self._accuracy(logits, label)
             loss = self._loss(logits, label.long().view(-1))
             output_dict['loss'] = loss
-            self._accuracy(logits, label)
 
         return output_dict
 
