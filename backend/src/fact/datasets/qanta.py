@@ -8,6 +8,7 @@ from tqdm import tqdm
 import click
 import numpy as np
 import pandas as pd
+import torch
 from overrides import overrides
 from sklearn.model_selection import train_test_split
 from pytorch_pretrained_bert import BertTokenizer
@@ -30,6 +31,11 @@ log = get_logger(__name__)
 TRAIN_RECORD = 'data/train.record.json'
 DEV_RECORD = 'data/dev.record.json'
 QUESTION_FILE = 'data/avgbert.question.json'
+QID_FILE = 'data/qid_array.txt'
+UID_FILE = 'data/uid_array.txt'
+TIMES_SEEN = 'data/times_seen.json'
+TIMES_SEEN_CORRECT = 'data/times_seen_correct.json'
+TIMES_SEEN_WRONG = 'data/times_seen_wrong.json'
 
 # TODO: Read this from data instead of hard code
 # Accuracy of users on questions
@@ -65,7 +71,7 @@ def average_buzz_ratio_per_user(df):
     feature = dict(zip(uid, value))
     feature['<UKN>'] = avg
     return feature
-    
+
 def accuracy_per_question(df):
     avg = df['ruling'].mean()
     accuracy_series = df.groupby(['qid']).mean()['ruling']
@@ -122,10 +128,30 @@ def qid_count(df):
     feature['<UKN>'] = 0
     return feature
 
-def times_seen(df):
-    cumcount_array = df.groupby(['uid', 'qid']).cumcount().values
-    feature = [[cumcount] for cumcount in cumcount_array]
-    return feature
+# def times_seen(df):
+#     ruling_df = pd.DataFrame({'count' : df.groupby(['uid', 'qid', 'ruling']).size()}).reset_index()
+#     ruling_count_df = pd.pivot_table(ruling_df, values='count', index=['uid', 'qid'], columns=['ruling'], aggfunc=np.sum).fillna(0)
+#     feature = {}
+#     for i in range(len(ruling_count_df.index)):
+#         feature[ruling_count_df.index[i]] = ruling_count_df[0][i] + ruling_count_df[1][i]
+#     return feature
+
+# def times_seen_correct(df):
+#     ruling_df = pd.DataFrame({'count' : df.groupby(['uid', 'qid', 'ruling']).size()}).reset_index()
+#     ruling_count_df = pd.pivot_table(ruling_df, values='count', index=['uid', 'qid'], columns=['ruling'], aggfunc=np.sum).fillna(0)
+#     feature = {}
+#     for i in range(len(ruling_count_df.index)):
+#         feature[ruling_count_df.index[i]] = ruling_count_df[1][i] # "False  True"
+#     return feature
+
+# def times_seen_wrong(df):
+#     ruling_df = pd.DataFrame({'count' : df.groupby(['uid', 'qid', 'ruling']).size()}).reset_index()
+#     ruling_count_df = pd.pivot_table(ruling_df, values='count', index=['uid', 'qid'], columns=['ruling'], aggfunc=np.sum).fillna(0)
+#     feature = {}
+#     for i in range(len(ruling_count_df.index)):
+#         feature[ruling_count_df.index[i]] = ruling_count_df[0][i]
+#     return feature
+
 
 with open(TRAIN_RECORD) as f:
     train_record = json.load(f)
@@ -133,9 +159,22 @@ with open(DEV_RECORD) as f:
     dev_record = json.load(f)
 with open(QUESTION_FILE) as f:
     question_data = json.load(f)
+with open(TIMES_SEEN) as f:
+    times_seen_feature = json.load(f)
+with open(TIMES_SEEN_CORRECT) as f:
+    times_seen_correct_feature = json.load(f)
+with open(TIMES_SEEN_WRONG) as f:
+    times_seen_wrong_feature = json.load(f)
 train_df = pd.DataFrame(train_record)
 dev_df = pd.DataFrame(dev_record)
 question_df = pd.DataFrame(question_data)
+
+qid_array = open(QID_FILE, 'r').read().split('\n')[0:-2] # remove question_id index and empty element
+uid_array = open(UID_FILE, 'r').read().split('\n')[0:-1] # remove empty element
+num_qid = len(qid_array)
+num_uid = len(uid_array)
+print("num_qid", num_qid)
+print("num_uid", num_uid)
 
 embedding_dict = bert_embedding(question_df)
 accuracy_per_user_feature = accuracy_per_user(train_df)
@@ -152,9 +191,6 @@ average_buzz_ratio_per_question_feature = average_buzz_ratio_per_question(train_
 
 uid_count_feature = uid_count(train_df)
 qid_count_feature = qid_count(train_df)
-
-train_times_seen_feature = times_seen(train_df)
-dev_times_seen_feature = times_seen(dev_df)
 
 
 @DatasetReader.register('qanta')
@@ -178,10 +214,10 @@ class QantaReader(DatasetReader):
         num = len(data)
         df = pd.DataFrame(data)
 
-        if file_path == 'data/train.record.json': 
-            times_seen_feature = train_times_seen_feature
-        else:
-            times_seen_feature = dev_times_seen_feature
+        # if file_path == 'data/train.record.json': 
+        #     times_seen_feature = train_times_seen_feature
+        # else:
+        #     times_seen_feature = dev_times_seen_feature
 
         for i in range(num):
             uid = data[i]['uid']
@@ -206,22 +242,55 @@ class QantaReader(DatasetReader):
                 question_accuracy = accuracy_per_question_feature['<UKN>']
                 question_buzzratio = average_buzz_ratio_per_question_feature['<UKN>']
                 qid_count = qid_count_feature['<UKN>']
+            if uid in uid_array:
+                uid_index = uid_array.index(uid)
+            else:
+                uid_index = -1
+            if qid in qid_array:
+                qid_index = qid_array.index(qid)
+            else:
+                qid_index = -1
 
-            feature_vec = [user_accuracy] + [user_buzzratio] + [uid_count] +  [question_accuracy] + [question_buzzratio] + [qid_count] + times_seen_feature[i]
+            uid_label = torch.LongTensor([uid_index]).resize_(1, 1)
+            uid_m_zeros = torch.zeros(1, num_uid)
+            if uid_label != -1:
+                uid_onehot = uid_m_zeros.scatter_(1, uid_label, 1)[0].numpy()
+            else:
+                uid_onehot = uid_m_zeros[0].numpy()
+            qid_label = torch.LongTensor([qid_index]).resize_(1, 1)
+            qid_m_zeros = torch.zeros(1, num_qid)
+            if qid_label != -1:
+                qid_onehot = qid_m_zeros.scatter_(1, qid_label, 1)[0].numpy()
+            else:
+                qid_onehot = qid_m_zeros[0].numpy()
+
+            if str((uid, qid)) in times_seen_feature:
+                times_seen = times_seen_feature[str((uid, qid))]
+                times_seen_correct = times_seen_correct_feature[str((uid, qid))]
+                times_seen_wrong = times_seen_wrong_feature[str((uid, qid))]
+            else:
+                times_seen = 0
+                times_seen_correct = 0
+                times_seen_wrong = 0
+
+            feature_vec = [user_accuracy] + [user_buzzratio] + [uid_count] + [uid_index] + [question_accuracy] + [question_buzzratio] + [qid_count] + [qid_index] + [times_seen] + [times_seen_correct] + [times_seen_wrong]
 
             label = data[i]['ruling']
+            text = text[0:1]
             instance = self.text_to_instance(
                 # tokens=[Token(word) for word in self._tokenizer(text.keys())],
                 tokens = [Token(word) for word in text],
+                uid_onehot = uid_onehot,
+                qid_onehot = qid_onehot,
                 embedding = embedding,
                 feature_vec = feature_vec,
                 label=label
                 )
             # print("feature_vec", feature_vec)
             # print("feature_vec len", len(feature_vec)
-            if file_path == 'data/train.record.json' and i > 2100000:
+            if file_path == 'data/train.record.json' and i > 210000:
                 break
-            if file_path == 'data/dev.record.json' and i > 300000:
+            if file_path == 'data/dev.record.json' and i > 30000:
                 break
             yield instance
 
@@ -232,10 +301,12 @@ class QantaReader(DatasetReader):
                         # answer: str,
                         #  frac_seen: float = AVG_FRAC_SEEN,
                         #  qid_encoding: np.ndarray,
+                         uid_onehot: np.ndarray,
+                         qid_onehot: np.ndarray,
                          embedding: List[float],
                          feature_vec: List[float],
                         #  question_buzz_ratio: float,
-                         # user features
+                        # user features
                         #  user_avg_frac_seen: float = AVG_FRAC_SEEN,
                         #  user_avg_accuracy: float = AVG_ACCURACY,
                         #  qanta_id: int = None,
@@ -248,6 +319,8 @@ class QantaReader(DatasetReader):
         # fields['text'] = TextField(tokenized_text, token_indexers=self._token_indexers)
         # fields['answer'] = LabelField(answer, label_namespace='answer_labels')
         # fields['metadata'] = MetadataField({'qanta_id': qanta_id})
+        fields['uid_onehot'] = ArrayField(uid_onehot)
+        fields['qid_onehot'] = ArrayField(qid_onehot)
         fields['embedding'] = ArrayField(np.array(embedding))
         fields['feature_vec'] = ArrayField(np.array(feature_vec))
         # fields['user_features'] = ArrayField(np.array([user_avg_frac_seen, user_avg_accuracy]))

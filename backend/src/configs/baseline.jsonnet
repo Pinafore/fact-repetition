@@ -50,13 +50,13 @@ local boe = {
     iterator: {
         type: 'bucket',
         sorting_keys: [['tokens', 'num_tokens']],   
-        batch_size: 256
+        batch_size: 128
     },
     trainer: {
         optimizer: {'type': 'adam'},
         num_serialized_models_to_keep: 1,
-        num_epochs: 500,
-        patience: 10,
+        num_epochs: 100,
+        patience: 5,
         cuda_device: 0,
         validation_metric: '+accuracy',
     },

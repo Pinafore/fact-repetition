@@ -33,7 +33,7 @@ class Baseline(Model):
         # self._text_field_embedder = word_embeddings
         # self._seq2vec_encoder = seq2vec_encoder
         # self._classifier_input_dim = self._seq2vec_encoder.get_output_dim() + 4
-        self._classifier_input_dim = 768 + 7
+        self._classifier_input_dim = 768 + 11 + 64809 + 125419
         
         # if dropout != 0:
         #     self._dropout = nn.Dropout(dropout)
@@ -57,6 +57,8 @@ class Baseline(Model):
                 tokens: Dict[str, torch.Tensor],
                 # answer: torch.Tensor,
                 # metadata: Dict,
+                uid_onehot: torch.Tensor,
+                qid_onehot: torch.Tensor,
                 embedding: np.ndarray,
                 feature_vec: np.ndarray,
                 # user_features: np.ndarray,
@@ -74,7 +76,7 @@ class Baseline(Model):
         # # print("embedded_text: ", type(embedded_text), 'dim ', embedded_text.dim(), 'size', embedded_text.size())
         # print("embedding", embedding.shape)
         # print("feature_vec", feature_vec.shape)
-        encoding = torch.cat((embedding, feature_vec), dim=1)
+        encoding = torch.cat((embedding, feature_vec, uid_onehot, qid_onehot), dim=1)
         # feature_vec = question_features
         logits = self._classification_layer(encoding)
         probs = torch.nn.functional.softmax(logits, dim=-1)
