@@ -29,11 +29,14 @@ class Baseline(Model):
         # EMBEDDING_DIM = 100
         # token_embedding = Embedding(num_embeddings=vocab.get_vocab_size('tokens'),
         #                     embedding_dim=EMBEDDING_DIM)
+        id_token_embedding = Embedding(num_embeddings=vocab.get_vocab_size('id_tokens'),
+                            embedding_dim=50) #take the first
         # word_embeddings = BasicTextFieldEmbedder({"tokens": token_embedding})
         # self._text_field_embedder = word_embeddings
         # self._seq2vec_encoder = seq2vec_encoder
         # self._classifier_input_dim = self._seq2vec_encoder.get_output_dim() + 4
-        self._classifier_input_dim = 768 + 11 + 64809 + 125419
+        # 64809 + 125419
+        self._classifier_input_dim = 768 + 9
         
         # if dropout != 0:
         #     self._dropout = nn.Dropout(dropout)
@@ -57,8 +60,8 @@ class Baseline(Model):
                 tokens: Dict[str, torch.Tensor],
                 # answer: torch.Tensor,
                 # metadata: Dict,
-                uid_onehot: torch.Tensor,
-                qid_onehot: torch.Tensor,
+                uid_text: Dict[str, torch.Tensor],
+                qid_text: Dict[str, torch.Tensor],
                 embedding: np.ndarray,
                 feature_vec: np.ndarray,
                 # user_features: np.ndarray,
@@ -76,7 +79,11 @@ class Baseline(Model):
         # # print("embedded_text: ", type(embedded_text), 'dim ', embedded_text.dim(), 'size', embedded_text.size())
         # print("embedding", embedding.shape)
         # print("feature_vec", feature_vec.shape)
-        encoding = torch.cat((embedding, feature_vec, uid_onehot, qid_onehot), dim=1)
+        print("uid_text", len(uid_text))
+        for qid, tensor in qid_text.items():
+            print("example\n", qid, '\n', tensor)
+
+        encoding = torch.cat((embedding, feature_vec, uid_text, qid_text), dim=1)
         # feature_vec = question_features
         logits = self._classification_layer(encoding)
         probs = torch.nn.functional.softmax(logits, dim=-1)
