@@ -198,12 +198,15 @@ class QantaReader(DatasetReader):
                  token_indexers: Dict[str, TokenIndexer] = None):
         super().__init__(lazy)
         # guesstrain, guessdev, guesstest, buzztrain, buzzdev, buzztest
-        # self._tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-        self._tokenizer = tokenizer or WordTokenizer(SpacyWordSplitter())
+        # self._tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
+        self._tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+        # self._tokenizer = tokenizer or WordTokenizer(SpacyWordSplitter())
         self._spacetokenizer = WordTokenizer(JustSpacesWordSplitter())
-        self._tokenid_indexers = {'id_tokens': SingleIdTokenIndexer()}
-        # # TODO: Add character indexer
-        self._token_indexers = token_indexers or {'tokens': SingleIdTokenIndexer()}
+        self._token_uid_indexers = {'uid_tokens': SingleIdTokenIndexer(namespace='uid_tokens')}
+        self._token_qid_indexers = {'qid_tokens': SingleIdTokenIndexer(namespace='qid_tokens')}
+        # # # TODO: Add character indexer
+        # self._token_indexers = token_indexers or {'tokens': SingleIdTokenIndexer()}
+        self._token_indexers = {'tokens': SingleIdTokenIndexer(namespace='tokens')}
 
     @overrides
     def _read(self, file_path:str):
@@ -221,6 +224,9 @@ class QantaReader(DatasetReader):
             uid = data[i]['uid']
             qid = data[i]['qid']
             text = question_data[qid]['text']
+            # print("uid", uid)
+            # print("qid", qid)
+            # print("text", text)
             #
             if uid in accuracy_per_user_feature:
                 user_accuracy = accuracy_per_user_feature[uid]
@@ -255,20 +261,27 @@ class QantaReader(DatasetReader):
             label = data[i]['ruling']
             # text = text[0:1]
             instance = self.text_to_instance(
-                tokens = self._spacetokenizer.tokenize(text),
-                uid_text = [Token(uid)],
-                qid_text = [Token(qid)],
+                tokens = self._spacetokenizer.tokenize(text)[:150],
+                # uid_text = [Token(uid)],
+                # qid_text = [Token(qid)],
+                uid_tokens = self._spacetokenizer.tokenize(uid),
+                qid_tokens = self._spacetokenizer.tokenize(qid),
                 embedding = embedding,
                 feature_vec = feature_vec,
                 label=label
                 )
-            # print("feature_vec", feature_vec)
-            # print("feature_vec len", len(feature_vec)
-            if file_path == 'data/train.record.json' and i > 2100000:
+            # print("tokens", self._spacetokenizer.tokenize(text))
+            # print("qid_tokens", self._spacetokenizer.tokenize(uid))
+            # print("qid_tokens", self._spacetokenizer.tokenize(qid))
+            # if i % 1000 == 0:
+            #     print(i, "000 records.")
+            if file_path == 'data/train.record.json' and i > 693:
                 break
-            if file_path == 'data/dev.record.json' and i > 300000:
+            if file_path == 'data/dev.record.json' and i > 99:
                 break
             yield instance
+        
+        self._tokenizer.save("./fine_tuned_bert_model")
 
 
     @overrides
@@ -277,8 +290,8 @@ class QantaReader(DatasetReader):
                         # answer: str,
                         #  frac_seen: float = AVG_FRAC_SEEN,
                         #  qid_encoding: np.ndarray,
-                         uid_text: str,
-                         qid_text: str,
+                         uid_tokens: str,
+                         qid_tokens: str,
                          embedding: List[float],
                          feature_vec: List[float],
                         #  question_buzz_ratio: float,
@@ -287,16 +300,19 @@ class QantaReader(DatasetReader):
                         #  user_avg_accuracy: float = AVG_ACCURACY,
                         #  qanta_id: int = None,
                          label: bool = None):
-        sentence_field = TextField(tokens, self._token_indexers)
-        fields: Dict[str, Field] = {"tokens": sentence_field}
+        fields = {}
+        fields['uid_tokens'] = TextField(uid_tokens, self._token_uid_indexers)
+        fields['qid_tokens'] = TextField(qid_tokens, self._token_qid_indexers)
+        fields['tokens'] = TextField(tokens, self._token_indexers)
         # tokenized_text = self._tokenizer.tokenize(text)
         # if len(tokenized_text) == 0:
         #     return None
         # fields['text'] = TextField(tokenized_text, token_indexers=self._token_indexers)
         # fields['answer'] = LabelField(answer, label_namespace='answer_labels')
         # fields['metadata'] = MetadataField({'qanta_id': qanta_id})
-        fields['uid_text'] = TextField(uid_text, self._tokenid_indexers)
-        fields['qid_text'] = TextField(qid_text, self._tokenid_indexers)
+        # print("tokens", fields['tokens'])
+        # print("uid_tokens", fields['uid_tokens'])
+        # print("qid_tokens", fields['qid_tokens'])
         fields['embedding'] = ArrayField(np.array(embedding))
         fields['feature_vec'] = ArrayField(np.array(feature_vec))
         # fields['user_features'] = ArrayField(np.array([user_avg_frac_seen, user_avg_accuracy]))
