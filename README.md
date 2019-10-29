@@ -27,7 +27,16 @@ The shared data are on the https://drive.google.com/file/d/1zP76YRcegHm8e-N8RbJb
 where could also be downloaded from /fs/clip-quiz/xiwen/updated/fact-repetition/backend/src/data/path in case the link not working or too slow.
 
 
-For runing code on umiacs env, under /fs/clip-quiz/xiwen/updated/fact-repetition/backend/src/ path, type bash/sbatch baseline.sh command should run the bert_baseline model.
+For runing code on umiacs env, under /fs/clip-quiz/xiwen/updated/fact-repetition/backend/src/ path, type 
+```bash
+$ bash baseline.sh
+```
+or 
+
+```bash
+$ allennlp train --include-package fact -s trained-models/baseline/exp1 configs/bert_baseline.jsonnet -f
+```
+command to run the bert_baseline model.
 
 ### Question-Oriented Data
 
