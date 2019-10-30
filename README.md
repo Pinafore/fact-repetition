@@ -23,7 +23,7 @@ $ allennlp train --include-package fact -s trained-models/baseline configs/basel
 
 ## Data
 ### Backend Model Data
-The shared data are on the https://drive.google.com/file/d/1zP76YRcegHm8e-N8RbJbi8X1b5zHVPFa/view?usp=sharing ,
+The shared data are on the https://drive.google.com/open?id=1tULLPA_Cn1TOO1rdL1gyLELQg-wF39lU,
 where could also be downloaded from /fs/clip-quiz/xiwen/updated/fact-repetition/backend/src/data/path in case the link not working or too slow.
 
 
