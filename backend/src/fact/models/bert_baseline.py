@@ -12,17 +12,24 @@ from allennlp.modules import (
     TextFieldEmbedder
 )
 from allennlp.modules.seq2vec_encoders.boe_encoder import BagOfEmbeddingsEncoder
-from allennlp.modules.text_field_embedders import TextFieldEmbedder, BasicTextFieldEmbedder
+from allennlp.modules.text_field_embedders import TextFieldEmbedder
 from allennlp.modules.seq2vec_encoders.seq2vec_encoder import Seq2VecEncoder
 from allennlp.nn.util import get_text_field_mask
 from allennlp.modules.token_embedders import Embedding
 from allennlp.training.metrics import CategoricalAccuracy
 from allennlp.modules.token_embedders.bert_token_embedder import PretrainedBertModel
+from allennlp.predictors.predictor import Predictor
+from allennlp.data import DatasetReader
 
 from pytorch_pretrained_bert.modeling import BertModel
 
 
 BERT_DIM = 768
+
+
+class KarlPredictor(Predictor):
+    def __init__(self, model: Model, dataset_reader: DatasetReader):
+        super().__init__(model, dataset_reader)
 
 
 @Model.register('karl_model')

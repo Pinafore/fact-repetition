@@ -15,4 +15,4 @@ hostname
 nvidia-smi
 source /fs/clip-quiz/entilzha/anaconda3/etc/profile.d/conda.sh > /dev/null 2> /dev/null
 conda activate fact
-allennlp train --include-package fact -s models/karl-bert -f configs/generated/rnn.jsonnet
+allennlp train --include-package fact -s models/karl-rnn -f configs/generated/rnn.jsonnet

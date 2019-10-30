@@ -43,11 +43,12 @@ local bert_indexer = {
 };
 
 
-function(use_bert=false, use_rnn=true) {
+function(use_bert=true, use_rnn=false, lazy=true) {
     # This needs to be changed to match the actual reader name/etc
     # Example of a reader defn https://github.com/allenai/allennlp/blob/master/training_config/bidaf.jsonnet#L4
     dataset_reader: {
         type: 'qanta',
+        lazy: lazy,
         use_rnn: use_rnn,
         use_bert: use_bert,
         token_indexers: if use_bert then bert_indexer else we_indexer,
