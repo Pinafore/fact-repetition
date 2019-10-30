@@ -1,11 +1,11 @@
 name: fact
 dependencies:
   - python=3.6
-  - pytorch=1.1.*
+  - pytorch=1.2.*
   - cudatoolkit=10.0
   - numpy
   - scipy
-  - pandas=0.23.*
+  - pandas
   - scikit-learn
   - requests
   - ipython
@@ -13,20 +13,13 @@ dependencies:
   - pyflakes
   - pycodestyle
   - jedi
-  - cloudpickle
   - click=7.0.*
-  - elasticsearch-dsl=6.3.*
-  - dask=1.2.0
+  - pip
   - pip:
-    - allennlp==0.8.*
+    - allennlp==0.9.*
     - overrides
-    - spacy
     - plotnine
-    - mlflow==1.0.*
     - unidecode
-    - intervaltree==3.0.2
-    - fastapi==0.29.*
 channels:
   - anaconda
   - pytorch
-  - conda-forge
