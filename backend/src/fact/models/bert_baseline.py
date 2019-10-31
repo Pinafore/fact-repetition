@@ -3,6 +3,7 @@ import os
 import numpy as np
 import torch
 from torch import nn
+from overrides import overrides
 from allennlp.nn import InitializerApplicator, RegularizerApplicator
 from allennlp.nn.regularizers import  L2Regularizer
 from allennlp.data import Vocabulary
@@ -18,18 +19,11 @@ from allennlp.nn.util import get_text_field_mask
 from allennlp.modules.token_embedders import Embedding
 from allennlp.training.metrics import CategoricalAccuracy
 from allennlp.modules.token_embedders.bert_token_embedder import PretrainedBertModel
-from allennlp.predictors.predictor import Predictor
-from allennlp.data import DatasetReader
 
 from pytorch_pretrained_bert.modeling import BertModel
 
 
 BERT_DIM = 768
-
-
-class KarlPredictor(Predictor):
-    def __init__(self, model: Model, dataset_reader: DatasetReader):
-        super().__init__(model, dataset_reader)
 
 
 @Model.register('karl_model')
@@ -51,6 +45,7 @@ class KarlModel(Model):
         if int(use_bert) + int(use_rnn) != 1:
             raise ValueError('Must use one of bert or rnn')
 
+        self.output_embedding = False
         self._uid_embedder = uid_embedder
         self._qid_embedder = qid_embedder
         self._text_field_embedder = text_field_embedder
@@ -96,6 +91,7 @@ class KarlModel(Model):
                 feature_vec: torch.Tensor,
                 label: torch.Tensor = None, 
                 ):
+        output_dict = {}
         if self._use_bert:
             input_ids = tokens['bert']
             token_type_ids = tokens["bert-type-ids"]
@@ -106,6 +102,9 @@ class KarlModel(Model):
         else:
             mask = get_text_field_mask(tokens).float()
             q_rep = self._context(self._we_embed(tokens), mask)
+
+        if self.output_embedding:
+            output_dict['q_rep'] = q_rep
         
         q_rep = self._dropout(q_rep)
         uid_embedding = self._uid_embedder(user_id)[:, 0, :]
@@ -113,7 +112,8 @@ class KarlModel(Model):
         encoding = torch.cat((q_rep, feature_vec, uid_embedding, qid_embedding), dim=-1)
         logits = self._classifier(encoding)
         probs = torch.nn.functional.softmax(logits, dim=-1)
-        output_dict = {'logits': logits, 'probs': probs}
+        output_dict['logits'] = logits
+        output_dict['probs'] = probs
 
         if label is not None:
             self._accuracy(logits, label)
