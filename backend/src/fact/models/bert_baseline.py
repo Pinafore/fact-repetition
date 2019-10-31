@@ -103,12 +103,16 @@ class KarlModel(Model):
             mask = get_text_field_mask(tokens).float()
             q_rep = self._context(self._we_embed(tokens), mask)
 
-        if self.output_embedding:
-            output_dict['q_rep'] = q_rep
-        
         q_rep = self._dropout(q_rep)
         uid_embedding = self._uid_embedder(user_id)[:, 0, :]
         qid_embedding = self._qid_embedder(question_id)[:, 0, :]
+
+        if self.output_embedding:
+            output_dict['q_rep'] = q_rep
+            output_dict['feature_vec'] = feature_vec
+            output_dict['uid_embedding'] = uid_embedding
+            output_dict['qid_embedding'] = qid_embedding
+
         encoding = torch.cat((q_rep, feature_vec, uid_embedding, qid_embedding), dim=-1)
         logits = self._classifier(encoding)
         probs = torch.nn.functional.softmax(logits, dim=-1)
