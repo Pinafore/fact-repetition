@@ -1,3 +1,4 @@
+import json
 import click
 from allennlp.predictors.predictor import Predictor
 from allennlp.data import DatasetReader, Instance
