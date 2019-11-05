@@ -29,5 +29,4 @@ app = FastAPI()
 
 @app.post('/api/karl/predict')
 def karl_predict(flashcard: Flashcard):
-    pred = predictor.predict_json(flashcard.dict())
-    return {'probs': pred['probs']}
+    return predictor.predict_json(flashcard.dict())
