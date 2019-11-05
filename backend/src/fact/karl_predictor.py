@@ -1,8 +1,10 @@
 import json
 import click
+
 from allennlp.predictors.predictor import Predictor
 from allennlp.data import DatasetReader, Instance
 from allennlp.common.util import JsonDict
+
 from fact.models.bert_baseline import KarlModel
 from fact.datasets.qanta import QantaReader
 
@@ -21,15 +23,29 @@ class KarlPredictor(Predictor):
             json_dict['text'],
             json_dict['user_id'],
             json_dict['question_id'],
+            user_accuracy=json_dict.get('user_accuracy'),
+            user_buzzratio=json_dict.get('user_buzzratio'),
+            user_count=json_dict.get('user_count'),
+            question_accuracy=json_dict.get('question_accuracy'),
+            question_buzzratio=json_dict.get('question_buzzratio'),
+            question_count=json_dict.get('question_count'),
+            times_seen=json_dict.get('times_seen'),
+            times_seen_correct=json_dict.get('times_seen_correct'),
+            times_seen_wrong=json_dict.get('times_seen_wrong'),
             label=json_dict.get('label')
         )
 
 
-@click.command()
+@click.group()
+def main():
+    pass
+
+
+@main.command()
 @click.argument('archive_path')
 @click.argument('out_path')
-def main(archive_path, out_path):
-    predictor = KarlPredictor.from_path(archive_path, predictor_name=KARL_PREDICTOR)
+def predict(archive_path, out_path):
+    predictor: Predictor = KarlPredictor.from_path(archive_path, predictor_name=KARL_PREDICTOR)
     questions = [
         'Name this capital of idaho',
         'This physicist was known for being a talented violinist',
