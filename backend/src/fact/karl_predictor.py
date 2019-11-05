@@ -35,6 +35,14 @@ class KarlPredictor(Predictor):
             label=json_dict.get('label')
         )
 
+        def predict_json(self, inputs: JsonDict) -> JsonDict:
+            instance = self._json_to_instance(inputs)
+            pred = self.predict_instance(instance)
+            label_dict = self._model.vocab.get_index_to_token_vocabulary('labels')
+            all_labels = [label_dict[i] for i in range(len(label_dict))]
+            pred['all_labels'] = all_labels
+            return pred
+
 
 @click.group()
 def main():
