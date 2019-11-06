@@ -1,4 +1,4 @@
-from typing import Dict, List, Union
+from typing import Dict, List, Union, Optional
 import json
 import pickle
 import glob
@@ -192,6 +192,15 @@ class QantaReader(DatasetReader):
                         # answer: str,
                          user_id: str,
                          question_id: str,
+                         user_accuracy: Optional[float] = None,
+                         user_buzzratio: Optional[float] = None,
+                         user_count: Optional[float] = None,
+                         question_accuracy: Optional[float] = None,
+                         question_buzzratio: Optional[float] = None,
+                         question_count: Optional[float] = None,
+                         times_seen: Optional[float] = None,
+                         times_seen_correct: Optional[float] = None,
+                         times_seen_wrong: Optional[float] = None,
                          label: str = None):
         fields = {}
         if text in self._question_cache:
@@ -204,31 +213,37 @@ class QantaReader(DatasetReader):
 
         uid = user_id
         qid = question_id
-        if uid in self._accuracy_per_user_feature:
-            user_accuracy = self._accuracy_per_user_feature[uid]
-            user_buzzratio = self._average_buzz_ratio_per_user_feature[uid]
-            uid_count = self._uid_count_feature[uid]
-        else:
-            user_accuracy = self._accuracy_per_user_feature['<UKN>']
-            user_buzzratio = self._average_buzz_ratio_per_user_feature['<UKN>']
-            uid_count = self._uid_count_feature['<UKN>']
-        if qid in self._accuracy_per_question_feature:
-            question_accuracy = self._accuracy_per_question_feature[qid]
-            question_buzzratio = self._average_buzz_ratio_per_question_feature[qid]
-            qid_count = self._qid_count_feature[qid]
-        else:
-            question_accuracy = self._accuracy_per_question_feature['<UKN>']
-            question_buzzratio = self._average_buzz_ratio_per_question_feature['<UKN>']
-            qid_count = self._qid_count_feature['<UKN>']
 
-        if str((uid, qid)) in self._times_seen_feature:
-            times_seen = self._times_seen_feature[str((uid, qid))]
-            times_seen_correct = self._times_seen_correct_feature[str((uid, qid))]
-            times_seen_wrong = self._times_seen_wrong_feature[str((uid, qid))]
-        else:
-            times_seen = 0
-            times_seen_correct = 0
-            times_seen_wrong = 0
+        if user_accuracy is None:
+            if uid in self._accuracy_per_user_feature:
+                user_accuracy = self._accuracy_per_user_feature[uid]
+                user_buzzratio = self._average_buzz_ratio_per_user_feature[uid]
+                uid_count = self._uid_count_feature[uid]
+            else:
+                user_accuracy = self._accuracy_per_user_feature['<UKN>']
+                user_buzzratio = self._average_buzz_ratio_per_user_feature['<UKN>']
+                uid_count = self._uid_count_feature['<UKN>']
+
+        if question_accuracy is None:
+            if qid in self._accuracy_per_question_feature:
+                question_accuracy = self._accuracy_per_question_feature[qid]
+                question_buzzratio = self._average_buzz_ratio_per_question_feature[qid]
+                qid_count = self._qid_count_feature[qid]
+            else:
+                question_accuracy = self._accuracy_per_question_feature['<UKN>']
+                question_buzzratio = self._average_buzz_ratio_per_question_feature['<UKN>']
+                qid_count = self._qid_count_feature['<UKN>']
+
+        if times_seen is None:
+            paired_id = str((uid, qid))
+            if paired_id in self._times_seen_feature:
+                times_seen = self._times_seen_feature[paired_id]
+                times_seen_correct = self._times_seen_correct_feature[paired_id]
+                times_seen_wrong = self._times_seen_wrong_feature[paired_id]
+            else:
+                times_seen = 0
+                times_seen_correct = 0
+                times_seen_wrong = 0
 
         feature_vec = [
             user_accuracy, user_buzzratio,

@@ -24,13 +24,36 @@ class KarlPredictor(Predictor):
             json_dict['text'],
             json_dict['user_id'],
             json_dict['question_id'],
+            user_accuracy=json_dict.get('user_accuracy'),
+            user_buzzratio=json_dict.get('user_buzzratio'),
+            user_count=json_dict.get('user_count'),
+            question_accuracy=json_dict.get('question_accuracy'),
+            question_buzzratio=json_dict.get('question_buzzratio'),
+            question_count=json_dict.get('question_count'),
+            times_seen=json_dict.get('times_seen'),
+            times_seen_correct=json_dict.get('times_seen_correct'),
+            times_seen_wrong=json_dict.get('times_seen_wrong'),
             label=json_dict.get('label')
         )
 
+    def predict_json(self, inputs: JsonDict) -> JsonDict:
+        instance = self._json_to_instance(inputs)
+        pred = self.predict_instance(instance)
+        label_dict = self._model.vocab.get_index_to_token_vocabulary('labels')
+        all_labels = [label_dict[i] for i in range(len(label_dict))]
+        pred['all_labels'] = all_labels
+        return pred
 
-@click.command()
+
+@click.group()
+def main():
+    pass
+
+
+@main.command()
 @click.argument('archive_path')
 @click.argument('out_path')
+
 def main(archive_path, out_path):
     predictor = KarlPredictor.from_path(archive_path, predictor_name=KARL_PREDICTOR)
     with open('data/withanswer.question.json') as f:
@@ -50,6 +73,7 @@ def main(archive_path, out_path):
     answers = []
     for qid in tqdm(unique_qid):
         questions.append({'text': question_dict[qid]['text'], 'answer': question_dict[qid]['answer']})
+
     preds = []
     counter = 0
     for q in tqdm(questions):

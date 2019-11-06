@@ -20,6 +20,8 @@ dependencies:
     - overrides
     - plotnine
     - unidecode
+    - fastapi
+    - uvicorn
 channels:
   - anaconda
   - pytorch
