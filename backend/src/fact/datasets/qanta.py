@@ -180,10 +180,10 @@ class QantaReader(DatasetReader):
                 question_id=qid,
                 label='correct' if label else 'wrong'
             )
-            if file_path == 'data/train.record.json' and i > 69300:
-                break
-            if file_path == 'data/dev.record.json' and i > 9900:
-                break
+            # if file_path == 'data/train.record.json' and i > 69300:
+            #     break
+            # if file_path == 'data/dev.record.json' and i > 9900:
+            #     break
 
             if instance is None:
                 continue
