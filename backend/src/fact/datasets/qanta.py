@@ -22,7 +22,7 @@ from allennlp.data.tokenizers.word_splitter import SpacyWordSplitter, WordSplitt
 from allennlp.data.tokenizers.word_stemmer import PassThroughWordStemmer
 from allennlp.data.tokenizers.word_filter import PassThroughWordFilter
 
-from util import get_logger
+from fact.util import get_logger
 
 
 log = get_logger(__name__)
@@ -42,6 +42,9 @@ TIMES_SEEN_WRONG = 'data/times_seen_wrong.json'
 # Average fraction of question text seen
 # AVG_FRAC_SEEN = 0.552
 
+def get_revealed_text(text, buzz_ratio):
+    length = math.floor(len(text) * buzz_ratio)
+    return text[0:length]
 
 def accuracy_per_user(df):
     avg = df['ruling'].mean()
@@ -168,17 +171,18 @@ class QantaReader(DatasetReader):
             qid = row['qid']
             text = self._question_data[qid]['text']
             label = row['ruling']
+            if file_path == 'data/train.record.json':
+                text = get_revealed_text(text, row['buzz_ratio'])
+            # print("=========text==========", text)
             instance = self.text_to_instance(
                 text=text,
                 user_id=uid,
                 question_id=qid,
                 label='correct' if label else 'wrong'
             )
-            print("file_path", file_path)
-            print(i)
-            if file_path == 'data/train.record.json' and i > 693:
+            if file_path == 'data/train.record.json' and i > 69300:
                 break
-            if file_path == 'data/dev.record.json' and i > 99:
+            if file_path == 'data/dev.record.json' and i > 9900:
                 break
 
             if instance is None:

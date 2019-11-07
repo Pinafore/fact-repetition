@@ -5,8 +5,8 @@ import pandas as pd
 from allennlp.predictors.predictor import Predictor
 from allennlp.data import DatasetReader, Instance
 from allennlp.common.util import JsonDict
-from bert_baseline import KarlModel
-from qanta import QantaReader
+from fact.models.bert_baseline import KarlModel
+from fact.datasets.qanta import QantaReader
 from tqdm import tqdm
 
 
