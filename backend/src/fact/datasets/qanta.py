@@ -171,8 +171,7 @@ class QantaReader(DatasetReader):
             qid = row['qid']
             text = self._question_data[qid]['text']
             label = row['ruling']
-            if file_path == 'data/train.record.json':
-                text = get_revealed_text(text, row['buzz_ratio'])
+            text = get_revealed_text(text, row['buzz_ratio'])
             # print("=========text==========", text)
             instance = self.text_to_instance(
                 text=text,

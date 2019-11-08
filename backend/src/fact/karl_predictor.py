@@ -77,9 +77,9 @@ def user_predictions():
     preds = []
     counter = 0
     for q in tqdm(questions):
-        counter += 1
-        if counter > 5000:
-            break
+        # counter += 1
+        # if counter > 5000:
+        #     break
         pred = predictor.predict_json({'text': q['text'], 'user_id': '', 'question_id': ''})
         pred['answer'] = q['answer']
         preds.append(pred)
