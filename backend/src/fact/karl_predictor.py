@@ -56,38 +56,50 @@ def main():
 
 def main(archive_path, out_path):
     predictor = KarlPredictor.from_path(archive_path, predictor_name=KARL_PREDICTOR)
-    pred = user_predictions()
+    preds, questions = user_predictions(predictor)
     with open(out_path, 'w+') as f:
         json.dump({'predictions': preds, 'questions': questions}, f)
 
-def user_predictions():
+def user_predictions(predictor):
+    predictor._model.output_embedding = False
     with open('data/withanswer.question.json') as f:
         question_data = json.load(f)
     with open('data/dev.record.json') as f:
         dev_record = json.load(f)
     question_dict = {q['qid']: q for q in question_data}
-    uid_count = uid.size().reset_index(name = 'qcount')
-    uids = uid_count.sort_values(by=['qcount'], ascending=[False])[0:20][uid].valus # array
+    dev_df = pd.DataFrame(dev_record)
+    uid_df = dev_df.groupby('uid')
+    uid_count = uid_df.size().reset_index(name = 'qcount')
+    uids = uid_count.sort_values(by=['qcount'], ascending=[False])[0:20]['uid'].values # array
     questions = []
     for uid in uids:
-        question = dev_df.loc[dev_df['uid'] == uid]['qid'].values
-        for qid in question:
+        qid_list = [record['qid'] for record in dev_record if record['uid'] == uid]
+        num = 0
+        print(qid_list[0:5])
+        break
+        for qid in qid_list:
+            num += 1
             text = question_dict[qid]['text']
-            questions.append({'text': question_dict[qid]['text'], 'uid': uid, 'qid': qid})
+            questions.append({'text': question_dict[qid]['text'], 'uid': uid, 'qid': qid, 'answer': question_dict[qid]['answer']})
+            if num >= 50:
+                break
+            
     preds = []
     counter = 0
     for q in tqdm(questions):
         # counter += 1
         # if counter > 5000:
         #     break
-        pred = predictor.predict_json({'text': q['text'], 'user_id': '', 'question_id': ''})
+        pred = predictor.predict_json({'text': q['text'], 'user_id': q['uid'], 'question_id': q['qid']})
+        pred['uid'] = q['uid']
+        pred['qid'] = q['qid']
         pred['answer'] = q['answer']
         preds.append(pred)
-    return preds
+    return preds, questions
     
     
 
-def extract_embeddings():
+def extract_embeddings(predictor):
     with open('data/withanswer.question.json') as f:
         question_data = json.load(f)
     with open('data/train.record.json') as f:
@@ -118,7 +130,7 @@ def extract_embeddings():
         pred = predictor.predict_json({'text': q['text'], 'user_id': '', 'question_id': ''})
         pred['answer'] = q['answer']
         preds.append(pred)
-    return preds
+    return preds, questions
 
 if __name__ == '__main__':
     main()
