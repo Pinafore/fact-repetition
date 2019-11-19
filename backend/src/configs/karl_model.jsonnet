@@ -94,7 +94,7 @@ function(use_bert=true, use_rnn=false, lazy=true) {
     trainer: {
         optimizer: {'type': 'adam', 'lr': 1e-3},
         num_serialized_models_to_keep: 1,
-        num_epochs: 10,
+        num_epochs: 4,
         patience: 2,
         cuda_device: 0,
         validation_metric: '+accuracy',
