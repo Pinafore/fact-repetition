@@ -62,6 +62,31 @@ def main(archive_path, out_path):
 
 def user_predictions(predictor):
     predictor._model.output_embedding = False
+    # two user answer 10 questions, uid_1_science: answer only science questions; uid_7: answer questions from 7 categories
+    uid_1_science = 'fb4f77ccf021b67a5a024e1e511678a90adcb7e2'
+    uid_7 = 'adfb33027392ad8065317b827a835bf24d0f2dc2'
+    uids = [uid_1_science, uid_7]
+    with open('data/withanswer.question.json') as f:
+        question_data = json.load(f)
+    question_dict = {q['qid']: q for q in question_data}
+    # get random 20 qids
+    random_qids = random.sample(list(question_df['qid'].values), 20)
+    questions = []
+    for uid in uids:
+        # qid_list = list(record_df.loc[record_df['uid'] == uid]['qid'].values) # get the history of the user
+        for qid in random_qids:
+            text = question_dict[qid]['text']
+            questions.append({'text': question_dict[qid]['text'], 'uid': uid, 'qid': qid, 'answer': question_dict[qid]['answer'], 'category': question_dict[qid]['category']})
+    preds = []
+    for q in questions:
+        pred = predictor.predict_json({'text': q['text'], 'user_id': q['uid'], 'question_id': q['qid']})
+        pred['uid'] = q['uid']
+        pred['qid'] = q['qid']
+        preds.append(pred)
+    return preds, questions
+
+def user_predictions(predictor):
+    predictor._model.output_embedding = False
     with open('data/withanswer.question.json') as f:
         question_data = json.load(f)
     with open('data/dev.record.json') as f:
@@ -75,15 +100,12 @@ def user_predictions(predictor):
     for uid in uids:
         qid_list = [record['qid'] for record in dev_record if record['uid'] == uid]
         num = 0
-        print(qid_list[0:5])
-        break
         for qid in qid_list:
             num += 1
             text = question_dict[qid]['text']
             questions.append({'text': question_dict[qid]['text'], 'uid': uid, 'qid': qid, 'answer': question_dict[qid]['answer']})
             if num >= 50:
                 break
-            
     preds = []
     counter = 0
     for q in tqdm(questions):
