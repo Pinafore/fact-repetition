@@ -92,7 +92,7 @@ def average_buzz_ratio_per_question(df):
 
 def uid_count(df):
     uid = list(df.groupby('uid').groups.keys())
-    uid_count_series = df.groupby(['uid']).mean()['uid_count']
+    uid_count_series = df.groupby(['uid']).size().reset_index(name='uid_count')['uid_count']
     value = []
     for i in range(len(uid_count_series)):
         value.append(uid_count_series[i])
@@ -102,7 +102,7 @@ def uid_count(df):
 
 def qid_count(df):
     qid = list(df.groupby('qid').groups.keys())
-    qid_count_series = df.groupby(['qid']).mean()['qid_count']
+    qid_count_series = df.groupby(['qid']).size().reset_index(name='qid_count')['qid_count']
     value = []
     for i in range(len(qid_count_series)):
         value.append(qid_count_series[i])
@@ -110,6 +110,24 @@ def qid_count(df):
     feature['<UKN>'] = 0
     return feature
 
+def category(question_df):
+    category_list = question_df.groupby(['category']).size().keys().values[1:] #contain Unlabeled, remove noise
+    feature = {}
+    num = len(category_list) # 35
+    for category in category_list:
+        feature[category] = [0] * num
+        feature[category][np.where(category_list == category)[0][0]] = 1
+    return feature
+
+def difficulty(question_df):
+    difficulty_list = question_df.groupby(['difficulty']).size().keys().values[:-1] #remove noise
+    difficulty_list = np.append(difficulty_list, 'Unlabeled') # 19
+    feature = {}
+    num = len(difficulty_list)
+    for difficulty in difficulty_list:
+        feature[difficulty] = [0] * num
+        feature[difficulty][np.where(difficulty_list == difficulty)[0][0]] = 1
+    return feature
 
 @DatasetReader.register('qanta')
 class QantaReader(DatasetReader):
@@ -148,6 +166,7 @@ class QantaReader(DatasetReader):
             self._times_seen_wrong_feature = json.load(f)
         train_df = pd.DataFrame(train_record)
         dev_df = pd.DataFrame(dev_record)
+        question_df = pd.DataFrame(question_data)
 
         log.info('Computing features')
         self._accuracy_per_user_feature = accuracy_per_user(train_df)
@@ -158,6 +177,9 @@ class QantaReader(DatasetReader):
         self._uid_count_feature = uid_count(train_df)
         self._qid_count_feature = qid_count(train_df)
 
+        self._category_feature = category(question_df)
+        self._difficulty_feature = difficulty(question_df)
+
         self._question_cache = {}
 
     @overrides
@@ -165,6 +187,7 @@ class QantaReader(DatasetReader):
         with open(file_path) as f:
             data = json.load(f)
         i = 0
+        print("==========", file_path)
         for row in data:
             i += 1
             uid = row['uid']
@@ -179,10 +202,10 @@ class QantaReader(DatasetReader):
                 question_id=qid,
                 label='correct' if label else 'wrong'
             )
-            # if file_path == 'data/train.record.json' and i > 69300:
-            #     break
-            # if file_path == 'data/dev.record.json' and i > 9900:
-            #     break
+            if file_path == 'data/train.record.json' and i > 945000:
+                break
+            if file_path == 'data/dev.record.json' and i > 135000:
+                break
 
             if instance is None:
                 continue
@@ -204,6 +227,8 @@ class QantaReader(DatasetReader):
                          times_seen: Optional[float] = None,
                          times_seen_correct: Optional[float] = None,
                          times_seen_wrong: Optional[float] = None,
+                         category: Optional[str] = None,
+                         difficulty: Optional[str] = None,
                          label: str = None):
         fields = {}
         if text in self._question_cache:
@@ -248,17 +273,34 @@ class QantaReader(DatasetReader):
                 times_seen_correct = 0
                 times_seen_wrong = 0
 
+        if category is None:
+            category = self._question_data[qid]['category']
+            if category in self._category_feature:
+                category = self._category_feature[category]
+            else:
+                category = self._category_feature['Unlabeled']
+        
+        if difficulty is None:
+            difficulty = self._question_data[qid]['difficulty']
+            if difficulty in self._difficulty_feature:
+                difficulty = self._difficulty_feature[difficulty]
+            else:
+                difficulty = self._difficulty_feature['Unlabeled']
+
         feature_vec = [
             user_accuracy, user_buzzratio,
             question_accuracy, question_buzzratio,
             uid_count, qid_count,
-            times_seen, times_seen_correct, times_seen_wrong
+            times_seen, times_seen_correct, times_seen_wrong,
         ]
+
+        feature_vec = np.concatenate((feature_vec, category, difficulty), axis=None)
+
         fields['user_id'] = TextField([Token(user_id)], self._uid_indexers)
         fields['question_id'] = TextField([Token(question_id)], self._qid_indexers)
         fields['tokens'] = TextField(tokenized_text, self._token_indexers)
         # fields['metadata'] = MetadataField({'qanta_id': qanta_id})
-        fields['feature_vec'] = ArrayField(np.array(feature_vec))
+        fields['feature_vec'] = ArrayField(feature_vec)
         # fields['user_features'] = ArrayField(np.array([user_avg_frac_seen, user_avg_accuracy]))
         if label is not None:
             # fields['text'] = TextField(tokenized_text, token_indexers=self._token_indexers)
