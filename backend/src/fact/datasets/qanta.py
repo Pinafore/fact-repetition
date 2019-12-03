@@ -205,6 +205,8 @@ class QantaReader(DatasetReader):
 
         uid = user_id
         qid = question_id
+        uid_count = user_count
+        qid_count = question_count
 
         if user_accuracy is None:
             if uid in self._accuracy_per_user_feature:

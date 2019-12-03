@@ -64,7 +64,8 @@ def predict(archive_path, out_path):
         # and counts are set to zero as well
         # We should probably change the api a little to be able to manually pass counts
         # Output has keys: q_rep, logits, probs
-        preds.append(predictor.predict_json({'text': q, 'user_id': '', 'question_id': ''}))
+        preds.append(predictor.predict_json({
+            'text': q, 'user_id': '', 'question_id': ''}))
     
     with open(out_path, 'w') as f:
         json.dump({'predictions': preds, 'questions': questions}, f)
