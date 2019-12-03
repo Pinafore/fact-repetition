@@ -16,17 +16,11 @@ The first woman to appear on a U.S. postage stamp, she revived the medieval herm
 Venice
 Because of an attempted coup, one ruler of this city is represented by a black shroud in this city's
 
-Venice
-Because of an attempted coup, one ruler of this city is represented by a black shroud in this city's
-
-Republic of {Finland} [or {Suomen Tasavalta}]
-This nation joined a military alliance with Germany under the leadership of Risto Ryti. Another lead
-
 {Francisco} Paulino Hermenegildo Teódulo {Franco} Bahamonde
 In one year, this leader signed a Concordat with the Vatican and a pact with the U.S., and two years
 
-Venice
-Because of an attempted coup, one ruler of this city is represented by a black shroud in this city's
+Republic of {Finland} [or {Suomen Tasavalta}]
+This nation joined a military alliance with Germany under the leadership of Risto Ryti. Another lead
 
 {Tiberius} Sempronius Gracchus [prompt on {Gracchus}]
 Early in his career, this man served as a quaestor under the consul Gaius Hostilius Mancinus in Spai
@@ -58,9 +52,6 @@ One document named for this city concluded the Albigensian Crusade. Another sign
 {Justinian} I [or {Justinian} the Great; prompt on {Justinian}]
 This ruler's Syrian treasurer Peter Barsymes speculated recklessly on grains and set up a silk monop
 
-Junipero {Serra}
-He taught at San Fernando College in Mexico City early in his life, a fact recorded by his biographe
-
 Lord Horatio Herbert {Kitchener}, first Earl Kitchene
 During World War one, this man's reputation was tarnished by the Shell Crisis and involvement in the
 
@@ -91,77 +82,41 @@ William Alden Smith led a Senate investigation into this event, which might have
 James Monroe
 This man served as a scout for George Washington at the Battle of Monmouth, and he suffered a near f
 
-James Monroe
-This man served as a scout for George Washington at the Battle of Monmouth, and he suffered a near f
-
-{Songhai} Empire
-The ethnic people who ruled this empire first inhabited its capital under the king Dia Kossoi. Parti
-
 {Songhai} Empire
 The ethnic people who ruled this empire first inhabited its capital under the king Dia Kossoi. Parti
 
 Crimean War
 The first war to be photographed extensively and the first war to utilize modern devices such as the
 
-Crimean War
-The first war to be photographed extensively and the first war to utilize modern devices such as the
-
 George {Calvert,} or the first {Lord Baltimore}
 A sponsor of a small colony at Ferryland in his Province of Avalon, Newfoundland, he was determined 
-
-George {Calvert,} or the first {Lord Baltimore}
-A sponsor of a small colony at Ferryland in his Province of Avalon, Newfoundland, he was determined 
-
-{Miss America} pageant
-It claims to be the world’s largest scholarship provider for women. Recent format changes include th
 
 {Miss America} pageant
 It claims to be the world’s largest scholarship provider for women. Recent format changes include th
 
 Giuseppe {Garibaldi}
 He lived with the inventor Antonio Meucci on Staten Island for a few years after he was forced into 
-
-massacring {Jews} (accept {pogroms} or anything that mentions killing or persecuting {Jews})
-One of these events happened in 1066 against vizier ibn Naghrela and thousands others in Granada, wh
 
 Benedict {Arnold}
 A group overseen by this figure was provided with bad maps by Reuben Colburn. Powder House Day comme
 
-{Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}]
-This country experienced an interregnum during a crisis that took place between 1383 and 1385. As a 
-
-{Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}]
-This country experienced an interregnum during a crisis that took place between 1383 and 1385. As a 
+massacring {Jews} (accept {pogroms} or anything that mentions killing or persecuting {Jews})
+One of these events happened in 1066 against vizier ibn Naghrela and thousands others in Granada, wh
 
 {Argentina}
 One politician from this country was forced to step down after losing the Battle of Caseros to Urqui
 
-Giuseppe {Garibaldi}
-He lived with the inventor Antonio Meucci on Staten Island for a few years after he was forced into 
-
-Giuseppe {Garibaldi}
-He lived with the inventor Antonio Meucci on Staten Island for a few years after he was forced into 
+{Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}]
+This country experienced an interregnum during a crisis that took place between 1383 and 1385. As a 
 
 Sumerian Civilization
 During this civilization's Renaissance, one of its leaders named Shulgi completed an iconic religiou
-
-Sumerian Civilization
-During this civilization's Renaissance, one of its leaders named Shulgi completed an iconic religiou
-
-{Indo-European} language family
-It contains the now-extinct Tocharian branch of China’s Tarim Basin, which included Kuchean and Turf
-
-{Catherine II} or {Catherine the Great}
-The so-called “Greek Project” was a program of this ruler, who also organized a league to defend neu
 
 {Whiskey Ring} Scandal
 History One of its sections funded papers against Carl Schurz in order to increase presidential supp
 
-Giuseppe {Garibaldi}
-This author of Citizen of the World wrote his memoirs with Dumas. He fought at Laguna in the War of 
-
-People’s Republic of {China}
-The United States recently won permission from the WTO to impose steel tariffs on this nation, and a
+{Indo-European} language family
+It contains the now-extinct Tocharian branch of China’s Tarim Basin, which included Kuchean and Turf
 
 People’s Republic of {China}
 The United States recently won permission from the WTO to impose steel tariffs on this nation, and a
@@ -181,20 +136,17 @@ This man was president during the Clearstream affair and during his country's CP
 Vladimir Ilich {Lenin} [or Vladimir Ilich {Ulyanov}]
 This leader created a ten-point strategy for his countrymen in his April Theses, which were written 
 
-Vladimir Ilich {Lenin} [or Vladimir Ilich {Ulyanov}]
-This leader created a ten-point strategy for his countrymen in his April Theses, which were written 
-
 William {Henry Harrison} [prompt on {Harrison}]
 This President ran on a campaign that promoted his simplicity as a man who knew about “log cabins an
 
-{Alexander the Great}
-This man dragged a still alive Batis behind his chariot after winning the Siege of Gaza. He built a 
+Giuseppe {Garibaldi}
+This author of Citizen of the World wrote his memoirs with Dumas. He fought at Laguna in the War of 
 
 Vassily {Kandinsky}
 From his early works in Russia to landscapes he created in Munich during the 1910’s, many of his pai
 
-{West Germany} [or {Westdeutschland}; prompt on {Federal Republic} of {Germany}; prompt on
-A government of this country was brought down in the Guillaume Affair, a spy scandal affecting the c
+{Catherine II} or {Catherine the Great}
+The so-called “Greek Project” was a program of this ruler, who also organized a league to defend neu
 
 {Hamas} (accept Harakat al-Muqa-wamat al-Isla-miyyah or {Islamic Resistance Movement})
 The sailboat Dignity was stopped for purportedly carrying medical aid to this group, and the Zeitoun
@@ -202,6 +154,36 @@ The sailboat Dignity was stopped for purportedly carrying medical aid to this gr
 Susan Brownell Anthony
 This person was expelled from the National Labor Union after interfering in a strike among printing 
 
-Susan Brownell Anthony
-This person was expelled from the National Labor Union after interfering in a strike among printing 
+Thomas Woodrow {Wilson}
+This man pushed for a piece of legislation which fixed an eight-hour work day for trainmen in order 
+
+{West Germany} [or {Westdeutschland}; prompt on {Federal Republic} of {Germany}; prompt on
+A government of this country was brought down in the Guillaume Affair, a spy scandal affecting the c
+
+{Colosseum}
+Its base covers an area of about six acres, and it measures 48 meters high, 188 meters long, and 156
+
+Mexico
+In 1991, this country stopped distributing communal plots of lands known as ejidos (ay-HEE-doze) to 
+
+Shah {Jahan}
+This ruler lost control of Kandahar to the Persians and eventually grew ill and was imprisoned after
+
+{Iranian Revolution} [or {Islamic Revolution}; or {Enqelab}-{e Eslami}]
+This event resulted in the institution of Wilayat al Faqih, or the "Guardianship of the Jurist." Ali
+
+{Thirty Years}' War
+During this war, Frederick V was defeated by at White Mountain by Count Tilly, who later won at Brei
+
+Dalai Lama or Tenzin Gyatso (RGYA-mtsho)
+equivalents) Toss-Up #11 Born Lhamo Thondup in the village of Takster, he was chosen in 1935 as the 
+
+{Cleopatra} VII Thea Philopator (or {Cleopatra VII} the Father Loving Goddess)
+The eunuch Pothinus temporarily removed this ruler from power, resulting in the Battle of Pelusium. 
+
+{Alexander the Great}
+This man dragged a still alive Batis behind his chariot after winning the Siege of Gaza. He built a 
+
+{Thutmose III} [or {Tuthmosis III}]
+This ruler had the Akh-Menu constructed at Karnak. He ordered the construction of what are now known
 
