@@ -20,14 +20,29 @@ $ allennlp dry-run --include-package fact configs/baseline.jsonnet
 $ allennlp train --include-package fact -s trained-models/baseline configs/baseline.jsonnet
 ```
 
+## Running predictor
+```bash
+$ python -m fact.karl_predictor models/karl-rnn/ preds.json
+```
 
 ## Data
 ### Backend Model Data
-The shared data are on the https://drive.google.com/open?id=1tULLPA_Cn1TOO1rdL1gyLELQg-wF39lU,
-where could also be downloaded from /fs/clip-quiz/xiwen/updated/fact-repetition/backend/src/data/path in case the link not working or too slow.
+The shared data are on the umiacs: /fs/clip-quiz/xiwen/updated/fact-repetition/backend/src/data/.
 
+(Preprocessing of data:
+1. pre_processing.py: delete useless info 
+   protobowl-042818.log -> record.json
+2. deduplication.py: delete duplicated uid/qid record (for same uid & qid, keep record with at least 1 hour interval)
+   record.json ->  record.deduplcaited.json
+3. match.py: keep record whose qid in qanta question set     
+   record.duplicated.json -> record.matched.deduplicated.json
+4. combine_question.py                                       
+   three train/dev/test qanta question set -> qanta.question.json
+5. generate_question：filter qanta_question and add accuraccy       
+   qanta.question.json -> matched.question.json
+)
 
-For runing code on umiacs env, under /fs/clip-quiz/xiwen/updated/fact-repetition/backend/src/ path, type 
+For runing code on umiacs env, under /fs/clip-quiz/xiwen/updated/fact-repetition/backend/src/, type 
 ```bash
 $ bash baseline.sh
 ```
