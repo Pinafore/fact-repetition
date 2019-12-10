@@ -29,8 +29,7 @@ class Flashcard(BaseModel):
 
 ARCHIVE_PATH = 'models/karl-rnn'
 
-predictor = KarlPredictor.from_path(
-    ARCHIVE_PATH, predictor_name=KARL_PREDICTOR)
+predictor = KarlPredictor.from_path(ARCHIVE_PATH, predictor_name=KARL_PREDICTOR)
 learning_rate = 1e-4
 optimizer = torch.optim.Adam(predictor._model.parameters(), lr=learning_rate)
 
@@ -80,3 +79,13 @@ def karl_update(flashcards: List[Flashcard]):
         outputs['loss'].backward()
         optimizer.step()
     # trainer._save_checkpoint("{0}.{1}".format(epoch, training_util.time_to_str(int(last_save_time))))
+    # return loss
+
+
+@app.post('/api/karl/reset')
+def karl_reset():
+    '''
+    reset model parameter to checkpoint
+    '''
+    predictor = KarlPredictor.from_path(ARCHIVE_PATH,
+                                        predictor_name=KARL_PREDICTOR)

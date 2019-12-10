@@ -1,189 +1,1010 @@
+uid 82990a64a4a8f77352144bb626074b5c2f35baf1
+# questions 63
 Junipero {Serra}
-He taught at San Fernando College in Mexico City early in his life, a fact recorded by his biographe
-
-Battle of {Waterloo}
-In one famous scene in this battle, artillery fire blew off the leg of Lord Uxbridge. The prelude to
-
-Sherman [accept William Tecumseh Sherman or John Sherman]
-One man with this last name accompanied Oliver Ellsworth to the Constitutional Convention, while ano
-
-{Florence}
-Troops from this city lost the Battle of Montaperti because of the treachery of Bocca degli Abati. T
-
-{Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}]
-The first woman to appear on a U.S. postage stamp, she revived the medieval hermandades police force
-
-Venice
-Because of an attempted coup, one ruler of this city is represented by a black shroud in this city's
-
-{Francisco} Paulino Hermenegildo Teódulo {Franco} Bahamonde
-In one year, this leader signed a Concordat with the Vatican and a pact with the U.S., and two years
-
-Republic of {Finland} [or {Suomen Tasavalta}]
-This nation joined a military alliance with Germany under the leadership of Risto Ryti. Another lead
-
-{Tiberius} Sempronius Gracchus [prompt on {Gracchus}]
-Early in his career, this man served as a quaestor under the consul Gaius Hostilius Mancinus in Spai
-
-Michael {Bloomberg}
-Kevin Sheekey's resignation spurred rumors that this politician would run for the 2012 presidential 
-
-Olmecs
-So-called human-jaguar copulation scenes can be found in the art of this people. A sacred bog in El 
-
-New Zealand
-In this country, a 1913 Great Strike orchestrated by the Red Feds was opposed by farmers who joined 
-
 Harry S. Truman
-This president's party badly lost the midterm "beef steak election" after he surprisingly lifted reg
-
-{obscenity} (prompt on things like {“pornography”})
-Pennsylvania v. Gordon used the example of “a moron” to dispute the prevailing test for this concept
-
-Maria Theresa [or Maria Theresia; prompt on partial answer]
-The agreement under this ruler that centralized power in the empire was the Ten Years’ Recess,  inc
-
-{Mayflower Compact}
-Christopher Martin stole money from a signer of this document, John Carver. Mourt’s Relation, a desc
-
-{Paris}
-One document named for this city concluded the Albigensian Crusade. Another signed thirty years late
-
 {Justinian} I [or {Justinian} the Great; prompt on {Justinian}]
-This ruler's Syrian treasurer Peter Barsymes speculated recklessly on grains and set up a silk monop
-
-Lord Horatio Herbert {Kitchener}, first Earl Kitchene
-During World War one, this man's reputation was tarnished by the Shell Crisis and involvement in the
-
-{Florence} [or {Firenze}]
-This city's lower classes were known as the "popolo minuto" and led by the wool carders in the 1378 
-
-Lee 
-One member of this family had a home at Menokin and was nicknamed “Lightfoot”; they descend from a s
-
-{Ivan the Terrible} (or {Ivan IV}; or {Ivan Grozny}; or {Ivan Vasilyevich}; prompt on “Ivan”)
-Yermak Timofeyevich explored Siberia in the name of this ruler. This ruler conquered Kazan and Astra
-
-{Crimea}n Peninsula [or The {Crimea}; or {Krym}; or {Qirim}]
-A khanate named for this region changed hands via the Treaty of Kuchuk Kainarji. Ottoman general Ged
-
-Battle of Gettysburg
-General Reynolds was killed on the first day of this battle, as John Buford’s men engaged Harris Het
-
 Ronald Wilson {Reagan}
-This man's idea of a defense system against nuclear missiles, the Strategic Defense Initiative, was 
+Battle of Gettysburg
 
-Municipality of {Beijing} [or {Peking}; or {Beijing} Shi]
-One incarnation of this city was captured by Prince Dorgon about a month after it became the capital
+------wrong-------
+Harry S. Truman
+{Justinian} I [or {Justinian} the Great; prompt on {Justinian}]
+Ronald Wilson {Reagan}
+Battle of Gettysburg
+Battle of {Waterloo}
+⇩1 Olmecs 9
 
+------wrong-------
+{Justinian} I [or {Justinian} the Great; prompt on {Justinian}]
+Ronald Wilson {Reagan}
+Battle of Gettysburg
+Battle of {Waterloo}
+{Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}]
+⇩1 Olmecs 9
+⇩1 Michael {Bloomberg} 8
+⇩1 Venice 7
+⇩1 {Florence} 6
+⇩1 Sherman [accept William Tecumseh Sherman or John Sherman] 5
+
+------correct-------
+Ronald Wilson {Reagan}
 sinking of the RMS Titanic [accept clear-knowledge equivalents]
-William Alden Smith led a Senate investigation into this event, which might have been prevented had 
+Battle of Gettysburg
+Battle of {Waterloo}
+{Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}]
+⇩1 Olmecs 9
+⇩1 Michael {Bloomberg} 8
+⇩1 Venice 7
+⇩1 {Florence} 6
+⇩1 Sherman [accept William Tecumseh Sherman or John Sherman] 5
+⇩1 {Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}] 4
+⇩1 Battle of {Waterloo} 3
+⇩1 Battle of Gettysburg 2
 
-James Monroe
-This man served as a scout for George Washington at the Battle of Monmouth, and he suffered a near f
+------wrong-------
+sinking of the RMS Titanic [accept clear-knowledge equivalents]
+Battle of Gettysburg
+Battle of {Waterloo}
+{Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}]
+Sherman [accept William Tecumseh Sherman or John Sherman]
 
+------wrong-------
+Battle of Gettysburg
+Battle of {Waterloo}
+Republic of {Finland} [or {Suomen Tasavalta}]
+{Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}]
+Sherman [accept William Tecumseh Sherman or John Sherman]
+⇩1 {obscenity} (prompt on things like {“pornography”}) 9
+⇩1 Olmecs 8
+⇩1 Michael {Bloomberg} 7
+⇩1 Venice 6
+⇩1 {Florence} 5
+⇩1 Sherman [accept William Tecumseh Sherman or John Sherman] 4
+⇩1 {Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}] 3
+
+------wrong-------
+Battle of {Waterloo}
+{Francisco} Paulino Hermenegildo Teódulo {Franco} Bahamonde
+Republic of {Finland} [or {Suomen Tasavalta}]
+{Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}]
+Sherman [accept William Tecumseh Sherman or John Sherman]
+⇩1 {obscenity} (prompt on things like {“pornography”}) 9
+⇩1 Olmecs 8
+⇩1 Michael {Bloomberg} 7
+⇩1 Venice 6
+⇩1 {Florence} 5
+⇩1 Sherman [accept William Tecumseh Sherman or John Sherman] 4
+⇩1 {Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}] 3
+⇩1 Republic of {Finland} [or {Suomen Tasavalta}] 2
+
+------wrong-------
+{Francisco} Paulino Hermenegildo Teódulo {Franco} Bahamonde
+Republic of {Finland} [or {Suomen Tasavalta}]
+{Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}]
+Sherman [accept William Tecumseh Sherman or John Sherman]
+{Florence}
+⇩1 {obscenity} (prompt on things like {“pornography”}) 9
+⇩1 Olmecs 8
+⇩1 Michael {Bloomberg} 7
+
+------wrong-------
+{Paris}
+Republic of {Finland} [or {Suomen Tasavalta}]
+{Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}]
+Sherman [accept William Tecumseh Sherman or John Sherman]
+{Florence}
+⇧1 Republic of {Finland} [or {Suomen Tasavalta}] 1
+⇧1 {Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}] 2
+⇧1 Sherman [accept William Tecumseh Sherman or John Sherman] 3
+⇧1 {Florence} 4
+⇧1 Venice 5
+⇧1 {Tiberius} Sempronius Gracchus [prompt on {Gracchus}] 6
+⇧1 Michael {Bloomberg} 7
+⇧1 Olmecs 8
+⇧1 {obscenity} (prompt on things like {“pornography”}) 9
+⇩1 {obscenity} (prompt on things like {“pornography”}) 9
+⇩1 Olmecs 8
+⇩1 Michael {Bloomberg} 7
+⇩1 {Tiberius} Sempronius Gracchus [prompt on {Gracchus}] 6
+⇩1 Venice 5
+⇩1 {Florence} 4
+⇩1 Sherman [accept William Tecumseh Sherman or John Sherman] 3
+⇩1 {Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}] 2
+⇩1 Republic of {Finland} [or {Suomen Tasavalta}] 1
+
+------correct-------
+New Zealand
+Republic of {Finland} [or {Suomen Tasavalta}]
+{Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}]
+Sherman [accept William Tecumseh Sherman or John Sherman]
+{Florence}
+⇧1 Republic of {Finland} [or {Suomen Tasavalta}] 1
+⇧1 {Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}] 2
+⇧1 Sherman [accept William Tecumseh Sherman or John Sherman] 3
+⇧1 {Florence} 4
+⇧1 Venice 5
+⇧1 {Tiberius} Sempronius Gracchus [prompt on {Gracchus}] 6
+⇧1 Michael {Bloomberg} 7
+⇧1 Olmecs 8
+⇧1 {obscenity} (prompt on things like {“pornography”}) 9
+⇩1 {obscenity} (prompt on things like {“pornography”}) 9
+⇩1 Olmecs 8
+⇩1 Michael {Bloomberg} 7
+⇩1 {Tiberius} Sempronius Gracchus [prompt on {Gracchus}] 6
+⇩1 Venice 5
+⇩1 {Florence} 4
+⇩1 Sherman [accept William Tecumseh Sherman or John Sherman] 3
+⇩1 {Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}] 2
+⇩1 Republic of {Finland} [or {Suomen Tasavalta}] 1
+
+------correct-------
+{Florence} [or {Firenze}]
+Republic of {Finland} [or {Suomen Tasavalta}]
+{Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}]
+Sherman [accept William Tecumseh Sherman or John Sherman]
+{Florence}
+⇧1 Republic of {Finland} [or {Suomen Tasavalta}] 1
+⇧1 {Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}] 2
+⇧1 Sherman [accept William Tecumseh Sherman or John Sherman] 3
+⇧1 {Florence} 4
+⇧1 Venice 5
+⇧1 {Tiberius} Sempronius Gracchus [prompt on {Gracchus}] 6
+⇧1 Michael {Bloomberg} 7
+⇧1 Olmecs 8
+⇧1 {obscenity} (prompt on things like {“pornography”}) 9
+⇩1 {obscenity} (prompt on things like {“pornography”}) 9
+⇩1 Olmecs 8
+⇩1 Michael {Bloomberg} 7
+⇩1 {Tiberius} Sempronius Gracchus [prompt on {Gracchus}] 6
+⇩1 Venice 5
+⇩1 {Florence} 4
+⇩1 Sherman [accept William Tecumseh Sherman or John Sherman] 3
+⇩1 {Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}] 2
+⇩1 Republic of {Finland} [or {Suomen Tasavalta}] 1
+
+------correct-------
+Municipality of {Beijing} [or {Peking}; or {Beijing} Shi]
+Republic of {Finland} [or {Suomen Tasavalta}]
+{Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}]
+Sherman [accept William Tecumseh Sherman or John Sherman]
+{Florence}
+⇧1 Republic of {Finland} [or {Suomen Tasavalta}] 1
+⇧1 {Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}] 2
+⇧1 Sherman [accept William Tecumseh Sherman or John Sherman] 3
+⇧1 {Florence} 4
+⇧1 Venice 5
+⇧1 {Tiberius} Sempronius Gracchus [prompt on {Gracchus}] 6
+⇧1 Michael {Bloomberg} 7
+⇧1 Olmecs 8
+⇧1 {obscenity} (prompt on things like {“pornography”}) 9
+⇩1 {obscenity} (prompt on things like {“pornography”}) 9
+⇩1 Olmecs 8
+⇩1 Michael {Bloomberg} 7
+⇩1 {Tiberius} Sempronius Gracchus [prompt on {Gracchus}] 6
+⇩1 Venice 5
+⇩1 {Florence} 4
+⇩1 Sherman [accept William Tecumseh Sherman or John Sherman] 3
+⇩1 {Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}] 2
+⇩1 Republic of {Finland} [or {Suomen Tasavalta}] 1
+
+------correct-------
+Lee 
+Republic of {Finland} [or {Suomen Tasavalta}]
+{Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}]
+Sherman [accept William Tecumseh Sherman or John Sherman]
+{Florence}
+⇧1 Republic of {Finland} [or {Suomen Tasavalta}] 1
+⇧1 {Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}] 2
+⇧1 Sherman [accept William Tecumseh Sherman or John Sherman] 3
+⇧1 {Florence} 4
+⇧1 Venice 5
+⇧1 {Tiberius} Sempronius Gracchus [prompt on {Gracchus}] 6
+⇧1 Michael {Bloomberg} 7
+⇧1 Olmecs 8
+⇧1 {obscenity} (prompt on things like {“pornography”}) 9
+⇩1 {obscenity} (prompt on things like {“pornography”}) 9
+⇩1 Olmecs 8
+⇩1 Michael {Bloomberg} 7
+⇩1 {Tiberius} Sempronius Gracchus [prompt on {Gracchus}] 6
+⇩1 Venice 5
+⇩1 {Florence} 4
+⇩1 Sherman [accept William Tecumseh Sherman or John Sherman] 3
+⇩1 {Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}] 2
+⇩1 Republic of {Finland} [or {Suomen Tasavalta}] 1
+
+------correct-------
+Maria Theresa [or Maria Theresia; prompt on partial answer]
+Republic of {Finland} [or {Suomen Tasavalta}]
+{Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}]
+Sherman [accept William Tecumseh Sherman or John Sherman]
+{Florence}
+⇧1 Republic of {Finland} [or {Suomen Tasavalta}] 1
+⇧1 {Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}] 2
+⇧1 Sherman [accept William Tecumseh Sherman or John Sherman] 3
+⇧1 {Florence} 4
+⇧1 Venice 5
+⇧1 {Tiberius} Sempronius Gracchus [prompt on {Gracchus}] 6
+⇧1 Michael {Bloomberg} 7
+⇧1 Olmecs 8
+⇧1 {obscenity} (prompt on things like {“pornography”}) 9
+⇩1 {obscenity} (prompt on things like {“pornography”}) 9
+⇩1 Olmecs 8
+⇩1 Michael {Bloomberg} 7
+⇩1 {Tiberius} Sempronius Gracchus [prompt on {Gracchus}] 6
+⇩1 Venice 5
+⇩1 {Florence} 4
+⇩1 Sherman [accept William Tecumseh Sherman or John Sherman] 3
+⇩1 {Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}] 2
+⇩1 Republic of {Finland} [or {Suomen Tasavalta}] 1
+
+------correct-------
+{Mayflower Compact}
+Republic of {Finland} [or {Suomen Tasavalta}]
+{Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}]
+Sherman [accept William Tecumseh Sherman or John Sherman]
+{Florence}
+⇧1 Republic of {Finland} [or {Suomen Tasavalta}] 1
+⇧1 {Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}] 2
+⇧1 Sherman [accept William Tecumseh Sherman or John Sherman] 3
+⇧1 {Florence} 4
+⇧1 Venice 5
+⇧1 {Tiberius} Sempronius Gracchus [prompt on {Gracchus}] 6
+⇧1 Michael {Bloomberg} 7
+⇧1 Olmecs 8
+⇧1 {obscenity} (prompt on things like {“pornography”}) 9
+⇩1 {obscenity} (prompt on things like {“pornography”}) 9
+⇩1 Olmecs 8
+⇩1 Michael {Bloomberg} 7
+⇩1 {Tiberius} Sempronius Gracchus [prompt on {Gracchus}] 6
+⇩1 Venice 5
+⇩1 {Florence} 4
+⇩1 Sherman [accept William Tecumseh Sherman or John Sherman] 3
+⇩1 {Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}] 2
+⇩1 Republic of {Finland} [or {Suomen Tasavalta}] 1
+
+------wrong-------
+Republic of {Finland} [or {Suomen Tasavalta}]
+{Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}]
+Sherman [accept William Tecumseh Sherman or John Sherman]
+{Florence}
+Venice
+
+------wrong-------
+{Isabella I} [prompt on {Isabella}; accept {Isabella of Castile} and Aragon; accept {Isabella the Catholic}]
+Sherman [accept William Tecumseh Sherman or John Sherman]
+{Florence}
+Venice
+Lord Horatio Herbert {Kitchener}, first Earl Kitchene
+⇩1 Giuseppe {Garibaldi} 9
+⇩1 {obscenity} (prompt on things like {“pornography”}) 8
+⇩1 Olmecs 7
+⇩1 Michael {Bloomberg} 6
+⇩1 {Tiberius} Sempronius Gracchus [prompt on {Gracchus}] 5
+
+------wrong-------
+Sherman [accept William Tecumseh Sherman or John Sherman]
+{Florence}
+Venice
+Lord Horatio Herbert {Kitchener}, first Earl Kitchene
+{Tiberius} Sempronius Gracchus [prompt on {Gracchus}]
+⇩1 Giuseppe {Garibaldi} 9
+
+------wrong-------
+{Ivan the Terrible} (or {Ivan IV}; or {Ivan Grozny}; or {Ivan Vasilyevich}; prompt on “Ivan”)
+{Florence}
+Venice
+Lord Horatio Herbert {Kitchener}, first Earl Kitchene
+{Tiberius} Sempronius Gracchus [prompt on {Gracchus}]
+⇧1 {Florence} 1
+⇧1 Venice 2
+⇧1 Lord Horatio Herbert {Kitchener}, first Earl Kitchene 3
+⇧1 {Tiberius} Sempronius Gracchus [prompt on {Gracchus}] 4
+⇧1 Michael {Bloomberg} 5
+⇧1 Olmecs 6
+⇧1 {obscenity} (prompt on things like {“pornography”}) 7
+⇧1 George {Calvert,} or the first {Lord Baltimore} 8
+⇧1 Giuseppe {Garibaldi} 9
+⇩1 Giuseppe {Garibaldi} 9
+⇩1 George {Calvert,} or the first {Lord Baltimore} 8
+⇩1 {obscenity} (prompt on things like {“pornography”}) 7
+⇩1 Olmecs 6
+⇩1 Michael {Bloomberg} 5
+⇩1 {Tiberius} Sempronius Gracchus [prompt on {Gracchus}] 4
+⇩1 Lord Horatio Herbert {Kitchener}, first Earl Kitchene 3
+⇩1 Venice 2
+⇩1 {Florence} 1
+
+------correct-------
+{Crimea}n Peninsula [or The {Crimea}; or {Krym}; or {Qirim}]
+{Florence}
+Venice
+Lord Horatio Herbert {Kitchener}, first Earl Kitchene
+{Tiberius} Sempronius Gracchus [prompt on {Gracchus}]
+⇧1 {Florence} 1
+⇧1 Venice 2
+⇧1 Lord Horatio Herbert {Kitchener}, first Earl Kitchene 3
+⇧1 {Tiberius} Sempronius Gracchus [prompt on {Gracchus}] 4
+⇧1 Michael {Bloomberg} 5
+⇧1 Olmecs 6
+⇧1 {obscenity} (prompt on things like {“pornography”}) 7
+⇧1 George {Calvert,} or the first {Lord Baltimore} 8
+⇧1 Giuseppe {Garibaldi} 9
+⇩1 Giuseppe {Garibaldi} 9
+⇩1 George {Calvert,} or the first {Lord Baltimore} 8
+⇩1 {obscenity} (prompt on things like {“pornography”}) 7
+⇩1 Olmecs 6
+⇩1 Michael {Bloomberg} 5
+⇩1 {Tiberius} Sempronius Gracchus [prompt on {Gracchus}] 4
+⇩1 Lord Horatio Herbert {Kitchener}, first Earl Kitchene 3
+⇩1 Venice 2
+⇩1 {Florence} 1
+
+------wrong-------
+{Florence}
+Venice
+Lord Horatio Herbert {Kitchener}, first Earl Kitchene
+{Tiberius} Sempronius Gracchus [prompt on {Gracchus}]
+Michael {Bloomberg}
+⇩1 Giuseppe {Garibaldi} 9
+
+------wrong-------
+Venice
+Lord Horatio Herbert {Kitchener}, first Earl Kitchene
+{Tiberius} Sempronius Gracchus [prompt on {Gracchus}]
+Michael {Bloomberg}
+Olmecs
+⇩1 Giuseppe {Garibaldi} 9
+⇩1 {Miss America} pageant 8
+
+------wrong-------
+Lord Horatio Herbert {Kitchener}, first Earl Kitchene
+{Tiberius} Sempronius Gracchus [prompt on {Gracchus}]
+Michael {Bloomberg}
+Olmecs
+{obscenity} (prompt on things like {“pornography”})
+⇩1 Giuseppe {Garibaldi} 9
+⇩1 {Miss America} pageant 8
+⇩1 Crimean War 7
+⇩1 George {Calvert,} or the first {Lord Baltimore} 6
+
+------wrong-------
 {Songhai} Empire
-The ethnic people who ruled this empire first inhabited its capital under the king Dia Kossoi. Parti
+{Tiberius} Sempronius Gracchus [prompt on {Gracchus}]
+Michael {Bloomberg}
+Olmecs
+{obscenity} (prompt on things like {“pornography”})
+⇧1 {Tiberius} Sempronius Gracchus [prompt on {Gracchus}] 1
+⇧1 Michael {Bloomberg} 2
+⇧1 Olmecs 3
+⇧1 {obscenity} (prompt on things like {“pornography”}) 4
+⇧1 James Monroe 5
+⇧1 George {Calvert,} or the first {Lord Baltimore} 6
+⇧1 Crimean War 7
+⇧1 {Miss America} pageant 8
+⇧1 Giuseppe {Garibaldi} 9
+⇩1 Giuseppe {Garibaldi} 9
+⇩1 {Miss America} pageant 8
+⇩1 Crimean War 7
+⇩1 George {Calvert,} or the first {Lord Baltimore} 6
+⇩1 James Monroe 5
+⇩1 {obscenity} (prompt on things like {“pornography”}) 4
+⇩1 Olmecs 3
+⇩1 Michael {Bloomberg} 2
+⇩1 {Tiberius} Sempronius Gracchus [prompt on {Gracchus}] 1
 
-Crimean War
-The first war to be photographed extensively and the first war to utilize modern devices such as the
+------wrong-------
+{Tiberius} Sempronius Gracchus [prompt on {Gracchus}]
+Michael {Bloomberg}
+Olmecs
+{obscenity} (prompt on things like {“pornography”})
+James Monroe
 
-George {Calvert,} or the first {Lord Baltimore}
-A sponsor of a small colony at Ferryland in his Province of Avalon, Newfoundland, he was determined 
-
-{Miss America} pageant
-It claims to be the world’s largest scholarship provider for women. Recent format changes include th
-
-Giuseppe {Garibaldi}
-He lived with the inventor Antonio Meucci on Staten Island for a few years after he was forced into 
-
-Benedict {Arnold}
-A group overseen by this figure was provided with bad maps by Reuben Colburn. Powder House Day comme
-
+------wrong-------
+Michael {Bloomberg}
+Olmecs
 massacring {Jews} (accept {pogroms} or anything that mentions killing or persecuting {Jews})
-One of these events happened in 1066 against vizier ibn Naghrela and thousands others in Granada, wh
+{obscenity} (prompt on things like {“pornography”})
+James Monroe
+⇩1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 Giuseppe {Garibaldi} 8
+⇩1 {Miss America} pageant 7
+⇩1 Crimean War 6
+⇩1 George {Calvert,} or the first {Lord Baltimore} 5
+⇩1 James Monroe 4
+⇩1 {obscenity} (prompt on things like {“pornography”}) 3
 
-{Argentina}
-One politician from this country was forced to step down after losing the Battle of Caseros to Urqui
+------wrong-------
+Benedict {Arnold}
+Olmecs
+massacring {Jews} (accept {pogroms} or anything that mentions killing or persecuting {Jews})
+{obscenity} (prompt on things like {“pornography”})
+James Monroe
+⇧1 Olmecs 1
+⇧1 massacring {Jews} (accept {pogroms} or anything that mentions killing or persecuting {Jews}) 2
+⇧1 {obscenity} (prompt on things like {“pornography”}) 3
+⇧1 James Monroe 4
+⇧1 George {Calvert,} or the first {Lord Baltimore} 5
+⇧1 Crimean War 6
+⇧1 {Miss America} pageant 7
+⇧1 Giuseppe {Garibaldi} 8
+⇧1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 Giuseppe {Garibaldi} 8
+⇩1 {Miss America} pageant 7
+⇩1 Crimean War 6
+⇩1 George {Calvert,} or the first {Lord Baltimore} 5
+⇩1 James Monroe 4
+⇩1 {obscenity} (prompt on things like {“pornography”}) 3
+⇩1 massacring {Jews} (accept {pogroms} or anything that mentions killing or persecuting {Jews}) 2
+⇩1 Olmecs 1
 
+------wrong-------
+Olmecs
+massacring {Jews} (accept {pogroms} or anything that mentions killing or persecuting {Jews})
+{obscenity} (prompt on things like {“pornography”})
 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}]
-This country experienced an interregnum during a crisis that took place between 1383 and 1385. As a 
+James Monroe
+⇩1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 Giuseppe {Garibaldi} 8
+⇩1 {Miss America} pageant 7
+⇩1 Crimean War 6
+⇩1 George {Calvert,} or the first {Lord Baltimore} 5
+⇩1 James Monroe 4
 
-Sumerian Civilization
-During this civilization's Renaissance, one of its leaders named Shulgi completed an iconic religiou
+------wrong-------
+{Argentina}
+massacring {Jews} (accept {pogroms} or anything that mentions killing or persecuting {Jews})
+{obscenity} (prompt on things like {“pornography”})
+{Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}]
+James Monroe
+⇧1 massacring {Jews} (accept {pogroms} or anything that mentions killing or persecuting {Jews}) 1
+⇧1 {obscenity} (prompt on things like {“pornography”}) 2
+⇧1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 3
+⇧1 James Monroe 4
+⇧1 George {Calvert,} or the first {Lord Baltimore} 5
+⇧1 Crimean War 6
+⇧1 {Miss America} pageant 7
+⇧1 Giuseppe {Garibaldi} 8
+⇧1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 Giuseppe {Garibaldi} 8
+⇩1 {Miss America} pageant 7
+⇩1 Crimean War 6
+⇩1 George {Calvert,} or the first {Lord Baltimore} 5
+⇩1 James Monroe 4
+⇩1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 3
+⇩1 {obscenity} (prompt on things like {“pornography”}) 2
+⇩1 massacring {Jews} (accept {pogroms} or anything that mentions killing or persecuting {Jews}) 1
 
-{Whiskey Ring} Scandal
-History One of its sections funded papers against Carl Schurz in order to increase presidential supp
+------wrong-------
+massacring {Jews} (accept {pogroms} or anything that mentions killing or persecuting {Jews})
+{obscenity} (prompt on things like {“pornography”})
+{Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}]
+James Monroe
+George {Calvert,} or the first {Lord Baltimore}
+⇩1 {Thutmose III} [or {Tuthmosis III}] 9
 
+------wrong-------
 {Indo-European} language family
-It contains the now-extinct Tocharian branch of China’s Tarim Basin, which included Kuchean and Turf
+{obscenity} (prompt on things like {“pornography”})
+{Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}]
+James Monroe
+George {Calvert,} or the first {Lord Baltimore}
+⇧1 {obscenity} (prompt on things like {“pornography”}) 1
+⇧1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇧1 James Monroe 3
+⇧1 George {Calvert,} or the first {Lord Baltimore} 4
+⇧1 Crimean War 5
+⇧1 {Miss America} pageant 6
+⇧1 Giuseppe {Garibaldi} 7
+⇧1 Sumerian Civilization 8
+⇧1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 Sumerian Civilization 8
+⇩1 Giuseppe {Garibaldi} 7
+⇩1 {Miss America} pageant 6
+⇩1 Crimean War 5
+⇩1 George {Calvert,} or the first {Lord Baltimore} 4
+⇩1 James Monroe 3
+⇩1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇩1 {obscenity} (prompt on things like {“pornography”}) 1
 
-People’s Republic of {China}
-The United States recently won permission from the WTO to impose steel tariffs on this nation, and a
-
-{Kurd}ish People
-Operation Provide Comfort was intended to help this group of people that was also targeted by the An
-
-Louis XV [prompt on Louis]
-This ruler fired his foreign minister, the Duke of Choiseul, for supporting Spain during the Falklan
-
-the {Mayflower Compact}
-Its original version was lost, but a version generally accepted as accurate comes from Mourt's Relat
-
-Jacques Rene {Chirac}
-This man was president during the Clearstream affair and during his country's CPE protests. During h
-
-Vladimir Ilich {Lenin} [or Vladimir Ilich {Ulyanov}]
-This leader created a ten-point strategy for his countrymen in his April Theses, which were written 
-
-William {Henry Harrison} [prompt on {Harrison}]
-This President ran on a campaign that promoted his simplicity as a man who knew about “log cabins an
-
-Giuseppe {Garibaldi}
-This author of Citizen of the World wrote his memoirs with Dumas. He fought at Laguna in the War of 
-
-Vassily {Kandinsky}
-From his early works in Russia to landscapes he created in Munich during the 1910’s, many of his pai
-
+------correct-------
 {Catherine II} or {Catherine the Great}
-The so-called “Greek Project” was a program of this ruler, who also organized a league to defend neu
+{obscenity} (prompt on things like {“pornography”})
+{Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}]
+James Monroe
+George {Calvert,} or the first {Lord Baltimore}
+⇧1 {obscenity} (prompt on things like {“pornography”}) 1
+⇧1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇧1 James Monroe 3
+⇧1 George {Calvert,} or the first {Lord Baltimore} 4
+⇧1 Crimean War 5
+⇧1 {Miss America} pageant 6
+⇧1 Giuseppe {Garibaldi} 7
+⇧1 Sumerian Civilization 8
+⇧1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 Sumerian Civilization 8
+⇩1 Giuseppe {Garibaldi} 7
+⇩1 {Miss America} pageant 6
+⇩1 Crimean War 5
+⇩1 George {Calvert,} or the first {Lord Baltimore} 4
+⇩1 James Monroe 3
+⇩1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇩1 {obscenity} (prompt on things like {“pornography”}) 1
 
-{Hamas} (accept Harakat al-Muqa-wamat al-Isla-miyyah or {Islamic Resistance Movement})
-The sailboat Dignity was stopped for purportedly carrying medical aid to this group, and the Zeitoun
+------wrong-------
+{Whiskey Ring} Scandal
+{obscenity} (prompt on things like {“pornography”})
+{Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}]
+James Monroe
+George {Calvert,} or the first {Lord Baltimore}
+⇧1 {obscenity} (prompt on things like {“pornography”}) 1
+⇧1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇧1 James Monroe 3
+⇧1 George {Calvert,} or the first {Lord Baltimore} 4
+⇧1 Crimean War 5
+⇧1 {Miss America} pageant 6
+⇧1 Giuseppe {Garibaldi} 7
+⇧1 Sumerian Civilization 8
+⇧1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 Sumerian Civilization 8
+⇩1 Giuseppe {Garibaldi} 7
+⇩1 {Miss America} pageant 6
+⇩1 Crimean War 5
+⇩1 George {Calvert,} or the first {Lord Baltimore} 4
+⇩1 James Monroe 3
+⇩1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇩1 {obscenity} (prompt on things like {“pornography”}) 1
 
-Susan Brownell Anthony
-This person was expelled from the National Labor Union after interfering in a strike among printing 
+------correct-------
+Giuseppe {Garibaldi}
+{obscenity} (prompt on things like {“pornography”})
+{Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}]
+James Monroe
+George {Calvert,} or the first {Lord Baltimore}
+⇧1 {obscenity} (prompt on things like {“pornography”}) 1
+⇧1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇧1 James Monroe 3
+⇧1 George {Calvert,} or the first {Lord Baltimore} 4
+⇧1 Crimean War 5
+⇧1 {Miss America} pageant 6
+⇧1 Giuseppe {Garibaldi} 7
+⇧1 Sumerian Civilization 8
+⇧1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 Sumerian Civilization 8
+⇩1 Giuseppe {Garibaldi} 7
+⇩1 {Miss America} pageant 6
+⇩1 Crimean War 5
+⇩1 George {Calvert,} or the first {Lord Baltimore} 4
+⇩1 James Monroe 3
+⇩1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇩1 {obscenity} (prompt on things like {“pornography”}) 1
 
-Thomas Woodrow {Wilson}
-This man pushed for a piece of legislation which fixed an eight-hour work day for trainmen in order 
+------wrong-------
+People’s Republic of {China}
+{obscenity} (prompt on things like {“pornography”})
+{Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}]
+James Monroe
+George {Calvert,} or the first {Lord Baltimore}
+⇧1 {obscenity} (prompt on things like {“pornography”}) 1
+⇧1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇧1 James Monroe 3
+⇧1 George {Calvert,} or the first {Lord Baltimore} 4
+⇧1 Crimean War 5
+⇧1 {Miss America} pageant 6
+⇧1 Giuseppe {Garibaldi} 7
+⇧1 Sumerian Civilization 8
+⇧1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 Sumerian Civilization 8
+⇩1 Giuseppe {Garibaldi} 7
+⇩1 {Miss America} pageant 6
+⇩1 Crimean War 5
+⇩1 George {Calvert,} or the first {Lord Baltimore} 4
+⇩1 James Monroe 3
+⇩1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇩1 {obscenity} (prompt on things like {“pornography”}) 1
 
-{West Germany} [or {Westdeutschland}; prompt on {Federal Republic} of {Germany}; prompt on
-A government of this country was brought down in the Guillaume Affair, a spy scandal affecting the c
+------wrong-------
+{Kurd}ish People
+{obscenity} (prompt on things like {“pornography”})
+{Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}]
+James Monroe
+George {Calvert,} or the first {Lord Baltimore}
+⇧1 {obscenity} (prompt on things like {“pornography”}) 1
+⇧1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇧1 James Monroe 3
+⇧1 George {Calvert,} or the first {Lord Baltimore} 4
+⇧1 Crimean War 5
+⇧1 {Miss America} pageant 6
+⇧1 Giuseppe {Garibaldi} 7
+⇧1 Sumerian Civilization 8
+⇧1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 Sumerian Civilization 8
+⇩1 Giuseppe {Garibaldi} 7
+⇩1 {Miss America} pageant 6
+⇩1 Crimean War 5
+⇩1 George {Calvert,} or the first {Lord Baltimore} 4
+⇩1 James Monroe 3
+⇩1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇩1 {obscenity} (prompt on things like {“pornography”}) 1
 
-{Colosseum}
-Its base covers an area of about six acres, and it measures 48 meters high, 188 meters long, and 156
+------correct-------
+Louis XV [prompt on Louis]
+{obscenity} (prompt on things like {“pornography”})
+{Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}]
+James Monroe
+George {Calvert,} or the first {Lord Baltimore}
+⇧1 {obscenity} (prompt on things like {“pornography”}) 1
+⇧1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇧1 James Monroe 3
+⇧1 George {Calvert,} or the first {Lord Baltimore} 4
+⇧1 Crimean War 5
+⇧1 {Miss America} pageant 6
+⇧1 Giuseppe {Garibaldi} 7
+⇧1 Sumerian Civilization 8
+⇧1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 Sumerian Civilization 8
+⇩1 Giuseppe {Garibaldi} 7
+⇩1 {Miss America} pageant 6
+⇩1 Crimean War 5
+⇩1 George {Calvert,} or the first {Lord Baltimore} 4
+⇩1 James Monroe 3
+⇩1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇩1 {obscenity} (prompt on things like {“pornography”}) 1
 
-Mexico
-In 1991, this country stopped distributing communal plots of lands known as ejidos (ay-HEE-doze) to 
+------correct-------
+the {Mayflower Compact}
+{obscenity} (prompt on things like {“pornography”})
+{Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}]
+James Monroe
+George {Calvert,} or the first {Lord Baltimore}
+⇧1 {obscenity} (prompt on things like {“pornography”}) 1
+⇧1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇧1 James Monroe 3
+⇧1 George {Calvert,} or the first {Lord Baltimore} 4
+⇧1 Crimean War 5
+⇧1 {Miss America} pageant 6
+⇧1 Giuseppe {Garibaldi} 7
+⇧1 Sumerian Civilization 8
+⇧1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 Sumerian Civilization 8
+⇩1 Giuseppe {Garibaldi} 7
+⇩1 {Miss America} pageant 6
+⇩1 Crimean War 5
+⇩1 George {Calvert,} or the first {Lord Baltimore} 4
+⇩1 James Monroe 3
+⇩1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇩1 {obscenity} (prompt on things like {“pornography”}) 1
 
-Shah {Jahan}
-This ruler lost control of Kandahar to the Persians and eventually grew ill and was imprisoned after
+------wrong-------
+Jacques Rene {Chirac}
+{obscenity} (prompt on things like {“pornography”})
+{Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}]
+James Monroe
+George {Calvert,} or the first {Lord Baltimore}
+⇧1 {obscenity} (prompt on things like {“pornography”}) 1
+⇧1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇧1 James Monroe 3
+⇧1 George {Calvert,} or the first {Lord Baltimore} 4
+⇧1 Crimean War 5
+⇧1 {Miss America} pageant 6
+⇧1 Giuseppe {Garibaldi} 7
+⇧1 Sumerian Civilization 8
+⇧1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 Sumerian Civilization 8
+⇩1 Giuseppe {Garibaldi} 7
+⇩1 {Miss America} pageant 6
+⇩1 Crimean War 5
+⇩1 George {Calvert,} or the first {Lord Baltimore} 4
+⇩1 James Monroe 3
+⇩1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇩1 {obscenity} (prompt on things like {“pornography”}) 1
 
-{Iranian Revolution} [or {Islamic Revolution}; or {Enqelab}-{e Eslami}]
-This event resulted in the institution of Wilayat al Faqih, or the "Guardianship of the Jurist." Ali
+------wrong-------
+Vladimir Ilich {Lenin} [or Vladimir Ilich {Ulyanov}]
+{obscenity} (prompt on things like {“pornography”})
+{Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}]
+James Monroe
+George {Calvert,} or the first {Lord Baltimore}
+⇧1 {obscenity} (prompt on things like {“pornography”}) 1
+⇧1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇧1 James Monroe 3
+⇧1 George {Calvert,} or the first {Lord Baltimore} 4
+⇧1 Crimean War 5
+⇧1 {Miss America} pageant 6
+⇧1 Giuseppe {Garibaldi} 7
+⇧1 Sumerian Civilization 8
+⇧1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 Sumerian Civilization 8
+⇩1 Giuseppe {Garibaldi} 7
+⇩1 {Miss America} pageant 6
+⇩1 Crimean War 5
+⇩1 George {Calvert,} or the first {Lord Baltimore} 4
+⇩1 James Monroe 3
+⇩1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇩1 {obscenity} (prompt on things like {“pornography”}) 1
 
-{Thirty Years}' War
-During this war, Frederick V was defeated by at White Mountain by Count Tilly, who later won at Brei
+------correct-------
+William {Henry Harrison} [prompt on {Harrison}]
+{obscenity} (prompt on things like {“pornography”})
+{Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}]
+James Monroe
+George {Calvert,} or the first {Lord Baltimore}
+⇧1 {obscenity} (prompt on things like {“pornography”}) 1
+⇧1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇧1 James Monroe 3
+⇧1 George {Calvert,} or the first {Lord Baltimore} 4
+⇧1 Crimean War 5
+⇧1 {Miss America} pageant 6
+⇧1 Giuseppe {Garibaldi} 7
+⇧1 Sumerian Civilization 8
+⇧1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 Sumerian Civilization 8
+⇩1 Giuseppe {Garibaldi} 7
+⇩1 {Miss America} pageant 6
+⇩1 Crimean War 5
+⇩1 George {Calvert,} or the first {Lord Baltimore} 4
+⇩1 James Monroe 3
+⇩1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇩1 {obscenity} (prompt on things like {“pornography”}) 1
 
-Dalai Lama or Tenzin Gyatso (RGYA-mtsho)
-equivalents) Toss-Up #11 Born Lhamo Thondup in the village of Takster, he was chosen in 1935 as the 
-
-{Cleopatra} VII Thea Philopator (or {Cleopatra VII} the Father Loving Goddess)
-The eunuch Pothinus temporarily removed this ruler from power, resulting in the Battle of Pelusium. 
-
+------correct-------
 {Alexander the Great}
-This man dragged a still alive Batis behind his chariot after winning the Siege of Gaza. He built a 
+{obscenity} (prompt on things like {“pornography”})
+{Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}]
+James Monroe
+George {Calvert,} or the first {Lord Baltimore}
+⇧1 {obscenity} (prompt on things like {“pornography”}) 1
+⇧1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇧1 James Monroe 3
+⇧1 George {Calvert,} or the first {Lord Baltimore} 4
+⇧1 Crimean War 5
+⇧1 {Miss America} pageant 6
+⇧1 Giuseppe {Garibaldi} 7
+⇧1 Sumerian Civilization 8
+⇧1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 Sumerian Civilization 8
+⇩1 Giuseppe {Garibaldi} 7
+⇩1 {Miss America} pageant 6
+⇩1 Crimean War 5
+⇩1 George {Calvert,} or the first {Lord Baltimore} 4
+⇩1 James Monroe 3
+⇩1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇩1 {obscenity} (prompt on things like {“pornography”}) 1
 
-{Thutmose III} [or {Tuthmosis III}]
-This ruler had the Akh-Menu constructed at Karnak. He ordered the construction of what are now known
+------wrong-------
+Vassily {Kandinsky}
+{obscenity} (prompt on things like {“pornography”})
+{Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}]
+James Monroe
+George {Calvert,} or the first {Lord Baltimore}
+⇧1 {obscenity} (prompt on things like {“pornography”}) 1
+⇧1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇧1 James Monroe 3
+⇧1 George {Calvert,} or the first {Lord Baltimore} 4
+⇧1 Crimean War 5
+⇧1 {Miss America} pageant 6
+⇧1 Giuseppe {Garibaldi} 7
+⇧1 Sumerian Civilization 8
+⇧1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 Sumerian Civilization 8
+⇩1 Giuseppe {Garibaldi} 7
+⇩1 {Miss America} pageant 6
+⇩1 Crimean War 5
+⇩1 George {Calvert,} or the first {Lord Baltimore} 4
+⇩1 James Monroe 3
+⇩1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇩1 {obscenity} (prompt on things like {“pornography”}) 1
 
+------correct-------
+{West Germany} [or {Westdeutschland}; prompt on {Federal Republic} of {Germany}; prompt on
+{obscenity} (prompt on things like {“pornography”})
+{Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}]
+James Monroe
+George {Calvert,} or the first {Lord Baltimore}
+⇧1 {obscenity} (prompt on things like {“pornography”}) 1
+⇧1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇧1 James Monroe 3
+⇧1 George {Calvert,} or the first {Lord Baltimore} 4
+⇧1 Crimean War 5
+⇧1 {Miss America} pageant 6
+⇧1 Giuseppe {Garibaldi} 7
+⇧1 Sumerian Civilization 8
+⇧1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 Sumerian Civilization 8
+⇩1 Giuseppe {Garibaldi} 7
+⇩1 {Miss America} pageant 6
+⇩1 Crimean War 5
+⇩1 George {Calvert,} or the first {Lord Baltimore} 4
+⇩1 James Monroe 3
+⇩1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇩1 {obscenity} (prompt on things like {“pornography”}) 1
+
+------wrong-------
+{Hamas} (accept Harakat al-Muqa-wamat al-Isla-miyyah or {Islamic Resistance Movement})
+{obscenity} (prompt on things like {“pornography”})
+{Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}]
+James Monroe
+George {Calvert,} or the first {Lord Baltimore}
+⇧1 {obscenity} (prompt on things like {“pornography”}) 1
+⇧1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇧1 James Monroe 3
+⇧1 George {Calvert,} or the first {Lord Baltimore} 4
+⇧1 Crimean War 5
+⇧1 {Miss America} pageant 6
+⇧1 Giuseppe {Garibaldi} 7
+⇧1 Sumerian Civilization 8
+⇧1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 Sumerian Civilization 8
+⇩1 Giuseppe {Garibaldi} 7
+⇩1 {Miss America} pageant 6
+⇩1 Crimean War 5
+⇩1 George {Calvert,} or the first {Lord Baltimore} 4
+⇩1 James Monroe 3
+⇩1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇩1 {obscenity} (prompt on things like {“pornography”}) 1
+
+------wrong-------
+Susan Brownell Anthony
+{obscenity} (prompt on things like {“pornography”})
+{Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}]
+James Monroe
+George {Calvert,} or the first {Lord Baltimore}
+⇧1 {obscenity} (prompt on things like {“pornography”}) 1
+⇧1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇧1 James Monroe 3
+⇧1 George {Calvert,} or the first {Lord Baltimore} 4
+⇧1 Crimean War 5
+⇧1 {Miss America} pageant 6
+⇧1 Giuseppe {Garibaldi} 7
+⇧1 Sumerian Civilization 8
+⇧1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 Sumerian Civilization 8
+⇩1 Giuseppe {Garibaldi} 7
+⇩1 {Miss America} pageant 6
+⇩1 Crimean War 5
+⇩1 George {Calvert,} or the first {Lord Baltimore} 4
+⇩1 James Monroe 3
+⇩1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇩1 {obscenity} (prompt on things like {“pornography”}) 1
+
+------wrong-------
+Thomas Woodrow {Wilson}
+{obscenity} (prompt on things like {“pornography”})
+{Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}]
+James Monroe
+George {Calvert,} or the first {Lord Baltimore}
+⇧1 {obscenity} (prompt on things like {“pornography”}) 1
+⇧1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇧1 James Monroe 3
+⇧1 George {Calvert,} or the first {Lord Baltimore} 4
+⇧1 Crimean War 5
+⇧1 {Miss America} pageant 6
+⇧1 Giuseppe {Garibaldi} 7
+⇧1 Sumerian Civilization 8
+⇧1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 Sumerian Civilization 8
+⇩1 Giuseppe {Garibaldi} 7
+⇩1 {Miss America} pageant 6
+⇩1 Crimean War 5
+⇩1 George {Calvert,} or the first {Lord Baltimore} 4
+⇩1 James Monroe 3
+⇩1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇩1 {obscenity} (prompt on things like {“pornography”}) 1
+
+------correct-------
+{Cleopatra} VII Thea Philopator (or {Cleopatra VII} the Father Loving Goddess)
+{obscenity} (prompt on things like {“pornography”})
+{Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}]
+James Monroe
+George {Calvert,} or the first {Lord Baltimore}
+⇧1 {obscenity} (prompt on things like {“pornography”}) 1
+⇧1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇧1 James Monroe 3
+⇧1 George {Calvert,} or the first {Lord Baltimore} 4
+⇧1 Crimean War 5
+⇧1 {Miss America} pageant 6
+⇧1 Giuseppe {Garibaldi} 7
+⇧1 Sumerian Civilization 8
+⇧1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 Sumerian Civilization 8
+⇩1 Giuseppe {Garibaldi} 7
+⇩1 {Miss America} pageant 6
+⇩1 Crimean War 5
+⇩1 George {Calvert,} or the first {Lord Baltimore} 4
+⇩1 James Monroe 3
+⇩1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇩1 {obscenity} (prompt on things like {“pornography”}) 1
+
+------correct-------
+{Colosseum}
+{obscenity} (prompt on things like {“pornography”})
+{Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}]
+James Monroe
+George {Calvert,} or the first {Lord Baltimore}
+⇧1 {obscenity} (prompt on things like {“pornography”}) 1
+⇧1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇧1 James Monroe 3
+⇧1 George {Calvert,} or the first {Lord Baltimore} 4
+⇧1 Crimean War 5
+⇧1 {Miss America} pageant 6
+⇧1 Giuseppe {Garibaldi} 7
+⇧1 Sumerian Civilization 8
+⇧1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 Sumerian Civilization 8
+⇩1 Giuseppe {Garibaldi} 7
+⇩1 {Miss America} pageant 6
+⇩1 Crimean War 5
+⇩1 George {Calvert,} or the first {Lord Baltimore} 4
+⇩1 James Monroe 3
+⇩1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇩1 {obscenity} (prompt on things like {“pornography”}) 1
+
+------wrong-------
+Mexico
+{obscenity} (prompt on things like {“pornography”})
+{Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}]
+James Monroe
+George {Calvert,} or the first {Lord Baltimore}
+⇧1 {obscenity} (prompt on things like {“pornography”}) 1
+⇧1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇧1 James Monroe 3
+⇧1 George {Calvert,} or the first {Lord Baltimore} 4
+⇧1 Crimean War 5
+⇧1 {Miss America} pageant 6
+⇧1 Giuseppe {Garibaldi} 7
+⇧1 Sumerian Civilization 8
+⇧1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 Sumerian Civilization 8
+⇩1 Giuseppe {Garibaldi} 7
+⇩1 {Miss America} pageant 6
+⇩1 Crimean War 5
+⇩1 George {Calvert,} or the first {Lord Baltimore} 4
+⇩1 James Monroe 3
+⇩1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇩1 {obscenity} (prompt on things like {“pornography”}) 1
+
+------correct-------
+Shah {Jahan}
+{obscenity} (prompt on things like {“pornography”})
+{Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}]
+James Monroe
+George {Calvert,} or the first {Lord Baltimore}
+⇧1 {obscenity} (prompt on things like {“pornography”}) 1
+⇧1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇧1 James Monroe 3
+⇧1 George {Calvert,} or the first {Lord Baltimore} 4
+⇧1 Crimean War 5
+⇧1 {Miss America} pageant 6
+⇧1 Giuseppe {Garibaldi} 7
+⇧1 Sumerian Civilization 8
+⇧1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 {Thutmose III} [or {Tuthmosis III}] 9
+⇩1 Sumerian Civilization 8
+⇩1 Giuseppe {Garibaldi} 7
+⇩1 {Miss America} pageant 6
+⇩1 Crimean War 5
+⇩1 George {Calvert,} or the first {Lord Baltimore} 4
+⇩1 James Monroe 3
+⇩1 {Portugal} [or {Portuguese} Republic; or Republica {Portuguesa}] 2
+⇩1 {obscenity} (prompt on things like {“pornography”}) 1
