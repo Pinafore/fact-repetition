@@ -11,7 +11,7 @@ from tqdm import tqdm
 # import seaborn as sns
 
 def main():
-    QUESTION_FILE = 'preds.json'
+    QUESTION_FILE = 'preds_dev_embeddings.json'
 
     with open(QUESTION_FILE) as f:
         question_data = json.load(f)
@@ -28,13 +28,15 @@ def main():
     # print(answers)
 
     with open('./output_label.tsv', 'w+') as out_file:
+        out_file.write('answer\tquestion_accuracy\n')
         for i in tqdm(range(len(question_data['predictions']))):
         # tsv_writer = csv.writer(out_file, delimiter='\n')
         # tsv_writer.writerow(answers)
             if '\n' in question_data['predictions'][i]['answer']:
-                out_file.write(question_data['predictions'][i]['answer'].split()[0] + '\n')
+                out_file.write(question_data['predictions'][i]['answer'].split()[0] + '\t')
             else:
-                out_file.write(question_data['predictions'][i]['answer'] + '\n')
+                out_file.write(question_data['predictions'][i]['answer'] + '\t')
+            out_file.write(str(question_data['predictions'][i]['accuracy']) + '\n')
 
     print(i)
 

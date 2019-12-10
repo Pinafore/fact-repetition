@@ -202,11 +202,12 @@ class QantaReader(DatasetReader):
                 question_id=qid,
                 label='correct' if label else 'wrong'
             )
-            if file_path == 'data/train.record.json' and i > 945000:
-                break
-            if file_path == 'data/dev.record.json' and i > 135000:
-                break
-
+            # if i == 1: 
+            #     print(uid, qid, text)
+            # if file_path == 'data/train.record.json' and i > 945000:
+            #     break
+            # if file_path == 'data/dev.record.json' and i > 135000:
+            #     break
             if instance is None:
                 continue
             else:
@@ -274,16 +275,18 @@ class QantaReader(DatasetReader):
                 times_seen_wrong = 0
 
         if category is None:
-            category = self._question_data[qid]['category']
-            if category in self._category_feature:
-                category = self._category_feature[category]
+            if qid in self._question_data:
+                category = self._question_data[qid]['category']
+                if category in self._category_feature:
+                    category = self._category_feature[category]
             else:
                 category = self._category_feature['Unlabeled']
         
         if difficulty is None:
-            difficulty = self._question_data[qid]['difficulty']
-            if difficulty in self._difficulty_feature:
-                difficulty = self._difficulty_feature[difficulty]
+            if qid in self._question_data:
+                difficulty = self._question_data[qid]['difficulty']
+                if difficulty in self._difficulty_feature:
+                    difficulty = self._difficulty_feature[difficulty]
             else:
                 difficulty = self._difficulty_feature['Unlabeled']
 
