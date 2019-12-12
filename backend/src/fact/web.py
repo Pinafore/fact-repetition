@@ -25,15 +25,21 @@ class Flashcard(BaseModel):
     times_correct: Optional[float]
     times_wrong: Optional[float]
     label: Optional[str]
+    answer: Optional[str]
+        
+        
+class Hyperparams(BaseModel):
+    learning_rate: Optional[float]
+    num_epochs: Optional[int]
 
 
-ARCHIVE_PATH = 'models/karl-rnn'
+ARCHIVE_PATH = 'checkpoint/karl-rnn'
+PARAMS_PATH = 'checkpoint/karl-rnn/model_state_epoch_4.th'
 
 predictor = KarlPredictor.from_path(ARCHIVE_PATH, predictor_name=KARL_PREDICTOR)
-learning_rate = 1e-4
-optimizer = torch.optim.Adam(predictor._model.parameters(), lr=learning_rate)
-
+LEARNING_RATE = 1e-4
 UPDATE_EPOCHS = 2
+optimizer = torch.optim.Adam(predictor._model.parameters(), lr=LEARNING_RATE)
 
 app = FastAPI()
 
@@ -73,11 +79,16 @@ def karl_update(flashcards: List[Flashcard]):
     dataset = Batch(instances)
     dataset.index_instances(predictor._model.vocab)
     model_input = util.move_to_device(dataset.as_tensor_dict(), cuda_device)
+    losses = []
     for i in range(UPDATE_EPOCHS):
         predictor._model.zero_grad()
         outputs = predictor._model(**model_input)
         outputs['loss'].backward()
         optimizer.step()
+        losses.append(outputs['loss'].detach().numpy().tolist())
+    return {
+        'loss': losses
+    }
     # trainer._save_checkpoint("{0}.{1}".format(epoch, training_util.time_to_str(int(last_save_time))))
     # return loss
 
@@ -87,5 +98,23 @@ def karl_reset():
     '''
     reset model parameter to checkpoint
     '''
-    predictor = KarlPredictor.from_path(ARCHIVE_PATH,
-                                        predictor_name=KARL_PREDICTOR)
+    global predictor, optimizer
+    predictor._model.load_state_dict(torch.load(PARAMS_PATH))
+    optimizer = torch.optim.Adam(predictor._model.parameters(), lr=LEARNING_RATE)
+
+
+@app.post('/api/karl/set_hyperparameter')
+def karl_set_hyperparameter(params: Hyperparams):
+    '''
+    update the retention model using user study records
+    each card should have a 'label' either 'correct' or 'wrong'
+    '''
+    global LEARNING_RATE, UPDATE_EPOCHS, optimizer
+    params = params.dict()
+    LEARNING_RATE = params.get('learning_rate', LEARNING_RATE)
+    UPDATE_EPOCHS = params.get('num_epochs', UPDATE_EPOCHS)
+    optimizer = torch.optim.Adam(predictor._model.parameters(), lr=LEARNING_RATE)
+    return {
+        'learning_rate': LEARNING_RATE,
+        'num_epochs': UPDATE_EPOCHS,
+    }
