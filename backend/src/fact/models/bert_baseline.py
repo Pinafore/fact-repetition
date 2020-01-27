@@ -75,9 +75,9 @@ class KarlModel(Model):
             self._dropout = lambda x: x
 
         if use_bert:
-            classifier_input_dim = BERT_DIM + 100 + 9 + 35 + 19 # 35 category onehot; 19 difficulty onehot
+            classifier_input_dim = BERT_DIM + 100 + 7 # 35 category onehot; 19 difficulty onehot
         else:
-            classifier_input_dim = self._context.get_output_dim() + 100 + 9 + 35 + 19
+            classifier_input_dim = self._context.get_output_dim() + 100 + 7
 
         self._classifier = nn.Linear(classifier_input_dim, 2)
         self._accuracy = CategoricalAccuracy()
