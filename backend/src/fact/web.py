@@ -31,14 +31,17 @@ class Flashcard(BaseModel):
 class Hyperparams(BaseModel):
     learning_rate: Optional[float]
     num_epochs: Optional[int]
+    target: Optional[float]
 
 
 ARCHIVE_PATH = 'checkpoint/karl-rnn'
-PARAMS_PATH = 'checkpoint/karl-rnn/model_state_epoch_4.th'
+PARAMS_PATH = 'checkpoint/karl-rnn/best.th'
+# PARAMS_PATH = 'checkpoint/karl-rnn-jeopardy/best.th'
 
 predictor = KarlPredictor.from_path(ARCHIVE_PATH, predictor_name=KARL_PREDICTOR)
 LEARNING_RATE = 1e-4
 UPDATE_EPOCHS = 2
+TARGET = 1.0
 optimizer = torch.optim.Adam(predictor._model.parameters(), lr=LEARNING_RATE)
 
 app = FastAPI()
@@ -58,7 +61,7 @@ def karl_schedule(flashcards: List[Flashcard]):
     '''
     preds = [predictor.predict_json(card.dict()) for card in flashcards]
     probs = [x['probs'][0] for x in preds]  # labels = [correct, wrong]
-    card_order = np.argsort(np.abs(0.5 - np.asarray(probs))).tolist()
+    card_order = np.argsort(np.abs(TARGET - np.asarray(probs))).tolist()
     return {
         'probs': [x['probs'] for x in preds],
         'all_labels': [x['all_labels'] for x in preds],
@@ -113,8 +116,10 @@ def karl_set_hyperparameter(params: Hyperparams):
     params = params.dict()
     LEARNING_RATE = params.get('learning_rate', LEARNING_RATE)
     UPDATE_EPOCHS = params.get('num_epochs', UPDATE_EPOCHS)
+    TARGET = params.get('target', TARGET)
     optimizer = torch.optim.Adam(predictor._model.parameters(), lr=LEARNING_RATE)
     return {
         'learning_rate': LEARNING_RATE,
         'num_epochs': UPDATE_EPOCHS,
+        'target': TARGET,
     }
