@@ -160,10 +160,11 @@ class JeopardyReader(DatasetReader):
         record_df.fillna('', inplace=True)
 
         log.info('train records')
-        train_df = record_df[:math.floor(0.7*len(record_df))][:5000]
+        # train_df = record_df[:math.floor(0.7*len(record_df))]
 
         log.info('dev records')
-        dev_df = record_df[math.floor(0.7*len(record_df)):math.floor(0.8*len(record_df))][:1000]
+        # dev_df = record_df[math.floor(0.7*len(record_df)):math.floor(0.8*len(record_df))]
+        train_df, dev_df, test_df = np.split(record_df.sample(frac=1), [int(.7*len(record_df)), int(.8*len(record_df))])
 
         log.info('question file')
         self._question_data = {row['qid']:row for index, row in question_df.iterrows()}
@@ -193,7 +194,16 @@ class JeopardyReader(DatasetReader):
         record_df = pickle.load(pickle_in)
         record_df['correct'] = record_df['correct'].map({1:True, -1:False})
         record_df = record_df.rename(columns={'question_id': 'qid', 'player_id': 'uid', 'timestamp': 'date', 'correct': 'ruling'})
-
+        # remove noise
+        # print(len(record_df))
+        # for index, row in tqdm(record_df.iterrows()):
+        #     qid = row['qid']
+        #     uid = row['uid']
+        #     if qid not in self._question_data or str(qid) == 'nan' or str(uid) == 'nan':
+        #         record_df.drop(index, inplace=True)
+        #     elif self._question_data[qid]['value'][0] == 'D' or self._question_data[qid]['value'][0] == 'F' or self._question_data[qid]['value'][0] == 'T' or self._question_data[qid]['value'][0] == 'V':
+        #         record_df.drop(index, inplace=True)
+        # print(len(record_df))
         train_df = record_df[:math.floor(0.7*len(record_df))]
         dev_df = record_df[math.floor(0.7*len(record_df)):math.floor(0.8*len(record_df))]
         if file_path == 'data/train.record.json':
@@ -201,13 +211,13 @@ class JeopardyReader(DatasetReader):
         elif file_path == 'data/dev.record.json':
             data = dev_df
         i = 0
-        # print("==========", file_path)
         for index, row in data.iterrows():
             i += 1
             uid = row['uid']
             qid = row['qid']
             if qid not in self._question_data or str(qid) == 'nan' or str(uid) == 'nan':
-                # print(qid)
+                continue
+            elif self._question_data[qid]['value'][0] == 'D' or self._question_data[qid]['value'][0] == 'F' or self._question_data[qid]['value'][0] == 'T' or self._question_data[qid]['value'][0] == 'V':
                 continue
             text = self._question_data[qid]['text']
             # if text == '' or (isinstance(text, float) and  math.isnan(text)):
@@ -223,9 +233,9 @@ class JeopardyReader(DatasetReader):
             )
             # if i == 1: 
             #     print(uid, qid, text)
-            # if file_path == 'data/train.record.json' and i > 945000:
+            # if file_path == 'data/train.record.json' and i > 9450:
             #     break
-            # if file_path == 'data/dev.record.json' and i > 135000:
+            # if file_path == 'data/dev.record.json' and i > 1350:
             #     break
             if instance is None:
                 continue
@@ -247,6 +257,9 @@ class JeopardyReader(DatasetReader):
                          times_seen: Optional[float] = None,
                          times_seen_correct: Optional[float] = None,
                          times_seen_wrong: Optional[float] = None,
+                         catnum: Optional[float] = None,
+                         level: Optional[float] = None,
+                         round_num: Optional[float] = None,
                         #  category: Optional[str] = None,
                         #  difficulty: Optional[str] = None,
                          label: str = None):
@@ -298,27 +311,35 @@ class JeopardyReader(DatasetReader):
                 times_seen_correct = 0
                 times_seen_wrong = 0
 
-        # if category is None:
-        #     if qid in self._question_data:
-        #         category = self._question_data[qid]['category']
-        #         if category in self._category_feature:
-        #             category = self._category_feature[category]
-        #     else:
-        #         category = self._category_feature['Unlabeled']
-        
-        # if difficulty is None:
-        #     if qid in self._question_data:
-        #         difficulty = self._question_data[qid]['difficulty']
-        #         if difficulty in self._difficulty_feature:
-        #             difficulty = self._difficulty_feature[difficulty]
-        #     else:
-        #         difficulty = self._difficulty_feature['Unlabeled']
+        if catnum is None:
+            catnum = self._question_data[qid]['catnum']
+            level = self._question_data[qid]['level']
+            round_str = self._question_data[qid]['round']
+            date = float(self._question_data[qid]['airdate'][:4])
+            value = self._question_data[qid]['value']
+            if value[0] == '$':
+                value = value[1:]
+            value = float(value)
+            if round_str == 'DJ':
+                round_num = 0
+            elif round_str == 'FJ':
+                round_num = 1
+            elif round_str == 'J':
+                round_num = 2
+            elif round_str == 'ROU':
+                round_str == 3
+
+        cat_onehot = np.zeros(14)
+        cat_onehot[catnum] += 1
+        round_onehot = np.zeros(4)
+        round_onehot[round_num] += 1
 
         feature_vec = [
             user_accuracy, 
             question_accuracy, 
             uid_count, qid_count,
             times_seen, times_seen_correct, times_seen_wrong,
+            cat_onehot, level, round_onehot, date, value
         ]
 
         # feature_vec = np.concatenate((feature_vec, category, difficulty), axis=None)
