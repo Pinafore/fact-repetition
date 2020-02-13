@@ -45,7 +45,7 @@ class KarlModel(Model):
         if int(use_bert) + int(use_rnn) != 1:
             raise ValueError('Must use one of bert or rnn')
 
-        self.output_embedding = False
+        self.output_embedding = True
         self._uid_embedder = uid_embedder
         self._qid_embedder = qid_embedder
         self._text_field_embedder = text_field_embedder

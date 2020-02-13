@@ -46,10 +46,17 @@ optimizer = torch.optim.Adam(predictor._model.parameters(), lr=LEARNING_RATE)
 
 app = FastAPI()
 
+def simplify(flashcard: Flashcard):
+    return {
+        'text': flashcard['text'], 
+        'user_id': flashcard['user_id'],
+        'question_id': flashcard['question_id'],
+        'label': flashcard['label'],
+    }
+
 @app.post('/api/karl/predict')
 def karl_predict(flashcard: Flashcard):
-    pred = predictor.predict_json(flashcard.dict())
-    return {'probs': pred['probs'], 'all_labels': pred['all_labels']}
+    return predictor.predict_json(simplify(flashcard.dict()))
 
 
 @app.post('/api/karl/schedule')
@@ -62,10 +69,12 @@ def karl_schedule(flashcards: List[Flashcard]):
     preds = [predictor.predict_json(card.dict()) for card in flashcards]
     probs = [x['probs'][0] for x in preds]  # labels = [correct, wrong]
     card_order = np.argsort(np.abs(TARGET - np.asarray(probs))).tolist()
+    q_reps = [p['q_rep'] for p in preds]
     return {
         'probs': [x['probs'] for x in preds],
         'all_labels': [x['all_labels'] for x in preds],
-        'card_order': card_order
+        'card_order': card_order,
+        'q_reps': q_reps
     }
 
 
@@ -75,7 +84,7 @@ def karl_update(flashcards: List[Flashcard]):
     update the retention model using user study records
     each card should have a 'label' either 'correct' or 'wrong'
     '''
-    flashcards = [card.dict() for card in flashcards]
+    flashcards = [simplify(card.dict()) for card in flashcards]
     instances = predictor._batch_json_to_instances(flashcards)
     batch_size = len(instances)
     cuda_device = predictor._model._get_prediction_device()
