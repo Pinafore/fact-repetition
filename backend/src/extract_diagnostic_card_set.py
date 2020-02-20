@@ -77,63 +77,48 @@ category_whitelist = [
 ]
 
 # load jeopardy data
-jeopardy_questions_df = pickle.load(open('data/jeopardy_358974_questions_20190612.pkl', 'rb'))
-jeopardy_records_df = pickle.load(open('data/jeopardy_310326_question_player_pairs_20190612.pkl', 'rb'))
+with open('data/jeopardy_358974_questions_20190612.pkl', 'rb') as f:
+    questions_df = pickle.load(f)
+with open('data/jeopardy_310326_question_player_pairs_20190612.pkl', 'rb') as f:
+    records_df = pickle.load(f)
+questions_df = questions_df.rename(columns={'questionid': 'question_id'})
 
-jeopardy_questions_dict = jeopardy_questions_df.to_dict()
-jeopardy_questions = {}
-for i in jeopardy_questions_dict['clue'].keys():
-    jeopardy_questions[jeopardy_questions_dict['questionid'][i]] = {
-        'text': jeopardy_questions_dict['clue'][i],
-        'answer': str(jeopardy_questions_dict['answer'][i]),
-    }
-    
-category_mapping = {}
-for row in jeopardy_questions_df.itertuples():
-    category_mapping[row.questionid] = row.category
-jeopardy_records_df['category'] = jeopardy_records_df['question_id'].apply(lambda x: category_mapping.get(x, None))
+# merge question_df and records_df into one
+questions_df['karl_id'] = questions_df.index # what KARL db uses as ID
+records_df = questions_df.set_index('question_id').join(records_df.set_index('question_id'))
+records_df['question_id'] = records_df.index
+# get number of records per question
+s = records_df['question_id'].value_counts()
+counts_df = pd.DataFrame({'question_id': s.index, 'count': s.values})
+records_df = records_df.join(counts_df.set_index('question_id'))
+# filter questions with no more than one records
+records_df = records_df[records_df['count'] > 1]
+# rank questions within each category by number of records
+records_df_grouped = records_df.groupby('category')
+ranking_dict = {}
+for category in category_whitelist:
+    group = records_df_grouped.get_group(category)
+    ranking_dict.update(group['count'].rank(ascending=False, method='min').to_dict())
+records_df['category_ranking'] = records_df['question_id'].apply(lambda x: ranking_dict.get(x, None))
+# remove questions ranked lower than top 20
+records_df = records_df[records_df['category_ranking'] <= 30]
 
-# # most popular categories
-# category_blacklist = ['POTPOURRI', 'BEFORE & AFTER,']
-# category_counter = collections.Counter(jeopardy_questions_df.category.tolist())
-# top_categories = [x[0] for x in category_counter.most_common()]
-# top_categories = [x for x in top_categories if x != 'POTPOURRI'][:n_categories]
-# print(top_categories)
-
-top_categories = category_whitelist
-print('# categories', len(top_categories))
-
-# most popular questions within each category
-selected_qids = []
-for category in top_categories:
-    df = jeopardy_records_df[jeopardy_records_df.category == category]
-    question_counter = collections.Counter(df.question_id)
-    selected_qids += [x[0] for x in question_counter.most_common(n_questions_per_category)]
-
-# filter records and get fake label
-jeopardy_records_filtered_df = jeopardy_records_df[jeopardy_records_df.question_id.isin(selected_qids)]
-jeopardy_set_df = jeopardy_records_filtered_df[['question_id', 'correct']]
-jeopardy_set_df['correct'] = jeopardy_set_df['correct'].apply(lambda x: int(x) / 2 + 0.5)
-jeopardy_set_df = jeopardy_set_df.groupby('question_id').mean()
-jeopardy_set_df['correct'] = jeopardy_set_df['correct'].apply(lambda x: 1 if x > 0.6 else -1)
-    
-# create set of flashcards from study record
-max_cards = 1000
+records_grouped = records_df.drop('question_id', axis=1).groupby('question_id')
 flashcards = []
-for row in jeopardy_set_df.itertuples():
-    if len(flashcards) >= max_cards:
-        break
-    qid = row.Index
+for question_id, records_group in records_grouped:
+# if True:
+    # question_id = '1014-6-5'
+    # records_group = records_grouped.get_group(question_id)
+    question = records_group.iloc[0]
     flashcards.append({
-        'text': jeopardy_questions[qid]['text'],
-        'user_id': 'diagnosis',
-        'question_id': qid,
-        'label': 'correct' if row.correct == 1 else 'wrong',
-        'answer': jeopardy_questions[qid]['answer'],
-        'category': category_mapping[qid],
-        })
-print('# flashcards', len(flashcards))
-print()
-
-with open('diagnostic_card_set.pkl', 'wb') as f:
+        'text': question['clue'],
+        'answer': question['answer'],
+        'user_id': 'diagnostic',
+        'record_id': question_id,
+        'question_id': int(question['karl_id']),
+        'category': question['category'],
+    })
+with open('diagnostic_flashcards.pkl', 'wb') as f:
     pickle.dump(flashcards, f)
+with open('diagnostic_records.pkl', 'wb') as f:
+    pickle.dump(records_df, f)
