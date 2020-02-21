@@ -6,23 +6,7 @@ from fastapi import FastAPI
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
 
-
-class Flashcard(BaseModel):
-    text: str
-    user_id: Optional[str]
-    question_id: Optional[str]
-    user_accuracy: Optional[float]
-    user_buzzratio: Optional[float]
-    user_count: Optional[float]
-    question_accuracy: Optional[float]
-    question_buzzratio: Optional[float]
-    question_count: Optional[float]
-    times_seen: Optional[float]
-    times_correct: Optional[float]
-    times_wrong: Optional[float]
-    label: Optional[str]
-    answer: Optional[str]
-    category: Optional[str]
+from fact.util import Flashcard
 
 
 class Hyperparams(BaseModel):
@@ -37,7 +21,7 @@ class Hyperparams(BaseModel):
     lr_qrep: Optional[float]
 
 
-n_features = 50000
+# n_components shouldn't be changed on the fly
 n_components = 20
 with open('tf_vectorizer.pkl', 'rb') as f:
     tf_vectorizer = pickle.load(f)
@@ -91,7 +75,7 @@ def train_save_lda():
         flashcards = pickle.load(f)
     all_text = [x['text'] for x in flashcards]
     tf_vectorizer = CountVectorizer(max_df=0.95, min_df=2,
-                                    max_features=n_features,
+                                    max_features=50000,
                                     stop_words='english')
     tf = tf_vectorizer.fit_transform(all_text)
     lda = LatentDirichletAllocation(n_components=n_components, max_iter=5,

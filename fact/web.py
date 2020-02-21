@@ -34,9 +34,9 @@ class Hyperparams(BaseModel):
     target: Optional[float]
 
 
-ARCHIVE_PATH = 'checkpoint/karl-rnn'
-PARAMS_PATH = 'checkpoint/karl-rnn/best.th'
-# PARAMS_PATH = 'checkpoint/karl-rnn-jeopardy/best.th'
+ARCHIVE_PATH = 'checkpoints/karl-rnn'
+PARAMS_PATH = 'checkpoints/karl-rnn/best.th'
+# PARAMS_PATH = 'checkpoints/karl-rnn-jeopardy/best.th'
 
 predictor = KarlPredictor.from_path(ARCHIVE_PATH, predictor_name=KARL_PREDICTOR)
 LEARNING_RATE = 1e-4

@@ -5,8 +5,6 @@ import collections
 import pandas as pd
 import numpy as np
 
-n_questions_per_category = 20
-
 category_whitelist = [
     'SCIENCE',
     'LITERATURE',
