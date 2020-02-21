@@ -1,6 +1,8 @@
+checkpoint
+data
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
-data
 *.pkl
 *.py[cod]
 *$py.class
