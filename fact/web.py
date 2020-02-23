@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from fastapi import FastAPI
 
 from fact.karl_predictor import KarlPredictor, KARL_PREDICTOR
+from fact.util import Flashcard
 
 class Flashcard(BaseModel):
     text: str
