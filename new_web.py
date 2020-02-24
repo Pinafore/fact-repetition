@@ -16,7 +16,7 @@ from whoosh.qparser import QueryParser
 
 from fact.util import Flashcard
 
-diagnostic_file = 'data/diagnostic_flashcards.pkl'
+diagnostic_questions = 'data/diagnostic_questions.pkl'
 records_file = 'data/jeopardy_310326_question_player_pairs_20190612.pkl'
 questions_file = 'data/jeopardy_358974_questions_20190612.pkl'
 
@@ -43,17 +43,25 @@ class Scheduler(ABC):
     def set_params(self, params):
         pass
 
+    @abstractmethod
+    def schedule(self, cards):
+        pass
+
+    @abstractmethod
+    def update(self, cards):
+        pass
+
 
 class MovingAvgScheduler(Scheduler):
 
     def __init__(self, n_components=20,
-                 lambda_qrep=0.1, lambda_category=-0.3,
+                 lambda_embedding=0.1, lambda_prob=0.7, lambda_category=0.3,
                  lambda_repetition=-1.0, lambda_leitner=1.0,
                  step_correct=0.5, step_wrong=0.05, step_qrep=0.3,
                  vectorizer_path='checkpoints/tf_vectorizer.pkl',
                  lda_path='checkpoints/lda.pkl'):
         self.n_components = n_components
-        self.lambda_qrep = lambda_qrep
+        self.lambda_embedding = lambda_embedding
         self.lambda_category = lambda_category
         self.lambda_repetition = lambda_repetition
         self.lambda_leitner = lambda_leitner
@@ -98,10 +106,10 @@ class MovingAvgScheduler(Scheduler):
 
         if not (os.path.exists(self.vectorizer_path) \
                 and os.path.exists(self.lda_path)):
-            with open(diagnostic_file, 'rb') as f:
+            with open(diagnostic_questions, 'rb') as f:
                 diagnostic_cards = pickle.load(f)
             print('building lda...')
-            build_lda(cards)
+            self.build_lda(diagnostic_cards)
         
         with open(self.vectorizer_path, 'rb') as f:
             self.tf_vectorizer = pickle.load(f)
@@ -114,10 +122,10 @@ class MovingAvgScheduler(Scheduler):
         # round number since start
         self.round_num = 0
         # topical representation
-        self.qrep = np.array([1 / n_components for _ in range(n_components)])
+        self.qrep = np.array([1 / self.n_components for _ in range(self.n_components)])
         # average difficulty (user accuracy) of questions seen so far
         # TODO replace 0.5 with average user accuracy
-        self.prob = [0.5 for _ in range(n_components)],
+        self.prob = [0.5 for _ in range(self.n_components)]
         # TODO might need to remove for quizbowl?
         self.category = 'HISTORY'
 
@@ -134,8 +142,8 @@ class MovingAvgScheduler(Scheduler):
                                         max_features=50000,
                                         stop_words='english')
         tf = tf_vectorizer.fit_transform(texts)
-        lda = LatentDirichletAllocation(n_components=n_components, max_iter=5,
-                                        learning_method='online',
+        lda = LatentDirichletAllocation(n_components=self.n_components,
+                                        max_iter=5, learning_method='online',
                                         learning_offset=50.,
                                         random_state=0)
         lda.fit(tf)
@@ -164,29 +172,26 @@ class MovingAvgScheduler(Scheduler):
                 answer=q['answer']
             )
         writer.commit()
-        
-        # with ix.searcher() as searcher:
-        #     query = QueryParser("text", ix.schema).parse("ballpoint")
-        #     results = searcher.search(query)
-        #     print(results[0])
 
     def embed(self, cards):
-        return [self.embed_one(card) for card in cards]
+        for i, card in enumerate(cards):
+            cards[i]['embedding'] = self.embed_one(card)
+        return cards
 
     def embed_one(self, card):
         if 'embedding' in card:
             self.embed_cache[card['question_id']] = card['embedding']
-            return card
+            return card['embedding']
         if card['question_id'] in self.embed_cache:
-            card['embedding'] = self.embed_cache[card['question_id']]
-            return card
+            return self.embed_cache[card['question_id']]
         embedding = lda.transform(tf_vectorizer.transform([card['text']]))
         self.embed_cache[card['question_id']] = embedding
-        card['embedding'] = embedding
-        return card
+        return embedding
 
     def predict(self, cards):
-        return [self.predict_one(card) for card in cards]
+        for i, card in enumerate(cards):
+            cards[i]['prob'] = self.predict_one(card)
+        return cards
 
     def retrieve(self, card):
         record_id = self.karl_to_question_id[int(card['question_id'])]
@@ -216,13 +221,12 @@ class MovingAvgScheduler(Scheduler):
     def predict_one(self, card):
         if 'prob' in card:
             self.prob_cache[card['question_id']] = card['prob']
-            return card
+            return card['prob']
         if card['question_id'] in self.prob_cache:
             return self.prob_cache[card['question_id']]
         prob = self._predict_one(card)
         self.prob_cache[card['question_id']] = prob
-        card['prob'] = prob
-        return card
+        return prob
 
     def _predict_one(self, card):
         # 1. find same or similar card in records
@@ -231,10 +235,84 @@ class MovingAvgScheduler(Scheduler):
             return np.dot([x['prob'] for x in cards], scores)
         # 2. use model to predict
         # TODO
-        pass
+        return 0
 
     def set_params(self, params):
+        self.lambda_embedding = params.get('lambda_embedding', lambda_embedding)
+        self.lambda_category = params.get('lambda_category', lambda_category)
+        self.lambda_repetition = params.get('lambda_repetition', lambda_repetition)
+        self.lambda_leitner = params.get('lambda_leitner', lambda_leitner)
+        self.step_correct = params.get('step_correct', step_correct)
+        self.step_wrong = params.get('step_wrong', step_wrong)
+        self.step_qrep = params.get('step_qrep', step_qrep)
+
+    def dist_rep(self, card):
+        # distance penalty due to repetition
+        prev = self.prev_cache.get(card['question_id'], self.round_num)
+        return self.round_num - prev
+    
+    def dist_category(self, card):
+        return int(card['category'] != self.category)
+    
+    def dist_prob(self, card):
+        if 'embedding' not in card:
+            card['embedding'] = self.embed_one(card)
+        topic_idx = np.argmax(card['embedding'])
+        d = card['prob'] - self.prob[topic_index]
+        # penalize easier questions
+        d *= 1 if d < 0 else 10
+        return abs(d)
+    
+    def dist_qrep(self, card):
+        def cosine_distance(a, b):
+            return 1 - (a @ b.T) / (np.linalg.norm(a) * np.linalg.norm(b))
+        return cosine_distance(self.embedding, card['embedding'])
+
+    def dist_leitner(self, card):
+        # TODO
         pass
+    
+    def score_one(self, card):
+        # compute distance metric of given card to current state
+        # dist = topic repr dist + topical difficulty dist + recency + leitner score
+        # NOTE lower is better
+        card['embedding'] = self.embed_one(card)
+        card['prob'] = self.predict_one(card)
+        return self.lambda_embedding * self.dist_qrep(card) \
+            + self.lambda_prob * self.dist_prob(card) \
+            + self.lambda_category * self.dist_category(card) \
+            # + self.lambda_repetition * self.dist_rep(card)
+            # + self.lambda_leitner * self.dist_leitner(card)
+
+    def score(self, cards):
+        cards = self.embed(self.predict(cards))
+        return [self.score_one(card) for card in cards]
+    
+    def schedule(self, cards):
+        scores = self.score(cards)
+        for i, card in enumerate(cards):
+            # NOTE lower is better
+            cards[i]['score'] = scores[i]
+        reverse_index = {x['question_id']: i for i, x in enumerate(cards)}
+        cards_sorted = sorted(cards, key=lambda x: x['dist'])
+        # sorted indices 
+        order = [reverse_index[x['question_id']] for x in cards_sorted]
+        ranking = [order.index(i) for i, _ in cards]
+        return order, ranking
+
+    def update(self, cards):
+        cards = self.embed(self.predict(cards))
+        for card in cards:
+            topic_index = np.argmax(card['qrep'])
+            if card['label'] == 'correct':
+                a = self.step_correct
+                self.prob[topic_index] = a * card['prob'] + (1 - a) * self.prob[topic_index]
+            else:
+                self.prob['prob'][topic_index] += self.step_wrong
+            self.prob[topic_index] = min(1.0, self.prob[topic_index])
+            b = self.step_qrep
+            self.embedding = b * card['embedding'] + (1 - b) * card['embedding']
+            self.category = card['category']
             
     
 class Hyperparams(BaseModel):
@@ -249,106 +327,34 @@ class Hyperparams(BaseModel):
     lr_qrep: Optional[float]
 
 
-
-
-
-
-
-
-
 app = FastAPI()
+scheduler = MovingAvgScheduler()
 
-def get_dist_rep(card, param):
-    # distance penalty due to repetition
-    prev = cache['prev'].get(card['question_id'], 0)
-    dist_rep = (curr['round'] - prev) * param['repetition']
-    return dist_rep
-
-def get_dist_category(card, param):
-    return param['category'] if card['category'] == curr['category'] else 0
-
-def cosine_distance(a, b):
-    return 1 - (a @ b.T) / (np.linalg.norm(a) * np.linalg.norm(b))
-
-def get_dist_prob(card, param):
-    topic_index = np.argmax(card['qrep'])
-    dist_prob = card['prob'] - curr['prob'][topic_index]
-    dist_prob *= param['prob_difficult'] if dist_prob < 0 else param['prob_easy']
-    dist_prob = abs(dist_prob)
-    return dist_prob
-
-def get_dist_qrep(card, param):
-    return param['qrep'] * cosine_distance(curr['qrep'], card['qrep'])
-
-def get_dist(card):
-    # compute distance metric of given card to current state
-    # dist = topic repr dist + topical difficulty dist + recency + leitner score
-    card['qrep'] = get_qrep(card)
-    card['prob'] = get_prob(card)
-    dist = get_dist_qrep(card, param) \
-        + get_dist_prob(card, param) \
-        + get_dist_category(card, param) \
-        # + get_dist_rep(card, param)
-    return dist
-    
 
 @app.post('/api/karl/predict')
-def karl_predict(flashcard: Flashcard):
-    # TODO: remove?
-    return curr
-
+def karl_predict(card: Flashcard):
+    scheduler.predict_one(card.dict())
 
 @app.post('/api/karl/schedule')
-def karl_schedule(flashcards: List[Flashcard]):
-    flashcards = [x.dict() for x in flashcards]
-    for i, card in enumerate(flashcards):
-        flashcards[i]['dist'] = get_dist(card)
-    reverse_index = {x['question_id']: i for i, x in enumerate(flashcards)}
-    cards_sorted = sorted(flashcards, key=lambda x: x['dist'])
-    card_order = [reverse_index[x['question_id']] for x in cards_sorted]
+def karl_schedule(cards: List[Flashcard]):
+    order, ranking = scheduler.schedule([x.dict() for x in cards])
     return {
         'all_labels': [['correct', 'wrong'] for x in flashcards],
-        'card_order': card_order,
-        'curr_prob': curr['prob'],
+        'order': order,
+        'ranking': ranking,
     }
 
-
 @app.post('/api/karl/update')
-def karl_update(flashcards: List[Flashcard]):
-    global curr
-    flashcards = [x.dict() for x in flashcards]
-    for card in flashcards:
-        card['prob'] = get_prob(card)
-        card['qrep'] = get_qrep(card)
-        topic_index = np.argmax(card['qrep'])
-        if card['label'] == 'correct':
-            alpha = param['lr_prob_correct']
-            curr['prob'][topic_index] = alpha * card['prob'] + (1 - alpha) * curr['prob'][topic_index]
-        else:
-            curr['prob'][topic_index] += param['lr_prob_wrong']
-        curr['prob'][topic_index] = min(1.0, curr['prob'][topic_index])
-        beta = param['lr_qrep']
-        curr['qrep'] = beta * card['qrep'] + (1 - beta) * card['qrep']
-        curr['category'] = card['category']
-
+def karl_update(cards: List[Flashcard]):
+    scheduler.update([x.dict() for x in cards])
 
 @app.post('/api/karl/reset')
 def karl_reset():
-    global curr
-    curr = init_state(n_components)
-
+    scheduler.reset()
 
 @app.post('/api/karl/set_hyperparameter')
-def karl_set_hyperparameter(params: Hyperparams):
-    '''
-    update the retention model using user study records
-    each card should have a 'label' either 'correct' or 'wrong'
-    '''
-    global param
-    new_param = params.dict()
-    for name, value in param.items():
-        param[name] = new_param.get(name, value)
-    return param
+def karl_set_params(params: Hyperparams):
+    scheduler.set_params(params.dict())
 
 
 if __name__ == '__main__':
