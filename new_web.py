@@ -11,8 +11,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
 
 from whoosh.fields import *
-from whoosh.index import create_in
-from whoosh.index import open_dir
+from whoosh.index import create_in, open_dir
 from whoosh.qparser import QueryParser
 
 from fact.util import Flashcard
@@ -86,7 +85,7 @@ class MovingAvgScheduler(Scheduler):
         df_grouped = df.reset_index()[['question_id', 'correct']].groupby('question_id')
         dict_correct_mean = df_grouped.mean().to_dict()['correct']
         dict_records_cnt = df_grouped.count().to_dict()['correct']
-        questions_df['accuracy'] = questions_df['question_id'].apply(lambda x: dict_correct_mean.get(x, None))
+        questions_df['prob'] = questions_df['question_id'].apply(lambda x: dict_correct_mean.get(x, None))
         questions_df['count'] = questions_df['question_id'].apply(lambda x: dict_records_cnt.get(x, None))
         self.questions_df = questions_df
         self.question_id_set = set(self.questions_df['question_id'])
@@ -95,6 +94,7 @@ class MovingAvgScheduler(Scheduler):
         if not os.path.exists(index_dir):
             print('building whoosh...')
             self.build_whoosh()
+        self.ix = open_dir(index_dir)
 
         if not (os.path.exists(self.vectorizer_path) \
                 and os.path.exists(self.lda_path)):
@@ -146,8 +146,29 @@ class MovingAvgScheduler(Scheduler):
             pickle.dump(lda, f)
 
     def build_whoosh(self):
-        # TODO
-        pass
+        index_dir = 'whoosh_index'
+        if not os.path.exists(index_dir):
+            os.mkdir(index_dir)
+        schema = Schema(
+            question_id=ID(stored=True),
+            text=TEXT(stored=True),
+            answer=TEXT(stored=True)
+        )
+        ix = create_in(index_dir, schema)
+        writer = ix.writer()
+        
+        for idx, q in tqdm(self.questions_df.iterrows()):
+            writer.add_document(
+                question_id=q['question_id'],
+                text=q['text'],
+                answer=q['answer']
+            )
+        writer.commit()
+        
+        # with ix.searcher() as searcher:
+        #     query = QueryParser("text", ix.schema).parse("ballpoint")
+        #     results = searcher.search(query)
+        #     print(results[0])
 
     def embed(self, cards):
         return [self.embed_one(card) for card in cards]
@@ -173,10 +194,24 @@ class MovingAvgScheduler(Scheduler):
         # 1. try to find in records with gameid-catnum-level
         if record_id in self.question_id_set:
             hits = self.questions_df[self.questions_df.question_id == record_id]
-            cards = [card.to_dict() for idx, card in hits.iterrows()]
-            return cards, [1 / len(hits) for _ in range(len(hits))]
+            if len(hits) > 0:
+                cards = [card.to_dict() for idx, card in hits.iterrows()]
+                return cards, [1 / len(hits) for _ in range(len(hits))]
 
         # 2. do text search
+        with self.ix.searcher() as searcher:
+            query = QueryParser("text", ix.schema).parse(card['text'])
+            hits = searcher.search(query)
+            hits = [x for x in hits if x['answer'] == card['answer']]
+            if len(hits) > 0:
+                scores = [x.score for x in hits]
+                ssum = np.sum(scores)
+                scores = [x / ssum for x in scores]
+                cards = [self.questions_df[self.questions_df['question_id'] == x['question_id']].iloc[0] for x in hits]
+                return cards, scores
+
+        # 3. not found
+        return [], []
         
     def predict_one(self, card):
         if 'prob' in card:
@@ -191,10 +226,12 @@ class MovingAvgScheduler(Scheduler):
 
     def _predict_one(self, card):
         # 1. find same or similar card in records
-        cards, weights = self.retrieve(card)
+        cards, score = self.retrieve(card)
         if len(cards) > 0:
-            return np.dot([x['accuracy'] for x in cards], weights)
+            return np.dot([x['prob'] for x in cards], scores)
         # 2. use model to predict
+        # TODO
+        pass
 
     def set_params(self, params):
         pass
@@ -210,6 +247,13 @@ class Hyperparams(BaseModel):
     lr_prob_correct: Optional[float]
     lr_prob_wrong: Optional[float]
     lr_qrep: Optional[float]
+
+
+
+
+
+
+
 
 
 app = FastAPI()
