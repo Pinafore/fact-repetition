@@ -3,6 +3,9 @@ import logging
 import os
 import torch
 
+from typing import List, Optional
+from pydantic import BaseModel
+
 
 try:
     CUDA = torch.cuda.is_available()

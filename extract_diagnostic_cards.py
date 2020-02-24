@@ -79,7 +79,6 @@ with open('data/jeopardy_358974_questions_20190612.pkl', 'rb') as f:
     questions_df = pickle.load(f)
 with open('data/jeopardy_310326_question_player_pairs_20190612.pkl', 'rb') as f:
     records_df = pickle.load(f)
-questions_df = questions_df.rename(columns={'questionid': 'question_id'})
 
 # merge question_df and records_df into one
 questions_df['karl_id'] = questions_df.index # what KARL db uses as ID
@@ -109,14 +108,13 @@ for question_id, records_group in records_grouped:
     # records_group = records_grouped.get_group(question_id)
     question = records_group.iloc[0]
     flashcards.append({
-        'text': question['clue'],
+        'text': question['text'],
         'answer': question['answer'],
-        'user_id': 'diagnostic',
         'record_id': question_id,
         'question_id': int(question['karl_id']),
         'category': question['category'],
     })
-with open('diagnostic_flashcards.pkl', 'wb') as f:
+with open('data/diagnostic_questions.pkl', 'wb') as f:
     pickle.dump(flashcards, f)
-with open('diagnostic_records.pkl', 'wb') as f:
+with open('data/diagnostic_records.pkl', 'wb') as f:
     pickle.dump(records_df, f)
