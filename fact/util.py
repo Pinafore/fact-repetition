@@ -35,21 +35,3 @@ def get_logger(name):
         log.addHandler(sh)
         log.setLevel(logging.INFO)
     return log
-
-
-class Flashcard(BaseModel):
-    text: str
-    user_id: Optional[str]
-    question_id: Optional[str]
-    user_accuracy: Optional[float]
-    user_buzzratio: Optional[float]
-    user_count: Optional[float]
-    question_accuracy: Optional[float]
-    question_buzzratio: Optional[float]
-    question_count: Optional[float]
-    times_seen: Optional[float]
-    times_correct: Optional[float]
-    times_wrong: Optional[float]
-    label: Optional[str]
-    answer: Optional[str]
-    category: Optional[str]

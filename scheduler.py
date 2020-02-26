@@ -14,13 +14,6 @@ from whoosh.fields import *
 from whoosh.index import create_in, open_dir
 from whoosh.qparser import QueryParser
 
-from fact.util import Flashcard
-
-diagnostic_questions = 'data/diagnostic_questions.pkl'
-records_file = 'data/jeopardy_310326_question_player_pairs_20190612.pkl'
-questions_file = 'data/jeopardy_358974_questions_20190612.pkl'
-
-
 
 class Scheduler(ABC):
 
@@ -72,6 +65,9 @@ class MovingAvgScheduler(Scheduler):
         self.vectorizer_path = vectorizer_path
         self.lda_path = lda_path
 
+        self.diagnostic_file = 'data/diagnostic_questions.pkl'
+        self.index_dir = 'whoosh_index'
+
         print('loading question and records...')
         with open('data/jeopardy_310326_question_player_pairs_20190612.pkl', 'rb') as f:
             records_df = pickle.load(f)
@@ -92,15 +88,14 @@ class MovingAvgScheduler(Scheduler):
         self.questions_df = questions_df
         self.question_id_set = set(self.questions_df['question_id'])
 
-        index_dir = 'whoosh_index'
-        if not os.path.exists(index_dir):
+        if not os.path.exists(self.index_dir):
             print('building whoosh...')
             self.build_whoosh()
-        self.ix = open_dir(index_dir)
+        self.ix = open_dir(self.index_dir)
 
         if not (os.path.exists(self.vectorizer_path) \
                 and os.path.exists(self.lda_path)):
-            with open(diagnostic_questions, 'rb') as f:
+            with open(self.diagnostic_file, 'rb') as f:
                 diagnostic_cards = pickle.load(f)
             print('building lda...')
             self.build_lda(diagnostic_cards)
@@ -110,17 +105,42 @@ class MovingAvgScheduler(Scheduler):
         with open(self.lda_path, 'rb') as f:
             self.lda = pickle.load(f)
 
-        self.reset()
+        with open(self.diagnostic_file, 'rb') as f:
+            diagnostic_cards = pickle.load(f)
+        self.reset(self.estimate_avg(diagnostic_cards))
         print('scheduler ready')
 
-    def reset(self):
+    def estimate_avg(self, cards):
+        # estimate the average acccuracy for each component
+        # use for initializing user estimate
+        estimate_file = 'data/diagnostic_avg_estimate.txt'
+        if os.path.exists(estimate_file):
+            with open(estimate_file) as f:
+                return [float(x) for x in f.readlines()]
+
+        texts = [x['text'] for x in cards]
+        qreps = self.lda.transform(self.tf_vectorizer.transform(texts))
+        estimates = [[] for _ in range(self.n_components)]
+        for card, qrep in zip(cards, qreps):
+            topic_idx = np.argmax(qrep)
+            prob = self.predict_one(card)
+            estimates[topic_idx].append(prob)
+        estimates = [np.mean(x) for x in estimates]
+        with open('data/diagnostic_avg_estimate.txt', 'w') as f:
+            for e in estimates:
+                f.write(str(e) + '\n')
+        return estimates
+
+    def reset(self, prob=None):
         # round number since start
         self.round_num = 0
         # topical representation
         self.qrep = np.array([1 / self.n_components for _ in range(self.n_components)])
         # average difficulty (user accuracy) of questions seen so far
         # TODO replace 0.5 with average user accuracy
-        self.prob = [0.5 for _ in range(self.n_components)]
+        if prob is None:
+            prob = [0.5 for _ in range(self.n_components)]
+        self.prob = prob
         # TODO might need to remove for quizbowl?
         self.category = 'HISTORY'
 
@@ -149,15 +169,14 @@ class MovingAvgScheduler(Scheduler):
             pickle.dump(lda, f)
 
     def build_whoosh(self):
-        index_dir = 'whoosh_index'
-        if not os.path.exists(index_dir):
-            os.mkdir(index_dir)
+        if not os.path.exists(self.index_dir):
+            os.mkdir(self.index_dir)
         schema = Schema(
             question_id=ID(stored=True),
             text=TEXT(stored=True),
             answer=TEXT(stored=True)
         )
-        ix = create_in(index_dir, schema)
+        ix = create_in(self.index_dir, schema)
         writer = ix.writer()
         
         for idx, q in tqdm(self.questions_df.iterrows()):
@@ -171,6 +190,7 @@ class MovingAvgScheduler(Scheduler):
     def embed(self, cards):
         for i, card in enumerate(cards):
             cards[i]['qrep'] = self.embed_one(card)
+        # TODO potential speed up here: batch cards without qrep
         return cards
 
     def embed_one(self, card):
@@ -309,50 +329,3 @@ class MovingAvgScheduler(Scheduler):
             b = self.step_qrep
             self.qrep = b * card['qrep'] + (1 - b) * self.qrep
             self.category = card['category']
-            
-    
-class Hyperparams(BaseModel):
-    lambda_qrep: Optional[float]
-    lambda_prob: Optional[float]
-    lambda_category: Optional[float]
-    lambda_repetition: Optional[float]
-    lambda_leitner: Optional[float]
-    step_correct: Optional[float]
-    step_wrong: Optional[float]
-    step_qrep: Optional[float]
-
-
-app = FastAPI()
-scheduler = MovingAvgScheduler()
-
-
-@app.post('/api/karl/predict')
-def karl_predict(card: Flashcard):
-    score = scheduler.predict_one(card.dict())
-    return {
-        'prob': score
-    }
-
-@app.post('/api/karl/schedule')
-def karl_schedule(cards: List[Flashcard]):
-    order, ranking = scheduler.schedule([x.dict() for x in cards])
-    return {
-        'order': order,
-        'ranking': ranking,
-    }
-
-@app.post('/api/karl/update')
-def karl_update(cards: List[Flashcard]):
-    scheduler.update([x.dict() for x in cards])
-
-@app.post('/api/karl/reset')
-def karl_reset():
-    scheduler.reset()
-
-@app.post('/api/karl/set_hyperparameter')
-def karl_set_params(params: Hyperparams):
-    scheduler.set_params(params.dict())
-
-
-if __name__ == '__main__':
-    scheduler = MovingAvgScheduler()
