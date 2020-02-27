@@ -51,8 +51,7 @@ def karl_schedule(cards: List[Flashcard]):
     return {
         'order': order,
         'ranking': ranking,
-        'user_qrep': scheduler.qrep,
-        'user_prob': scheduler.prob,
+        'rationale': 
     }
 
 @app.post('/api/karl/update')

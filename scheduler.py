@@ -137,12 +137,10 @@ class MovingAvgScheduler(Scheduler):
         # topical representation
         self.qrep = np.array([1 / self.n_components for _ in range(self.n_components)])
         # average difficulty (user accuracy) of questions seen so far
-        # TODO replace 0.5 with average user accuracy
         if prob is None:
             prob = [0.5 for _ in range(self.n_components)]
         self.prob = prob
-        # TODO might need to remove for quizbowl?
-        self.category = 'HISTORY'
+        self.category = None
 
         # cache of embeddings
         self.qrep_cache = dict()
@@ -268,6 +266,8 @@ class MovingAvgScheduler(Scheduler):
         return self.round_num - prev
     
     def dist_category(self, card):
+        if self.category is None:
+            return 0
         return int(card['category'] != self.category)
     
     def dist_prob(self, card):
