@@ -6,6 +6,8 @@ from typing import List, Optional
 from pydantic import BaseModel
 from fastapi import FastAPI
 from abc import ABC, abstractmethod
+from collections import namedtuple
+from datetime import datetime, time, timedelta
 
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
@@ -186,10 +188,27 @@ class MovingAvgScheduler(Scheduler):
         writer.commit()
 
     def embed(self, cards):
+        to_be_embedded = []
         for i, card in enumerate(cards):
-            cards[i]['qrep'] = self.embed_one(card)
-        # TODO potential speed up here: batch cards without qrep
+            qid = card['question_id']
+            if 'qrep' in card:
+                self.qrep_cache[qid] = card['qrep']
+            elif qid in self.qrep_cache:
+                cards[i]['qrep'] = self.qrep_cache[qid]
+            else:
+                to_be_embedded.append(card)
+        if len(to_be_embedded) == 0:
+            return cards
+        self._embed(to_be_embedded)
+        for i, card in enumerate(cards):
+            if 'qrep' not in card:
+                cards[i]['qrep'] = self.qrep_cache[card['question_id']]
         return cards
+    
+    def _embed(self, cards):
+        texts = [x['text'] for x in cards]
+        qreps = self.lda.transform(self.tf_vectorizer.transform(texts))
+        self.qrep_cache.update({x['question_id']: q for x, q in zip(cards, qreps)})
 
     def embed_one(self, card):
         if 'qrep' in card:
@@ -329,3 +348,66 @@ class MovingAvgScheduler(Scheduler):
             b = self.step_qrep
             self.qrep = b * card['qrep'] + (1 - b) * self.qrep
             self.category = card['category']
+
+
+class Leitner:
+
+    def __init__(self):
+        self.scheduled_time = dict()
+        self.card_to_box = dict()
+        increment_days = [0, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 9999]
+        self.increment_days = {i: x for i, x in enumerate(increment_days)}
+
+    def update(self, card):
+        qid = card['question_id']
+        curr_box = self.card_to_box.get(qid, None)
+        if curr_box is None:
+            self.card_to_box[qid] = 1
+            curr_box = 0
+        new_box = curr_box + (1 if card['label'] == 'correct' else -1)
+        new_box = max(min(new_box, 9), 0)
+        self.card_to_box[qid] = new_box
+        interval = timedelta(days=self.increment_days[new_box])
+        print(new_box, interval)
+        self.scheduled_time[qid] = datetime.now() + interval
+
+        
+class SM2:
+
+    def __init__(self):
+        self.study = dict()
+        self.scheduled_time = dict()
+
+    def get_quality_from_response(self, response: str):
+        return 4 if response == 'correct' else 1
+
+    def update(self, card):
+        date_studied = datetime.now()
+        qid = card['question_id']
+        quality = self.get_quality_from_response(card['label'])
+        
+        if card['label'] != 'correct':
+            self.scheduled_time[qid] = date_studied
+            self.study[qid] = (2.5, 0, 0)
+            # return self.study[qid], self.scheduled_time[qid]
+        
+        if qid not in self.study:
+            self.scheduled_time[qid] = date_studied
+            self.study[qid] = (2.5, 1, 1)
+            # return self.study[qid], self.scheduled_time[qid]
+        
+        e_factor, repetition, interval = self.study[qid]
+        e_factor = max(1.3, e_factor + 0.1 - (5.0 - quality) * (0.08 + (5.0 - quality) * 0.02))
+        repetition += 1
+        
+        if repetition == 1:
+            interval = 1
+        elif repetition == 2:
+            interval = 6
+        else:
+            interval *= e_factor
+        
+        self.scheduled_time[qid] = datetime.now() + timedelta(days=interval)
+        self.study[qid] = (e_factor, repetition, interval)
+        
+        # return self.study[qid], self.scheduled_time[qid]
