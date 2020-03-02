@@ -51,7 +51,7 @@ class MovingAvgScheduler(Scheduler):
 
     def __init__(self, n_components=20,
                  lambda_qrep=0.1, lambda_prob=0.7, lambda_category=0.3,
-                 lambda_repetition=-1.0, lambda_leitner=1.0,
+                 lambda_leitner=1.0, lambda_sm2=1.0,
                  step_correct=0.5, step_wrong=0.05, step_qrep=0.3,
                  vectorizer_path='checkpoints/tf_vectorizer.pkl',
                  lda_path='checkpoints/lda.pkl'):
@@ -59,8 +59,8 @@ class MovingAvgScheduler(Scheduler):
         self.lambda_qrep = lambda_qrep
         self.lambda_prob = lambda_prob
         self.lambda_category = lambda_category
-        self.lambda_repetition = lambda_repetition
         self.lambda_leitner = lambda_leitner
+        self.lambda_sm2 = lambda_sm2
         self.step_correct = step_correct
         self.step_wrong = step_wrong
         self.step_qrep = step_qrep
@@ -90,26 +90,33 @@ class MovingAvgScheduler(Scheduler):
         self.questions_df = questions_df
         self.question_id_set = set(self.questions_df['question_id'])
 
+        # setup whoosh for text search
         if not os.path.exists(self.index_dir):
             print('building whoosh...')
             self.build_whoosh()
         self.ix = open_dir(self.index_dir)
 
+        # setup LDA
         if not (os.path.exists(self.vectorizer_path) \
                 and os.path.exists(self.lda_path)):
             with open(self.diagnostic_file, 'rb') as f:
                 diagnostic_cards = pickle.load(f)
             print('building lda...')
             self.build_lda(diagnostic_cards)
-        
         with open(self.vectorizer_path, 'rb') as f:
             self.tf_vectorizer = pickle.load(f)
         with open(self.lda_path, 'rb') as f:
             self.lda = pickle.load(f)
 
+        # estimate initial state
         with open(self.diagnostic_file, 'rb') as f:
             diagnostic_cards = pickle.load(f)
         self.reset(self.estimate_avg(diagnostic_cards))
+
+        # setup Leitner and SM2
+        self.leitner = Leitner()
+        self.sm2 = SM2()
+
         print('scheduler ready')
 
     def estimate_avg(self, cards):
@@ -273,8 +280,8 @@ class MovingAvgScheduler(Scheduler):
         self.lambda_qrep = params.get('lambda_qrep', lambda_qrep)
         self.lambda_prob = params.get('lambda_prob', lambda_prob)
         self.lambda_category = params.get('lambda_category', lambda_category)
-        self.lambda_repetition = params.get('lambda_repetition', lambda_repetition)
         self.lambda_leitner = params.get('lambda_leitner', lambda_leitner)
+        self.lambda_sm2 = params.get('lambda_sm2', lambda_sm2)
         self.step_correct = params.get('step_correct', step_correct)
         self.step_wrong = params.get('step_wrong', step_wrong)
         self.step_qrep = params.get('step_qrep', step_qrep)
@@ -304,8 +311,14 @@ class MovingAvgScheduler(Scheduler):
         return cosine_distance(self.qrep, card['qrep'])
 
     def dist_leitner(self, card):
-        # TODO
-        pass
+        # distance to leitner scheduled time
+        t = self.leitner.scheduled_time.get(card['question_id'], None)
+        return 0 if t is None else (t - datetime.now()).days
+    
+    def dist_sm2(self, card):
+        # distance to sm2 scheduled time
+        t = self.sm2.scheduled_time.get(card['question_id'], None)
+        return 0 if t is None else (t - datetime.now()).days
     
     def score_one(self, card):
         # compute distance metric of given card to current state
@@ -316,8 +329,8 @@ class MovingAvgScheduler(Scheduler):
         return self.lambda_qrep * self.dist_qrep(card) \
             + self.lambda_prob * self.dist_prob(card) \
             + self.lambda_category * self.dist_category(card) \
-            # + self.lambda_repetition * self.dist_rep(card)
-            # + self.lambda_leitner * self.dist_leitner(card)
+            + self.lambda_leitner * self.dist_leitner(card) \
+            + self.lambda_sm2 * self.dist_sm2(card)
 
     def score(self, cards):
         cards = self.embed(self.predict(cards))
@@ -375,8 +388,8 @@ class Leitner:
 class SM2:
 
     def __init__(self):
-        self.study = dict()
         self.scheduled_time = dict()
+        self.study = dict()
 
     def get_quality_from_response(self, response: str):
         return 4 if response == 'correct' else 1
@@ -409,5 +422,3 @@ class SM2:
         
         self.scheduled_time[qid] = datetime.now() + timedelta(days=interval)
         self.study[qid] = (e_factor, repetition, interval)
-        
-        # return self.study[qid], self.scheduled_time[qid]
