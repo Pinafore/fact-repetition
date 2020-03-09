@@ -47,11 +47,11 @@ def karl_predict(card: Flashcard):
 
 @app.post('/api/karl/schedule')
 def karl_schedule(cards: List[Flashcard]):
-    order, ranking = scheduler.schedule([x.dict() for x in cards])
+    order, ranking, rationale = scheduler.schedule([x.dict() for x in cards])
     return {
         'order': order,
         'ranking': ranking,
-        'rationale': 'place_holder'
+        'rationale': rationale
     }
 
 @app.post('/api/karl/update')

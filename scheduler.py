@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from abc import ABC, abstractmethod
 from collections import namedtuple
 from datetime import datetime, time, timedelta
+from typing import Optional, List, Tuple, Dict
 
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
@@ -20,30 +21,31 @@ from whoosh.qparser import QueryParser
 class Scheduler(ABC):
 
     @abstractmethod
-    def reset(self):
+    def reset(self) -> None:
         # reset model and return init state
         pass
 
     @abstractmethod
-    def predict(self, cards):
+    def predict(self, cards: List[dict]) -> List[dict]:
         # estimate difficulty of cards
         pass
     
     @abstractmethod
-    def embed(self, cards):
+    def embed(self, cards: List[dict]) -> List[dict]:
         # embed card in topic space. return augmented cards
         pass
 
     @abstractmethod
-    def set_params(self, params):
+    def set_params(self, params: dict) -> None:
         pass
 
     @abstractmethod
-    def schedule(self, cards):
+    def schedule(self, cards: List[dict]) -> Tuple[List[int], List[int], str]:
+        # order, ranking, rationale
         pass
 
     @abstractmethod
-    def update(self, cards):
+    def update(self, cards: List[dict]) -> None:
         pass
 
 
@@ -54,13 +56,15 @@ class MovingAvgScheduler(Scheduler):
                  lambda_leitner=1.0, lambda_sm2=1.0,
                  step_correct=0.5, step_wrong=0.05, step_qrep=0.3,
                  vectorizer_path='checkpoints/tf_vectorizer.pkl',
-                 lda_path='checkpoints/lda.pkl'):
+                 lda_path='checkpoints/lda.pkl') -> None:
         self.n_components = n_components
-        self.lambda_qrep = lambda_qrep
-        self.lambda_prob = lambda_prob
-        self.lambda_category = lambda_category
-        self.lambda_leitner = lambda_leitner
-        self.lambda_sm2 = lambda_sm2
+        self.lambdaa = {
+            'qrep': lambda_qrep,
+            'prob': lambda_prob,
+            'category': lambda_category,
+            'leitner': lambda_leitner,
+            'sm2': lambda_sm2,
+        }
         self.step_correct = step_correct
         self.step_wrong = step_wrong
         self.step_qrep = step_qrep
@@ -119,7 +123,7 @@ class MovingAvgScheduler(Scheduler):
 
         print('scheduler ready')
 
-    def estimate_avg(self, cards):
+    def estimate_avg(self, cards: List[dict]) -> List[float]:
         # estimate the average acccuracy for each component
         # use for initializing user estimate
         estimate_file = 'data/diagnostic_avg_estimate.txt'
@@ -140,7 +144,7 @@ class MovingAvgScheduler(Scheduler):
                 f.write(str(e) + '\n')
         return estimates
 
-    def reset(self, prob=None):
+    def reset(self, prob: Optional[List[float]]) -> None:
         # round number since start
         self.round_num = 0
         # topical representation
@@ -158,7 +162,7 @@ class MovingAvgScheduler(Scheduler):
         # cache of previous study round number
         self.prev_cache = dict()
 
-    def build_lda(self, cards):
+    def build_lda(self, cards: List[dict]) -> None:
         texts = [card['text'] for card in cards]
         tf_vectorizer = CountVectorizer(max_df=0.95, min_df=2,
                                         max_features=50000,
@@ -175,7 +179,7 @@ class MovingAvgScheduler(Scheduler):
         with open(self.lda_path, 'wb') as f:
             pickle.dump(lda, f)
 
-    def build_whoosh(self):
+    def build_whoosh(self) -> None:
         if not os.path.exists(self.index_dir):
             os.mkdir(self.index_dir)
         schema = Schema(
@@ -194,7 +198,7 @@ class MovingAvgScheduler(Scheduler):
             )
         writer.commit()
 
-    def embed(self, cards):
+    def embed(self, cards: List[dict]) -> List[dict]:
         to_be_embedded = []
         for i, card in enumerate(cards):
             qid = card['question_id']
@@ -212,12 +216,12 @@ class MovingAvgScheduler(Scheduler):
                 cards[i]['qrep'] = self.qrep_cache[card['question_id']]
         return cards
     
-    def _embed(self, cards):
+    def _embed(self, cards: List[dict]) -> None:
         texts = [x['text'] for x in cards]
         qreps = self.lda.transform(self.tf_vectorizer.transform(texts))
         self.qrep_cache.update({x['question_id']: q for x, q in zip(cards, qreps)})
 
-    def embed_one(self, card):
+    def embed_one(self, card: dict) -> np.ndarray:
         if 'qrep' in card:
             self.qrep_cache[card['question_id']] = card['qrep']
             return card['qrep']
@@ -227,12 +231,12 @@ class MovingAvgScheduler(Scheduler):
         self.qrep_cache[card['question_id']] = qrep
         return qrep
 
-    def predict(self, cards):
+    def predict(self, cards: List[dict]) -> List[dict]:
         for i, card in enumerate(cards):
             cards[i]['prob'] = self.predict_one(card)
         return cards
 
-    def retrieve(self, card):
+    def retrieve(self, card: dict) -> Tuple[List[dict], List[float]]:
         record_id = self.karl_to_question_id[int(card['question_id'])]
 
         # 1. try to find in records with gameid-catnum-level
@@ -257,7 +261,7 @@ class MovingAvgScheduler(Scheduler):
         # 3. not found
         return [], []
         
-    def predict_one(self, card):
+    def predict_one(self, card: dict) -> float:
         if 'prob' in card:
             self.prob_cache[card['question_id']] = card['prob']
             return card['prob']
@@ -267,7 +271,7 @@ class MovingAvgScheduler(Scheduler):
         self.prob_cache[card['question_id']] = prob
         return prob
 
-    def _predict_one(self, card):
+    def _predict_one(self, card: dict) -> float:
         # 1. find same or similar card in records
         cards, scores = self.retrieve(card)
         if len(cards) > 0:
@@ -276,27 +280,29 @@ class MovingAvgScheduler(Scheduler):
         # TODO
         return 0
 
-    def set_params(self, params):
-        self.lambda_qrep = params.get('lambda_qrep', lambda_qrep)
-        self.lambda_prob = params.get('lambda_prob', lambda_prob)
-        self.lambda_category = params.get('lambda_category', lambda_category)
-        self.lambda_leitner = params.get('lambda_leitner', lambda_leitner)
-        self.lambda_sm2 = params.get('lambda_sm2', lambda_sm2)
+    def set_params(self, params: dict) -> None:
+        self.lambdaa = {
+            'qrep': params.get('lambda_qrep', lambda_qrep),
+            'prob': params.get('lambda_prob', lambda_prob),
+            'category': params.get('lambda_category', lambda_category),
+            'leitner': params.get('lambda_leitner', lambda_leitner),
+            'sm2': params.get('lambda_sm2', lambda_sm2),
+        }
         self.step_correct = params.get('step_correct', step_correct)
         self.step_wrong = params.get('step_wrong', step_wrong)
         self.step_qrep = params.get('step_qrep', step_qrep)
 
-    def dist_rep(self, card):
+    def dist_rep(self, card: dict) -> float:
         # distance penalty due to repetition
         prev = self.prev_cache.get(card['question_id'], self.round_num)
         return self.round_num - prev
     
-    def dist_category(self, card):
+    def dist_category(self, card: dict) -> float:
         if self.category is None:
             return 0
         return int(card['category'] != self.category)
     
-    def dist_prob(self, card):
+    def dist_prob(self, card: dict) -> float:
         if 'qrep' not in card:
             card['qrep'] = self.embed_one(card)
         topic_idx = np.argmax(card['qrep'])
@@ -305,73 +311,98 @@ class MovingAvgScheduler(Scheduler):
         d *= 1 if d < 0 else 10
         return abs(d)
     
-    def dist_qrep(self, card):
+    def dist_qrep(self, card: dict) -> float:
         def cosine_distance(a, b):
             return 1 - (a @ b.T) / (np.linalg.norm(a) * np.linalg.norm(b))
         return cosine_distance(self.qrep, card['qrep'])
 
-    def dist_leitner(self, card):
+    def dist_leitner(self, card: dict) -> float:
         # distance to leitner scheduled time
         t = self.leitner.scheduled_time.get(card['question_id'], None)
         return 0 if t is None else (t - datetime.now()).days
     
-    def dist_sm2(self, card):
+    def dist_sm2(self, card: dict) -> float:
         # distance to sm2 scheduled time
         t = self.sm2.scheduled_time.get(card['question_id'], None)
         return 0 if t is None else (t - datetime.now()).days
     
-    def score_one(self, card):
+    def score_one(self, card: dict) -> Dict[str, float]:
         # compute distance metric of given card to current state
         # dist = topic repr dist + topical difficulty dist + recency + leitner score
         # NOTE lower is better
         card['qrep'] = self.embed_one(card)
         card['prob'] = self.predict_one(card)
-        return self.lambda_qrep * self.dist_qrep(card) \
-            + self.lambda_prob * self.dist_prob(card) \
-            + self.lambda_category * self.dist_category(card) \
-            + self.lambda_leitner * self.dist_leitner(card) \
-            + self.lambda_sm2 * self.dist_sm2(card)
+        return {
+            'qrep': self.dist_qrep(card),
+            'prob': self.dist_prob(card),
+            'category': self.dist_category(card),
+            'leitner': self.dist_leitner(card),
+            'sm2': self.dist_sm2(card),
+        }
 
-    def score(self, cards):
+    def score(self, cards: List[dict]) -> List[float]:
         cards = self.embed(self.predict(cards))
         return [self.score_one(card) for card in cards]
     
-    def schedule(self, cards):
+    def schedule(self, cards: List[dict]) -> Tuple[List[int], List[int], str]:
+        if len(cards) == 0:
+            return [], [], ''
+
         scores = self.score(cards)
+        scores_summed = [
+            sum([self.lambdaa[key] * value for key, value in ss.items()])
+            for ss in scores
+        ]
         for i, card in enumerate(cards):
             # NOTE lower is better
-            cards[i]['score'] = scores[i]
+            cards[i]['score'] = scores_summed[i]
+            cards[i]['scores'] = scores[i]
         reverse_index = {x['question_id']: i for i, x in enumerate(cards)}
         cards_sorted = sorted(cards, key=lambda x: x['score'])
         # sorted indices 
         order = [reverse_index[x['question_id']] for x in cards_sorted]
         ranking = [order.index(i) for i, _ in enumerate(cards)]
-        return order, ranking
 
-    def update(self, cards):
+        card = cards_sorted[0]
+        info = card['scores']
+        topic_idx = np.argmax(card['qrep'])
+        info.update({
+            'sum': card['score'],
+            'user': self.prob[topic_idx],
+            'card': card['prob'],
+            'topic': topic_idx,
+        })
+        rationale = '\n'.join([
+            '{}: {:.3f}'.format(key, value)
+            for key, value in info.items()
+        ])
+        return order, ranking, rationale
+
+    def update(self, cards: List[dict]) -> None:
         cards = self.embed(self.predict(cards))
         for card in cards:
-            topic_index = np.argmax(card['qrep'])
+            topic_idx = np.argmax(card['qrep'])
             if card['label'] == 'correct':
                 a = self.step_correct
-                self.prob[topic_index] = a * card['prob'] + (1 - a) * self.prob[topic_index]
+                self.prob[topic_idx] = a * card['prob'] + (1 - a) * self.prob[topic_idx]
             else:
-                self.prob[topic_index] += self.step_wrong
-            self.prob[topic_index] = min(1.0, self.prob[topic_index])
+                self.prob[topic_idx] += self.step_wrong
+            self.prob[topic_idx] = min(1.0, self.prob[topic_idx])
             b = self.step_qrep
             self.qrep = b * card['qrep'] + (1 - b) * self.qrep
             self.category = card['category']
+        # TODO update Leitner and SM2
 
 
 class Leitner:
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.scheduled_time = dict()
         self.card_to_box = dict()
         increment_days = [0, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 9999]
         self.increment_days = {i: x for i, x in enumerate(increment_days)}
 
-    def update(self, card):
+    def update(self, card: dict) -> None:
         qid = card['question_id']
         curr_box = self.card_to_box.get(qid, None)
         if curr_box is None:
@@ -387,14 +418,14 @@ class Leitner:
         
 class SM2:
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.scheduled_time = dict()
         self.study = dict()
 
-    def get_quality_from_response(self, response: str):
+    def get_quality_from_response(self, response: str) -> int:
         return 4 if response == 'correct' else 1
 
-    def update(self, card):
+    def update(self, card: dict) -> None:
         date_studied = datetime.now()
         qid = card['question_id']
         quality = self.get_quality_from_response(card['label'])
