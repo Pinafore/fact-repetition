@@ -29,6 +29,11 @@ class Scheduler(ABC):
     def predict(self, cards: List[dict]) -> List[dict]:
         # estimate difficulty of cards
         pass
+
+    @abstractmethod
+    def predict_one(self, card: dict) -> float:
+        # estimate difficulty of cards
+        pass
     
     @abstractmethod
     def embed(self, cards: List[dict]) -> List[dict]:
@@ -441,7 +446,8 @@ class SM2:
             # return self.study[qid], self.scheduled_time[qid]
         
         e_factor, repetition, interval = self.study[qid]
-        e_factor = max(1.3, e_factor + 0.1 - (5.0 - quality) * (0.08 + (5.0 - quality) * 0.02))
+        e_factor = max(1.3, e_factor + 0.1 - (5.0 - quality) \
+                       * (0.08 + (5.0 - quality) * 0.02))
         repetition += 1
         
         if repetition == 1:
