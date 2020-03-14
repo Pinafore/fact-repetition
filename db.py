@@ -41,7 +41,7 @@ class SchedulerDB:
                    text TEXT, \
                    answer TEXT, \
                    qrep TEXT, \
-                   prob TEXT, \
+                   skill TEXT, \
                    category TEXT, \
                    last_update timestamp)')
 
@@ -78,9 +78,10 @@ class SchedulerDB:
                           u.last_update))
         except sqlite3.IntegrityError:
             logger.info("user {} exists".format(u.user_id))
+            print("user {} exists".format(u.user_id))
         self.conn.commit()
 
-    def get_user(self, user_id: Optional[str]):
+    def get_user(self, user_id: str = None):
         def row_to_dict(r):
             return User(
                 user_id=r[0],
@@ -146,6 +147,7 @@ class SchedulerDB:
                             c.last_update))
         except sqlite3.IntegrityError:
             logger.info("card {} exists".format(c.card_id))
+            print("card {} exists".format(c.card_id))
         self.conn.commit()
 
     def get_card(self, card_id: Optional[str]):
@@ -170,8 +172,27 @@ class SchedulerDB:
             else:
                 return row_to_dict(r[0])
 
+    def update_card(self, c: Card):
+        cur = self.conn.cursor()
+        cur.execute("UPDATE cards SET \
+                     text=?, \
+                     answer=?, \
+                     qrep=?, \
+                     skill=?, \
+                     category=?, \
+                     last_update=? \
+                     WHERE card_id=?", (
+            c.text,
+            c.answer,
+            json.dumps(c.qrep.tolist()),
+            str(c.skill),
+            c.category,
+            c.last_update,
+            c.card_id))
+        self.conn.commit()
 
-def test_user():
+
+def test_user(db):
     user = User(
         user_id='user 1',
         qrep=np.array([1, 2, 3]),
@@ -204,9 +225,7 @@ def test_user():
     print()
     print(db.get_user('user 1'))
 
-
-if __name__ == '__main__':
-    db = SchedulerDB()
+def test_card(db):
     card = Card(
         card_id='card 1',
         text='This is the question text',
@@ -218,3 +237,24 @@ if __name__ == '__main__':
     )
     db.add_card(card)
     print(db.get_card('card 1'))
+    card = Card(
+        card_id='card 1',
+        text='This is the NEWWWWWWW question text',
+        answer='Answer Text IVVVV',
+        qrep=np.array([1, 2, 3, 4]),
+        skill=0.7,
+        category='WORLD',
+        last_update=datetime.now()
+    )
+    db.update_card(card)
+    print()
+    print(db.get_card('card 1'))
+
+
+if __name__ == '__main__':
+    db = SchedulerDB()
+    test_user(db)
+    print()
+    print()
+    print()
+    test_card(db)
