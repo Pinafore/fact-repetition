@@ -9,9 +9,9 @@ from typing import Optional, List, Tuple, Dict
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
 
-import whoosh
 from whoosh.index import create_in, open_dir
 from whoosh.qparser import QueryParser
+from whoosh.fields import Schema, ID, TEXT
 
 from util import Params
 
@@ -70,7 +70,9 @@ class Scheduler(ABC):
 
 class MovingAvgScheduler(Scheduler):
 
-    def __init__(self, params: Params):
+    def __init__(self, params: Params = None):
+        if params is None:
+            params = Params()
         self.params = params
         # TODO change to logger
         print('loading question and records...')
@@ -182,10 +184,10 @@ class MovingAvgScheduler(Scheduler):
     def build_whoosh(self):
         if not os.path.exists(self.params.whoosh_index):
             os.mkdir(self.params.whoosh_index)
-        schema = whoosh.fields.Schema(
-            question_id=whoosh.fields.ID(stored=True),
-            text=whoosh.fields.TEXT(stored=True),
-            answer=whoosh.fields.TEXT(stored=True)
+        schema = Schema(
+            question_id=ID(stored=True),
+            text=TEXT(stored=True),
+            answer=TEXT(stored=True)
         )
         ix = create_in(self.params.whoosh_index, schema)
         writer = ix.writer()
