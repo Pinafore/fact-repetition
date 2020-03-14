@@ -107,19 +107,31 @@ class SchedulerDB:
                 return None
             else:
                 return row_to_dict(r[0])
-    '''
-    def update_player(self, player):
+
+    def update_user(self, u):
         c = self.conn.cursor()
-        c.execute("UPDATE players SET score=?,\
-                questions_seen=?,questions_answered=?,questions_correct=? \
-                WHERE player_id=?", (
-                    player.score,
-                    json.dumps(player.questions_seen),
-                    json.dumps(player.questions_answered),
-                    json.dumps(player.questions_correct),
-                    player.uid))
+        c.execute("UPDATE users SET\
+                   qrep=?, \
+                   skill=?, \
+                   repetition=?, \
+                   last_study_time=?, \
+                   scheduled_time=?, \
+                   sm2_efactor=?, \
+                   sm2_interval=?, \
+                   leitner_box=?, \
+                   last_update=?\
+                   WHERE user_id=?", (
+            json.dumps(u.qrep.tolist()),
+            json.dumps(u.skill.tolist()),
+            json.dumps(u.repetition),
+            json.dumps({k: str(v) for k, v in u.last_study_time.items()}),
+            json.dumps({k: str(v) for k, v in u.scheduled_time.items()}),
+            json.dumps(u.sm2_efactor),
+            json.dumps(u.sm2_interval),
+            json.dumps(u.leitner_box),
+            u.last_update,
+            u.user_id))
         self.conn.commit()
-    '''
 
 
 if __name__ == '__main__':
@@ -140,3 +152,18 @@ if __name__ == '__main__':
     db.add_user(user)
     print()
     print(db.get_user())
+    user = User(
+        user_id='user 1',
+        qrep=np.array([4, 5, 6]),
+        skill=np.array([0.7, 0.8, 0.9]),
+        repetition={'card 1': 11, 'card 2': 1},
+        last_study_time={'card 1': datetime.now()},
+        scheduled_time={'card 2': datetime.now()},
+        sm2_efactor={'card 1': 0.5},
+        sm2_interval={'card 1': 6},
+        leitner_box={'card 1': 2},
+        last_update=datetime.now()
+    )
+    db.update_user(user)
+    print()
+    print(db.get_user('user 1'))
