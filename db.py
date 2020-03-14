@@ -5,6 +5,7 @@ import logging
 import numpy as np
 from datetime import datetime
 from util import User, Card, History
+from typing import Optional
 
 logger = logging.getLogger('scheduler')
 DB_FILENAME = 'db.sqlite'
@@ -23,39 +24,39 @@ class SchedulerDB:
         # *current* state of the player
         # including leitner and sm2 info
         c.execute('CREATE TABLE users (\
-                user_id PRIMARY KEY, \
-                qrep TEXT, \
-                skill TEXT, \
-                repetition TEXT, \
-                last_study_time TEXT, \
-                scheduled_time TEXT, \
-                sm2_efactor TEXT, \
-                sm2_interval TEXT, \
-                leitner_box TEXT, \
-                last_update timestamp)')
+                   user_id PRIMARY KEY, \
+                   qrep TEXT, \
+                   skill TEXT, \
+                   repetition TEXT, \
+                   last_study_time TEXT, \
+                   scheduled_time TEXT, \
+                   sm2_efactor TEXT, \
+                   sm2_interval TEXT, \
+                   leitner_box TEXT, \
+                   last_update timestamp)')
 
         # *current* cache of cards
         c.execute('CREATE TABLE cards (\
-                card_id PRIMARY KEY, \
-                text TEXT, \
-                answer TEXT, \
-                qrep TEXT, \
-                prob TEXT, \
-                category TEXT, \
-                last_update timestamp)')
+                   card_id PRIMARY KEY, \
+                   text TEXT, \
+                   answer TEXT, \
+                   qrep TEXT, \
+                   prob TEXT, \
+                   category TEXT, \
+                   last_update timestamp)')
 
         # input to and output from the schedule API
         c.execute('CREATE TABLE history (\
-                history_id PRIMARY KEY, \
-                user_id TEXT, \
-                card_id TEXT, \
-                response TEXT, \
-                judgement TEXT, \
-                user_snapshot TEXT, \
-                scheduler_snapshot TEXT, \
-                cards TEXT, \
-                scheduler_output TEXT, \
-                timestamp timestamp)')
+                   history_id PRIMARY KEY, \
+                   user_id TEXT, \
+                   card_id TEXT, \
+                   response TEXT, \
+                   judgement TEXT, \
+                   user_snapshot TEXT, \
+                   scheduler_snapshot TEXT, \
+                   cards TEXT, \
+                   scheduler_output TEXT, \
+                   timestamp timestamp)')
 
         conn.commit()
         conn.close()
@@ -74,13 +75,12 @@ class SchedulerDB:
                           json.dumps(u.sm2_efactor),
                           json.dumps(u.sm2_interval),
                           json.dumps(u.leitner_box),
-                          u.last_update
-                      ))
+                          u.last_update))
         except sqlite3.IntegrityError:
             logger.info("user {} exists".format(u.user_id))
         self.conn.commit()
 
-    def get_user(self, user_id=None):
+    def get_user(self, user_id: Optional[str]):
         def row_to_dict(r):
             return User(
                 user_id=r[0],
@@ -94,8 +94,7 @@ class SchedulerDB:
                 sm2_efactor=json.loads(r[6]),
                 sm2_interval=json.loads(r[7]),
                 leitner_box=json.loads(r[8]),
-                last_update=r[9]
-            )
+                last_update=r[9])
         c = self.conn.cursor()
         if user_id is None:
             c.execute("SELECT * FROM users")
@@ -108,7 +107,7 @@ class SchedulerDB:
             else:
                 return row_to_dict(r[0])
 
-    def update_user(self, u):
+    def update_user(self, u: User):
         c = self.conn.cursor()
         c.execute("UPDATE users SET\
                    qrep=?, \
@@ -133,9 +132,46 @@ class SchedulerDB:
             u.user_id))
         self.conn.commit()
 
+    def add_card(self, c: Card):
+        cur = self.conn.cursor()
+        try:
+            cur.execute('INSERT INTO cards VALUES (?,?,?,?,?,?,?)',
+                        (
+                            c.card_id,
+                            c.text,
+                            c.answer,
+                            json.dumps(c.qrep.tolist()),
+                            str(c.skill),
+                            c.category,
+                            c.last_update))
+        except sqlite3.IntegrityError:
+            logger.info("card {} exists".format(c.card_id))
+        self.conn.commit()
 
-if __name__ == '__main__':
-    db = SchedulerDB()
+    def get_card(self, card_id: Optional[str]):
+        def row_to_dict(r):
+            return Card(
+                card_id=r[0],
+                text=r[1],
+                answer=r[2],
+                qrep=np.array(json.loads(r[3])),
+                skill=float(r[4]),
+                category=r[5],
+                last_update=r[6])
+        c = self.conn.cursor()
+        if card_id is None:
+            c.execute("SELECT * FROM cards")
+            return [row_to_dict(r) for r in c.fetchall()]
+        else:
+            c.execute("SELECT * FROM cards WHERE card_id=?", (card_id,))
+            r = c.fetchall()
+            if len(r) == 0:
+                return None
+            else:
+                return row_to_dict(r[0])
+
+
+def test_user():
     user = User(
         user_id='user 1',
         qrep=np.array([1, 2, 3]),
@@ -167,3 +203,18 @@ if __name__ == '__main__':
     db.update_user(user)
     print()
     print(db.get_user('user 1'))
+
+
+if __name__ == '__main__':
+    db = SchedulerDB()
+    card = Card(
+        card_id='card 1',
+        text='This is the question text',
+        answer='Answer Text III',
+        qrep=np.array([1, 2, 3, 4]),
+        skill=0.7,
+        category='WORLD',
+        last_update=datetime.now()
+    )
+    db.add_card(card)
+    print(db.get_card('card 1'))
