@@ -9,8 +9,8 @@ class Flashcard(BaseModel):
     text: str
     user_id: Optional[str]
     question_id: Optional[str]
-    history_id: Optional[str]
     label: Optional[str]
+    history_id: Optional[str]
 
 
 # class Flashcard(BaseModel):
@@ -32,11 +32,11 @@ class Flashcard(BaseModel):
 
 
 class Hyperparams(BaseModel):
-    lambda_qrep: Optional[float]
-    lambda_prob: Optional[float]
-    lambda_category: Optional[float]
-    lambda_leitner: Optional[float]
-    lambda_sm2: Optional[float]
+    qrep: Optional[float]
+    prob: Optional[float]
+    category: Optional[float]
+    leitner: Optional[float]
+    sm2: Optional[float]
     step_correct: Optional[float]
     step_wrong: Optional[float]
     step_qrep: Optional[float]
