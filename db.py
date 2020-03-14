@@ -4,7 +4,7 @@ import sqlite3
 import logging
 import numpy as np
 from datetime import datetime
-from util import User, Card, History
+from util import User, Card, History, Params
 from typing import Optional
 
 logger = logging.getLogger('scheduler')
@@ -150,7 +150,7 @@ class SchedulerDB:
             print("card {} exists".format(c.card_id))
         self.conn.commit()
 
-    def get_card(self, card_id: Optional[str]):
+    def get_card(self, card_id: str = None):
         def row_to_dict(r):
             return Card(
                 card_id=r[0],
@@ -191,6 +191,50 @@ class SchedulerDB:
             c.card_id))
         self.conn.commit()
 
+    def add_history(self, h: History):
+        cur = self.conn.cursor()
+        try:
+            cur.execute('INSERT INTO history VALUES (?,?,?,?,?,?,?,?,?,?)',
+                        (
+                            h.history_id,
+                            h.user_id,
+                            h.card_id,
+                            h.response,
+                            h.judgement,
+                            h.user_snapshot,
+                            h.scheduler_snapshot,
+                            json.dumps(h.card_ids),
+                            h.scheduler_output,
+                            h.timestamp))
+        except sqlite3.IntegrityError:
+            logger.info("history {} exists".format(h.history_id))
+            print("history {} exists".format(h.history_id))
+        self.conn.commit()
+
+    def get_history(self, history_id: str = None):
+        def row_to_dict(r):
+            return History(
+                history_id=r[0],
+                user_id=r[1],
+                card_id=r[2],
+                response=r[3],
+                judgement=r[4],
+                user_snapshot=r[5],
+                scheduler_snapshot=r[6],
+                card_ids=json.loads(r[7]),
+                scheduler_output=r[8],
+                timestamp=r[9])
+        c = self.conn.cursor()
+        if history_id is None:
+            c.execute("SELECT * FROM history")
+            return [row_to_dict(r) for r in c.fetchall()]
+        else:
+            c.execute("SELECT * FROM history WHERE history_id=?", (history_id,))
+            r = c.fetchall()
+            if len(r) == 0:
+                return None
+            else:
+                return row_to_dict(r[0])
 
 def test_user(db):
     user = User(
@@ -250,6 +294,47 @@ def test_card(db):
     print()
     print(db.get_card('card 1'))
 
+def test_history(db):
+    user = User(
+        user_id='user 1',
+        qrep=np.array([1, 2, 3]),
+        skill=np.array([0.1, 0.2, 0.3]),
+        repetition={'card 1': 10},
+        last_study_time={'card 1': datetime.now()},
+        scheduled_time={'card 2': datetime.now()},
+        sm2_efactor={'card 1': 0.5},
+        sm2_interval={'card 1': 6},
+        leitner_box={'card 1': 2},
+        last_update=datetime.now()
+    )
+    card = Card(
+        card_id='card 1',
+        text='This is the question text',
+        answer='Answer Text III',
+        qrep=np.array([1, 2, 3, 4]),
+        skill=0.7,
+        category='WORLD',
+        last_update=datetime.now()
+    )
+    params = Params()
+    history = History(
+        history_id='history 1',
+        user_id=user.user_id,
+        card_id=card.card_id,
+        response='User Guess',
+        judgement='wrong',
+        user_snapshot=user.to_snapshot(),
+        scheduler_snapshot=json.dumps(params.__dict__),
+        card_ids=json.dumps([1, 2, 3, 4, 5]),
+        scheduler_output='(awd, awd, awd)',
+        timestamp=datetime.now())
+    db.add_history(history)
+    print()
+    h = db.get_history()[0]
+    print(h)
+    u = User.from_snapshot(h.user_snapshot)
+    print(u)
+
 
 if __name__ == '__main__':
     db = SchedulerDB()
@@ -258,3 +343,7 @@ if __name__ == '__main__':
     print()
     print()
     test_card(db)
+    print()
+    print()
+    print()
+    test_history(db)

@@ -1,10 +1,81 @@
 import json
 import numpy as np
 from datetime import datetime
-from typing import NamedTuple, Dict, List
+from pydantic import BaseModel
+from typing import Optional, Dict, List
+from dataclasses import dataclass
+try:
+    from typing import TypedDict  # >=3.8
+except ImportError:
+    from mypy_extensions import TypedDict  # <=3.7
 
 
-class Card(NamedTuple):
+'''
+BaseModels are used for fastapi
+NamedTuples and TypedDicts are used for DB
+'''
+
+
+class Flashcard(BaseModel):
+    text: str
+    user_id: Optional[str]
+    question_id: Optional[str]
+    label: Optional[str]
+    history_id: Optional[str]
+
+
+# class Flashcard(BaseModel):
+#     text: str
+#     user_id: Optional[str]
+#     question_id: Optional[str]
+#     user_accuracy: Optional[float]
+#     user_buzzratio: Optional[float]
+#     user_count: Optional[float]
+#     question_accuracy: Optional[float]
+#     question_buzzratio: Optional[float]
+#     question_count: Optional[float]
+#     times_seen: Optional[float]
+#     times_correct: Optional[float]
+#     times_wrong: Optional[float]
+#     label: Optional[str]
+#     answer: Optional[str]
+#     category: Optional[str]
+
+
+@dataclass
+class Params:
+    n_components: int = 20
+    qrep: float = 0.1
+    prob: float = 0.7
+    category: float = 0.3
+    leitner: float = 1.0
+    sm2: float = 1.0
+    step_correct: float = 0.5
+    step_wrong: float = 0.05
+    step_qrep: float = 0.3
+    vectorizer: str = 'checkpoints/tf_vectorizer.pkl'
+    lda: str = 'checkpoints/lda.pkl'
+    whoosh_index: str = 'whoosh_index'
+
+
+class Hyperparams(BaseModel):
+    # TODO merge this with Params
+    n_components: Optional[int]
+    qrep: Optional[float]
+    prob: Optional[float]
+    category: Optional[float]
+    leitner: Optional[float]
+    sm2: Optional[float]
+    step_correct: Optional[float]
+    step_wrong: Optional[float]
+    step_qrep: Optional[float]
+    vectorizer: Optional[str]
+    lda: Optional[str]
+    whoosh_index: Optional[str]
+
+
+@dataclass
+class Card:
     card_id: str
     text: str
     answer: str
@@ -14,7 +85,8 @@ class Card(NamedTuple):
     last_update: datetime
 
 
-class History(NamedTuple):
+@dataclass
+class History:
     history_id: str
     user_id: str
     card_id: str
@@ -22,12 +94,13 @@ class History(NamedTuple):
     judgement: str
     user_snapshot: str
     scheduler_snapshot: str
-    cards: List[str]
+    card_ids: List[str]
     scheduler_output: str
     timestamp: datetime
 
 
-class User(NamedTuple):
+@dataclass
+class User:
     user_id: str
     qrep: np.ndarray
     skill: np.ndarray
@@ -40,7 +113,7 @@ class User(NamedTuple):
     last_update: datetime
 
     def to_snapshot(self):
-        x = self._asdict()
+        x = self.__dict__.copy()
         x['qrep'] = x['qrep'].tolist()
         x['skill'] = x['skill'].tolist()
         # repetition: Dict[str, int]

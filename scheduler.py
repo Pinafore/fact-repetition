@@ -1,10 +1,10 @@
 import os
 import pickle
 import numpy as np
+from tqdm import tqdm
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from typing import Optional, List, Tuple, Dict
-from tqdm import tqdm
 
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
@@ -13,11 +13,13 @@ import whoosh
 from whoosh.index import create_in, open_dir
 from whoosh.qparser import QueryParser
 
+from util import Params
+
 
 class Scheduler(ABC):
 
     @abstractmethod
-    def reset(self) -> None:
+    def reset(self):
         # reset model and return init state
         pass
 
@@ -37,7 +39,7 @@ class Scheduler(ABC):
         pass
 
     @abstractmethod
-    def set_params(self, params: dict) -> None:
+    def set_params(self, params: dict):
         pass
 
     @abstractmethod
@@ -46,35 +48,31 @@ class Scheduler(ABC):
         pass
 
     @abstractmethod
-    def update(self, cards: List[dict]) -> None:
+    def update(self, cards: List[dict]):
         pass
+
+
+# find this in util.py
+# class Params(TypedDict):
+#     n_components: int = 20
+#     qrep: float = 0.1
+#     prob: float = 0.7
+#     category: float = 0.3
+#     leitner: float = 1.0
+#     sm2: float = 1.0
+#     step_correct: float = 0.5
+#     step_wrong: float = 0.05
+#     step_qrep: float = 0.3
+#     vectorizer: str = 'checkpoints/tf_vectorizer.pkl'
+#     lda: str = 'checkpoints/lda.pkl'
+#     whoosh_index: str = 'whoosh_index'
 
 
 class MovingAvgScheduler(Scheduler):
 
-    def __init__(self, n_components=20,
-                 lambda_qrep=0.1, lambda_prob=0.7, lambda_category=0.3,
-                 lambda_leitner=1.0, lambda_sm2=1.0,
-                 step_correct=0.5, step_wrong=0.05, step_qrep=0.3,
-                 vectorizer_path='checkpoints/tf_vectorizer.pkl',
-                 lda_path='checkpoints/lda.pkl') -> None:
-        self.n_components = n_components
-        self.params = {
-            'qrep': lambda_qrep,
-            'prob': lambda_prob,
-            'category': lambda_category,
-            'leitner': lambda_leitner,
-            'sm2': lambda_sm2,
-            'step_correct': step_correct,
-            'step_wrong': step_wrong,
-            'step_qrep': step_qrep,
-        }
-        self.vectorizer_path = vectorizer_path
-        self.lda_path = lda_path
-
-        self.diagnostic_file = 'data/diagnostic_questions.pkl'
-        self.index_dir = 'whoosh_index'
-
+    def __init__(self, params: Params):
+        self.params = params
+        # TODO change to logger
         print('loading question and records...')
         with open('data/jeopardy_310326_question_player_pairs_20190612.pkl', 'rb') as f:
             records_df = pickle.load(f)
@@ -96,24 +94,25 @@ class MovingAvgScheduler(Scheduler):
         self.question_id_set = set(self.questions_df['question_id'])
 
         # setup whoosh for text search
-        if not os.path.exists(self.index_dir):
+        if not os.path.exists(self.params.whoosh_index):
             print('building whoosh...')
             self.build_whoosh()
-        self.ix = open_dir(self.index_dir)
+        self.ix = open_dir(self.params.whoosh_index)
 
+        diagnostic_file = 'data/diagnostic_questions.pkl'
         # setup LDA
-        if not (os.path.exists(self.vectorizer_path) and os.path.exists(self.lda_path)):
-            with open(self.diagnostic_file, 'rb') as f:
+        if not (os.path.exists(self.params.vectorizer) and os.path.exists(self.params.lda)):
+            with open(diagnostic_file, 'rb') as f:
                 diagnostic_cards = pickle.load(f)
             print('building lda...')
             self.build_lda(diagnostic_cards)
-        with open(self.vectorizer_path, 'rb') as f:
+        with open(self.params.vectorizer, 'rb') as f:
             self.tf_vectorizer = pickle.load(f)
-        with open(self.lda_path, 'rb') as f:
+        with open(self.params.lda, 'rb') as f:
             self.lda = pickle.load(f)
 
         # estimate initial state
-        with open(self.diagnostic_file, 'rb') as f:
+        with open(diagnostic_file, 'rb') as f:
             diagnostic_cards = pickle.load(f)
         self.reset(self.estimate_avg(diagnostic_cards))
 
@@ -133,7 +132,7 @@ class MovingAvgScheduler(Scheduler):
 
         texts = [x['text'] for x in cards]
         qreps = self.lda.transform(self.tf_vectorizer.transform(texts))
-        estimates = [[] for _ in range(self.n_components)]
+        estimates = [[] for _ in range(self.params.n_components)]
         for card, qrep in zip(cards, qreps):
             topic_idx = np.argmax(qrep)
             prob = self.predict_one(card)
@@ -144,14 +143,15 @@ class MovingAvgScheduler(Scheduler):
                 f.write(str(e) + '\n')
         return estimates
 
-    def reset(self, prob: Optional[List[float]]) -> None:
+    def reset(self, prob: Optional[List[float]]):
         # round number since start
         self.round_num = 0
         # topical representation
-        self.qrep = np.array([1 / self.n_components for _ in range(self.n_components)])
+        k = self.params.n_components
+        self.qrep = np.array([1 / k for _ in range(k)])
         # average difficulty (user accuracy) of questions seen so far
         if prob is None:
-            prob = [0.5 for _ in range(self.n_components)]
+            prob = [0.5 for _ in range(k)]
         self.prob = prob
         self.category = None
 
@@ -162,32 +162,32 @@ class MovingAvgScheduler(Scheduler):
         # cache of previous study round number
         self.prev_cache = dict()
 
-    def build_lda(self, cards: List[dict]) -> None:
+    def build_lda(self, cards: List[dict]):
         texts = [card['text'] for card in cards]
         tf_vectorizer = CountVectorizer(max_df=0.95, min_df=2,
                                         max_features=50000,
                                         stop_words='english')
         tf = tf_vectorizer.fit_transform(texts)
-        lda = LatentDirichletAllocation(n_components=self.n_components,
+        lda = LatentDirichletAllocation(n_components=self.params.n_components,
                                         max_iter=5, learning_method='online',
                                         learning_offset=50.,
                                         random_state=0)
         lda.fit(tf)
         # tf_feature_names = tf_vectorizer.get_feature_names()
-        with open(self.vectorizer_path, 'wb') as f:
+        with open(self.params.vectorizer, 'wb') as f:
             pickle.dump(tf_vectorizer, f)
-        with open(self.lda_path, 'wb') as f:
+        with open(self.params.lda, 'wb') as f:
             pickle.dump(lda, f)
 
-    def build_whoosh(self) -> None:
-        if not os.path.exists(self.index_dir):
-            os.mkdir(self.index_dir)
+    def build_whoosh(self):
+        if not os.path.exists(self.params.whoosh_index):
+            os.mkdir(self.params.whoosh_index)
         schema = whoosh.fields.Schema(
             question_id=whoosh.fields.ID(stored=True),
             text=whoosh.fields.TEXT(stored=True),
             answer=whoosh.fields.TEXT(stored=True)
         )
-        ix = create_in(self.index_dir, schema)
+        ix = create_in(self.params.whoosh_index, schema)
         writer = ix.writer()
 
         for idx, q in tqdm(self.questions_df.iterrows()):
@@ -216,7 +216,7 @@ class MovingAvgScheduler(Scheduler):
                 cards[i]['qrep'] = self.qrep_cache[card['question_id']]
         return cards
 
-    def _embed(self, cards: List[dict]) -> None:
+    def _embed(self, cards: List[dict]):
         texts = [x['text'] for x in cards]
         qreps = self.lda.transform(self.tf_vectorizer.transform(texts))
         self.qrep_cache.update({x['question_id']: q for x, q in zip(cards, qreps)})
@@ -280,8 +280,8 @@ class MovingAvgScheduler(Scheduler):
         # TODO
         return 0
 
-    def set_params(self, params: dict) -> None:
-        self.params.update(params)
+    def set_params(self, params: dict):
+        self.params.__dict__.update(params)
 
     def dist_rep(self, card: dict) -> float:
         # distance penalty due to repetition
@@ -369,7 +369,7 @@ class MovingAvgScheduler(Scheduler):
         ])
         return order, ranking, rationale
 
-    def update(self, cards: List[dict]) -> None:
+    def update(self, cards: List[dict]):
         cards = self.embed(self.predict(cards))
         for card in cards:
             topic_idx = np.argmax(card['qrep'])
@@ -387,13 +387,13 @@ class MovingAvgScheduler(Scheduler):
 
 class Leitner:
 
-    def __init__(self) -> None:
+    def __init__(self):
         self.scheduled_time = dict()
         self.card_to_box = dict()
         increment_days = [0, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 9999]
         self.increment_days = {i: x for i, x in enumerate(increment_days)}
 
-    def update(self, card: dict) -> None:
+    def update(self, card: dict):
         qid = card['question_id']
         curr_box = self.card_to_box.get(qid, None)
         if curr_box is None:
@@ -409,14 +409,14 @@ class Leitner:
 
 class SM2:
 
-    def __init__(self) -> None:
+    def __init__(self):
         self.scheduled_time = dict()
         self.study = dict()
 
     def get_quality_from_response(self, response: str) -> int:
         return 4 if response == 'correct' else 1
 
-    def update(self, card: dict) -> None:
+    def update(self, card: dict):
         date_studied = datetime.now()
         qid = card['question_id']
         quality = self.get_quality_from_response(card['label'])
