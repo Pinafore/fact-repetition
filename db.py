@@ -68,7 +68,7 @@ class SchedulerDB:
                       (
                           u.user_id,
                           json.dumps(u.qrep.tolist()),
-                          json.dumps(u.skill.tolist()),
+                          json.dumps(u.skill),
                           json.dumps(u.repetition),
                           json.dumps({k: str(v) for k, v in u.last_study_time.items()}),
                           json.dumps({k: str(v) for k, v in u.scheduled_time.items()}),
@@ -86,7 +86,7 @@ class SchedulerDB:
             return User(
                 user_id=r[0],
                 qrep=np.array(json.loads(r[1])),
-                skill=np.array(json.loads(r[2])),
+                skill=json.loads(r[2]),
                 repetition=json.loads(r[3]),
                 last_study_time={k: datetime.strptime(v, "%Y-%m-%d %H:%M:%S.%f")
                                  for k, v in json.loads(r[4]).items()},
@@ -125,7 +125,7 @@ class SchedulerDB:
                    last_update=?\
                    WHERE user_id=?", (
             json.dumps(u.qrep.tolist()),
-            json.dumps(u.skill.tolist()),
+            json.dumps(u.skill),
             json.dumps(u.repetition),
             json.dumps({k: str(v) for k, v in u.last_study_time.items()}),
             json.dumps({k: str(v) for k, v in u.scheduled_time.items()}),
@@ -244,7 +244,7 @@ def test_user(db):
     user = User(
         user_id='user 1',
         qrep=np.array([0.1, 0.2, 0.3]),
-        skill=np.array([0.1, 0.2, 0.3]),
+        skill=[0.1, 0.2, 0.3],
         repetition={'card 1': 10},
         last_study_time={'card 1': datetime.now()},
         scheduled_time={'card 2': datetime.now()},
@@ -260,7 +260,7 @@ def test_user(db):
     user = User(
         user_id='user 1',
         qrep=np.array([0.7, 0.8, 0.9]),
-        skill=np.array([0.7, 0.8, 0.9]),
+        skill=[0.7, 0.8, 0.9],
         repetition={'card 1': 11, 'card 2': 1},
         last_study_time={'card 1': datetime.now()},
         scheduled_time={'card 2': datetime.now()},
@@ -302,7 +302,7 @@ def test_history(db):
     user = User(
         user_id='user 1',
         qrep=np.array([0.1, 0.2, 0.3]),
-        skill=np.array([0.1, 0.2, 0.3]),
+        skill=[0.1, 0.2, 0.3],
         repetition={'card 1': 10},
         last_study_time={'card 1': datetime.now()},
         scheduled_time={'card 2': datetime.now()},
@@ -339,9 +339,7 @@ def test_history(db):
     u = User.from_snapshot(h.user_snapshot)
     print(u)
 
-
-if __name__ == '__main__':
-    db = SchedulerDB()
+def test(db):
     test_user(db)
     print()
     print()
@@ -351,3 +349,8 @@ if __name__ == '__main__':
     print()
     print()
     test_history(db)
+
+
+if __name__ == '__main__':
+    db = SchedulerDB()
+    print(db.get_card())

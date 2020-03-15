@@ -58,7 +58,7 @@ class Flashcard(BaseModel):
 class Params:
     n_components: int = 20
     qrep: float = 0.1
-    prob: float = 0.7
+    skill: float = 0.7
     category: float = 0.3
     leitner: float = 1.0
     sm2: float = 1.0
@@ -74,7 +74,7 @@ class Hyperparams(BaseModel):
     # TODO merge this with Params
     n_components: Optional[int]
     qrep: Optional[float]
-    prob: Optional[float]
+    skill: Optional[float]
     category: Optional[float]
     leitner: Optional[float]
     sm2: Optional[float]
@@ -104,7 +104,7 @@ class History:
 class User:
     user_id: str
     qrep: np.ndarray
-    skill: np.ndarray
+    skill: List[float]
     repetition: Dict[str, int] = field(default_factory=dict)
     last_study_time: Dict[str, datetime] = field(default_factory=dict)
     scheduled_time: Dict[str, datetime] = field(default_factory=dict)
@@ -116,7 +116,7 @@ class User:
     def to_snapshot(self):
         x = self.__dict__.copy()
         x['qrep'] = x['qrep'].tolist()
-        x['skill'] = x['skill'].tolist()
+        # skill: List[float]
         # repetition: Dict[str, int]
         x['last_study_time'] = {k: str(v) for k, v in x['last_study_time'].items()}
         x['scheduled_time'] = {k: str(v) for k, v in x['scheduled_time'].items()}
@@ -132,7 +132,7 @@ class User:
         return User(
             user_id=x['user_id'],
             qrep=np.array(x['qrep']),
-            skill=np.array(x['skill']),
+            skill=x['skill'],
             repetition=x['repetition'],
             last_study_time={k: datetime.strptime(v, "%Y-%m-%d %H:%M:%S.%f")
                              for k, v in x['last_study_time'].items()},

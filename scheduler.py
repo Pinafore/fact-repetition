@@ -17,47 +17,11 @@ from util import Params, Card, User, History
 from db import SchedulerDB
 
 
-class Scheduler(ABC):
-
-    @abstractmethod
-    def reset(self):
-        # reset model and return init state
-        pass
-
-    @abstractmethod
-    def predict(self, cards: List[dict]) -> List[dict]:
-        # estimate difficulty of cards
-        pass
-
-    @abstractmethod
-    def predict_one(self, card: dict) -> float:
-        # estimate difficulty of cards
-        pass
-
-    @abstractmethod
-    def embed(self, cards: List[dict]) -> List[dict]:
-        # embed card in topic space. return augmented cards
-        pass
-
-    @abstractmethod
-    def set_params(self, params: dict):
-        pass
-
-    @abstractmethod
-    def schedule(self, cards: List[dict]) -> Tuple[List[int], List[int], str]:
-        # order, ranking, rationale
-        pass
-
-    @abstractmethod
-    def update(self, cards: List[dict]):
-        pass
-
-
 # find this in util.py
 # class Params(TypedDict):
 #     n_components: int = 20
 #     qrep: float = 0.1
-#     prob: float = 0.7
+#     skill: float = 0.7
 #     category: float = 0.3
 #     leitner: float = 1.0
 #     sm2: float = 1.0
@@ -69,7 +33,7 @@ class Scheduler(ABC):
 #     whoosh_index: str = 'whoosh_index'
 
 
-class MovingAvgScheduler(Scheduler):
+class MovingAvgScheduler:
 
     def __init__(self, params: Params = None):
         if params is None:
@@ -93,7 +57,7 @@ class MovingAvgScheduler(Scheduler):
         df_grouped = df.reset_index()[['question_id', 'correct']].groupby('question_id')
         dict_correct_mean = df_grouped.mean().to_dict()['correct']
         dict_records_cnt = df_grouped.count().to_dict()['correct']
-        questions_df['prob'] = questions_df['question_id'].apply(lambda x: dict_correct_mean.get(x, None))
+        questions_df['skill'] = questions_df['question_id'].apply(lambda x: dict_correct_mean.get(x, None))
         questions_df['count'] = questions_df['question_id'].apply(lambda x: dict_records_cnt.get(x, None))
         self.questions_df = questions_df
         self.question_id_set = set(self.questions_df['question_id'])
@@ -116,19 +80,13 @@ class MovingAvgScheduler(Scheduler):
         with open(self.params.lda, 'rb') as f:
             self.lda = pickle.load(f)
 
-        self.reset(self.estimate_avg())
-
-        # setup Leitner and SM2
-        self.leitner = Leitner()
-        self.sm2 = SM2()
-
         print('scheduler ready')
 
     def estimate_avg(self) -> List[float]:
         # estimate the average acccuracy for each component
         # use for initializing user estimate
         with open('data/diagnostic_questions.pkl', 'rb') as f:
-            diagnostic_cards = pickle.load(f)
+            cards = pickle.load(f)
         estimate_file = 'data/diagnostic_avg_estimate.txt'
         if os.path.exists(estimate_file):
             with open(estimate_file) as f:
@@ -138,22 +96,13 @@ class MovingAvgScheduler(Scheduler):
         estimates = [[] for _ in range(self.params.n_components)]
         for card, qrep in zip(cards, qreps):
             topic_idx = np.argmax(qrep)
-            prob = self.predict_one(card)
-            estimates[topic_idx].append(prob)
+            skill = self.predict_one(card)
+            estimates[topic_idx].append(skill)
         estimates = [np.mean(x) for x in estimates]
         with open('data/diagnostic_avg_estimate.txt', 'w') as f:
             for e in estimates:
                 f.write(str(e) + '\n')
         return estimates
-
-    def reset(self, prob: Optional[List[float]]):
-        # TODO to be removed
-        # cache of embeddings
-        self.qrep_cache = dict()
-        # cache of card probability
-        self.prob_cache = dict()
-        # cache of previous study round number
-        self.prev_cache = dict()
 
     def build_lda(self, cards: List[dict]):
         texts = [card['text'] for card in cards]
@@ -192,7 +141,7 @@ class MovingAvgScheduler(Scheduler):
         writer.commit()
 
     def get_card(self, card: dict) -> Card:
-        '''get card from DB, insert if new'''
+        '''get card from db, insert if new'''
         # retrieve from db if exists
         c = self.db.get_card(card['question_id'])
         if c is not None:
@@ -202,7 +151,7 @@ class MovingAvgScheduler(Scheduler):
             card_id=card['question_id'],
             text=card['text'],
             answer=card['answer'],
-            qrep=self.embed_one(card['text']),
+            qrep=self.embed_one(card),
             skill=self.predict_one(card),
             category=card['category'],
             last_update=datetime.now()
@@ -210,6 +159,39 @@ class MovingAvgScheduler(Scheduler):
         self.db.add_card(new_card)
         # TODO translate all prob to skill
         return new_card
+
+    def get_cards(self, cards: List[dict]) -> List[Card]:
+        '''get cards from db, insert if new'''
+        to_be_embedded = []
+        for i, card in enumerate(cards):
+            card_id = card['question_id']
+            cc = self.db.get_card(card_id)
+            if cc is None:
+                card[i]['index'] = i
+                to_be_embedded.append(card)
+            else:
+                cards[i] = cc
+        if len(to_be_embedded) == 0:
+            return cards
+
+        texts = [x['text'] for x in to_be_embedded]
+        qreps = self.lda.transform(self.tf_vectorizer.transform(texts))
+        to_be_embedded = self.predict(to_be_embedded)
+
+        for i, c in enumerate(to_be_embedded):
+            new_card = Card(
+                card_id=c['question_id'],
+                text=c['text'],
+                answer=c['answer'],
+                qrep=qreps[i],
+                skill=c['skill'],
+                category=c['category'],
+                last_update=datetime.now()
+            )
+            self.db.add_card(new_card)
+            assert cards[c['index']]['question_id'] == new_card.card_id
+            cards[c['index']] = new_card
+        return cards
 
     def get_user(self, user_id: str) -> User:
         '''get user from DB, insert if new'''
@@ -224,44 +206,6 @@ class MovingAvgScheduler(Scheduler):
         )
         self.db.add_user(new_user)
         return new_user
-
-    def embed(self, cards: List[dict]) -> List[dict]:
-        to_be_embedded = []
-        for i, card in enumerate(cards):
-            qid = card['question_id']
-            if 'qrep' in card:
-                self.qrep_cache[qid] = card['qrep']
-            elif qid in self.qrep_cache:
-                cards[i]['qrep'] = self.qrep_cache[qid]
-            else:
-                to_be_embedded.append(card)
-        if len(to_be_embedded) == 0:
-            return cards
-        self._embed(to_be_embedded)
-        for i, card in enumerate(cards):
-            if 'qrep' not in card:
-                cards[i]['qrep'] = self.qrep_cache[card['question_id']]
-        return cards
-
-    def _embed(self, cards: List[dict]):
-        texts = [x['text'] for x in cards]
-        qreps = self.lda.transform(self.tf_vectorizer.transform(texts))
-        self.qrep_cache.update({x['question_id']: q for x, q in zip(cards, qreps)})
-
-    def embed_one(self, card: dict) -> np.ndarray:
-        if 'qrep' in card:
-            self.qrep_cache[card['question_id']] = card['qrep']
-            return card['qrep']
-        if card['question_id'] in self.qrep_cache:
-            return self.qrep_cache[card['question_id']]
-        qrep = self.lda.transform(self.tf_vectorizer.transform([card['text']]))
-        self.qrep_cache[card['question_id']] = qrep
-        return qrep
-
-    def predict(self, cards: List[dict]) -> List[dict]:
-        for i, card in enumerate(cards):
-            cards[i]['prob'] = self.predict_one(card)
-        return cards
 
     def retrieve(self, card: dict) -> Tuple[List[dict], List[float]]:
         record_id = self.karl_to_question_id[int(card['question_id'])]
@@ -289,30 +233,28 @@ class MovingAvgScheduler(Scheduler):
         return [], []
 
     def predict_one(self, card: dict) -> float:
-        if 'prob' in card:
-            self.prob_cache[card['question_id']] = card['prob']
-            return card['prob']
-        if card['question_id'] in self.prob_cache:
-            return self.prob_cache[card['question_id']]
-        prob = self._predict_one(card)
-        self.prob_cache[card['question_id']] = prob
-        return prob
-
-    def _predict_one(self, card: dict) -> float:
         # 1. find same or similar card in records
         cards, scores = self.retrieve(card)
         if len(cards) > 0:
-            return np.dot([x['prob'] for x in cards], scores)
+            return np.dot([x['skill'] for x in cards], scores)
         # TODO 2. use model to predict
         return 0
+
+    def predict(self, cards: List[dict]) -> List[dict]:
+        for i, card in enumerate(cards):
+            cards[i]['skill'] = self.predict_one(card)
+        return cards
+
+    def embed_one(self, card: dict) -> np.ndarray:
+        return self.lda.transform(self.tf_vectorizer.transform([card['text']]))
 
     def set_params(self, params: dict):
         self.params.__dict__.update(params)
 
     def dist_rep(self, card: dict) -> float:
         # distance penalty due to repetition
-        prev = self.prev_cache.get(card['question_id'], self.round_num)
-        return self.round_num - prev
+        # TODO
+        return self.round_num
 
     def dist_category(self, card: dict) -> float:
         if self.category is None:
@@ -343,27 +285,15 @@ class MovingAvgScheduler(Scheduler):
         t = self.sm2.scheduled_time.get(card['question_id'], None)
         return 0 if t is None else (t - datetime.now()).days
 
-    def score_one(self, card: dict) -> Dict[str, float]:
-        # compute distance metric of given card to current state
-        # dist = topic repr dist + topical difficulty dist + recency + leitner score
-        # NOTE lower is better
-        card['qrep'] = self.embed_one(card)
-        card['prob'] = self.predict_one(card)
-        return {
-            'qrep': self.dist_qrep(card),
-            'prob': self.dist_prob(card),
-            'category': self.dist_category(card),
-            'leitner': self.dist_leitner(card),
-            'sm2': self.dist_sm2(card),
-        }
-
-    def score(self, cards: List[dict]) -> List[float]:
-        cards = self.embed(self.predict(cards))
-        return [self.score_one(card) for card in cards]
-
     def schedule(self, cards: List[dict]) -> Tuple[List[int], List[int], str]:
         if len(cards) == 0:
             return [], [], ''
+
+        # a schedule request might contain that of many users
+        # first group cards by user
+
+        users = set([x['user_id'] for x in cards])
+        users = [self.get_user(x) for x in users]
 
         scores = self.score(cards)
         scores_summed = [
@@ -471,3 +401,20 @@ class SM2:
 
         self.scheduled_time[qid] = datetime.now() + timedelta(days=interval)
         self.study[qid] = (e_factor, repetition, interval)
+
+def test_add_get():
+    '''test adding and getting cards to and from db'''
+    with open('data/diagnostic_questions.pkl', 'rb') as f:
+        cards = pickle.load(f)
+
+    scheduler = MovingAvgScheduler()
+    c0 = scheduler.get_card(cards[0])
+    print(c0)
+    c0.qrep = np.array([1, 2, 3, 4])
+    scheduler.db.update_card(c0)
+    print()
+    print(scheduler.db.get_card(c0.card_id))
+
+
+if __name__ == '__main__':
+    test_add_get()
