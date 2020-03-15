@@ -102,13 +102,16 @@ class SchedulerDB:
             return [row_to_dict(r) for r in c.fetchall()]
         else:
             c.execute("SELECT * FROM users WHERE user_id=?", (user_id,))
-            r = c.fetchall()
-            if len(r) == 0:
-                return None
-            else:
-                return row_to_dict(r[0])
+            r = c.fetchone()
+            return row_to_dict(r) if r else None
+
+    def check_user(self, user_id: str) -> bool:
+        c = self.conn.cursor()
+        c.execute("SELECT * FROM users WHERE user_id=?", (user_id,))
+        return True if c.fetchone() else False
 
     def update_user(self, u: User):
+        # TODO maybe update timestamp here?
         c = self.conn.cursor()
         c.execute("UPDATE users SET\
                    qrep=?, \
@@ -132,6 +135,11 @@ class SchedulerDB:
             u.last_update,
             u.user_id))
         self.conn.commit()
+
+    def check_card(self, card_id: str) -> bool:
+        c = self.conn.cursor()
+        c.execute("SELECT * FROM cards WHERE card_id=?", (card_id,))
+        return True if c.fetchone() else False
 
     def add_card(self, c: Card):
         cur = self.conn.cursor()
@@ -166,13 +174,11 @@ class SchedulerDB:
             return [row_to_dict(r) for r in c.fetchall()]
         else:
             c.execute("SELECT * FROM cards WHERE card_id=?", (card_id,))
-            r = c.fetchall()
-            if len(r) == 0:
-                return None
-            else:
-                return row_to_dict(r[0])
+            r = c.fetchone()
+            return row_to_dict(r) if r else None
 
     def update_card(self, c: Card):
+        # TODO maybe update timestamp here?
         cur = self.conn.cursor()
         cur.execute("UPDATE cards SET \
                      text=?, \
@@ -192,6 +198,7 @@ class SchedulerDB:
         self.conn.commit()
 
     def add_history(self, h: History):
+        # TODO maybe choose timestamp here?
         cur = self.conn.cursor()
         try:
             cur.execute('INSERT INTO history VALUES (?,?,?,?,?,?,?,?,?,?)',
@@ -230,16 +237,13 @@ class SchedulerDB:
             return [row_to_dict(r) for r in c.fetchall()]
         else:
             c.execute("SELECT * FROM history WHERE history_id=?", (history_id,))
-            r = c.fetchall()
-            if len(r) == 0:
-                return None
-            else:
-                return row_to_dict(r[0])
+            r = c.fetchone()
+            return row_to_dict(r) if r else None
 
 def test_user(db):
     user = User(
         user_id='user 1',
-        qrep=np.array([1, 2, 3]),
+        qrep=np.array([0.1, 0.2, 0.3]),
         skill=np.array([0.1, 0.2, 0.3]),
         repetition={'card 1': 10},
         last_study_time={'card 1': datetime.now()},
@@ -255,7 +259,7 @@ def test_user(db):
     print(db.get_user())
     user = User(
         user_id='user 1',
-        qrep=np.array([4, 5, 6]),
+        qrep=np.array([0.7, 0.8, 0.9]),
         skill=np.array([0.7, 0.8, 0.9]),
         repetition={'card 1': 11, 'card 2': 1},
         last_study_time={'card 1': datetime.now()},
@@ -297,7 +301,7 @@ def test_card(db):
 def test_history(db):
     user = User(
         user_id='user 1',
-        qrep=np.array([1, 2, 3]),
+        qrep=np.array([0.1, 0.2, 0.3]),
         skill=np.array([0.1, 0.2, 0.3]),
         repetition={'card 1': 10},
         last_study_time={'card 1': datetime.now()},

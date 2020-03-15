@@ -3,7 +3,7 @@ import numpy as np
 from datetime import datetime
 from pydantic import BaseModel
 from typing import Optional, Dict, List
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 try:
     from typing import TypedDict  # >=3.8
 except ImportError:
@@ -15,9 +15,21 @@ BaseModels are used for fastapi
 NamedTuples and TypedDicts are used for DB
 '''
 
+@dataclass
+class Card:
+    card_id: str
+    text: str
+    answer: str
+    qrep: np.ndarray
+    skill: float
+    category: str
+    last_update: datetime
+
 
 class Flashcard(BaseModel):
     text: str
+    answer: str
+    category: str
     user_id: Optional[str]
     question_id: Optional[str]
     label: Optional[str]
@@ -75,17 +87,6 @@ class Hyperparams(BaseModel):
 
 
 @dataclass
-class Card:
-    card_id: str
-    text: str
-    answer: str
-    qrep: np.ndarray
-    skill: float
-    category: str
-    last_update: datetime
-
-
-@dataclass
 class History:
     history_id: str
     user_id: str
@@ -104,13 +105,13 @@ class User:
     user_id: str
     qrep: np.ndarray
     skill: np.ndarray
-    repetition: Dict[str, int]
-    last_study_time: Dict[str, datetime]
-    scheduled_time: Dict[str, datetime]
-    sm2_efactor: Dict[str, float]
-    sm2_interval: Dict[str, float]
-    leitner_box: Dict[str, int]
-    last_update: datetime
+    repetition: Dict[str, int] = field(default_factory=dict)
+    last_study_time: Dict[str, datetime] = field(default_factory=dict)
+    scheduled_time: Dict[str, datetime] = field(default_factory=dict)
+    sm2_efactor: Dict[str, float] = field(default_factory=dict)
+    sm2_interval: Dict[str, float] = field(default_factory=dict)
+    leitner_box: Dict[str, int] = field(default_factory=dict)
+    last_update: datetime = field(default_factory=datetime.now)
 
     def to_snapshot(self):
         x = self.__dict__.copy()

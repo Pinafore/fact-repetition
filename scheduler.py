@@ -13,7 +13,8 @@ from whoosh.index import create_in, open_dir
 from whoosh.qparser import QueryParser
 from whoosh.fields import Schema, ID, TEXT
 
-from util import Params
+from util import Params, Card, User, History
+from db import SchedulerDB
 
 
 class Scheduler(ABC):
@@ -74,6 +75,8 @@ class MovingAvgScheduler(Scheduler):
         if params is None:
             params = Params()
         self.params = params
+        self.db = SchedulerDB()
+
         # TODO change to logger
         print('loading question and records...')
         with open('data/jeopardy_310326_question_player_pairs_20190612.pkl', 'rb') as f:
@@ -113,10 +116,7 @@ class MovingAvgScheduler(Scheduler):
         with open(self.params.lda, 'rb') as f:
             self.lda = pickle.load(f)
 
-        # estimate initial state
-        with open(diagnostic_file, 'rb') as f:
-            diagnostic_cards = pickle.load(f)
-        self.reset(self.estimate_avg(diagnostic_cards))
+        self.reset(self.estimate_avg())
 
         # setup Leitner and SM2
         self.leitner = Leitner()
@@ -124,14 +124,15 @@ class MovingAvgScheduler(Scheduler):
 
         print('scheduler ready')
 
-    def estimate_avg(self, cards: List[dict]) -> List[float]:
+    def estimate_avg(self) -> List[float]:
         # estimate the average acccuracy for each component
         # use for initializing user estimate
+        with open('data/diagnostic_questions.pkl', 'rb') as f:
+            diagnostic_cards = pickle.load(f)
         estimate_file = 'data/diagnostic_avg_estimate.txt'
         if os.path.exists(estimate_file):
             with open(estimate_file) as f:
                 return [float(x) for x in f.readlines()]
-
         texts = [x['text'] for x in cards]
         qreps = self.lda.transform(self.tf_vectorizer.transform(texts))
         estimates = [[] for _ in range(self.params.n_components)]
@@ -146,17 +147,7 @@ class MovingAvgScheduler(Scheduler):
         return estimates
 
     def reset(self, prob: Optional[List[float]]):
-        # round number since start
-        self.round_num = 0
-        # topical representation
-        k = self.params.n_components
-        self.qrep = np.array([1 / k for _ in range(k)])
-        # average difficulty (user accuracy) of questions seen so far
-        if prob is None:
-            prob = [0.5 for _ in range(k)]
-        self.prob = prob
-        self.category = None
-
+        # TODO to be removed
         # cache of embeddings
         self.qrep_cache = dict()
         # cache of card probability
@@ -199,6 +190,40 @@ class MovingAvgScheduler(Scheduler):
                 answer=q['answer']
             )
         writer.commit()
+
+    def get_card(self, card: dict) -> Card:
+        '''get card from DB, insert if new'''
+        # retrieve from db if exists
+        c = self.db.get_card(card['question_id'])
+        if c is not None:
+            return c
+        # create new card and insert to db
+        new_card = Card(
+            card_id=card['question_id'],
+            text=card['text'],
+            answer=card['answer'],
+            qrep=self.embed_one(card['text']),
+            skill=self.predict_one(card),
+            category=card['category'],
+            last_update=datetime.now()
+        )
+        self.db.add_card(new_card)
+        # TODO translate all prob to skill
+        return new_card
+
+    def get_user(self, user_id: str) -> User:
+        '''get user from DB, insert if new'''
+        # retrieve from db if exists
+        u = self.db.get_user(user_id)
+        if u is not None:
+            return u
+        # create new user and insert to db
+        new_user = User(
+            user_id=user_id,
+            skill=self.estimate_avg(),
+        )
+        self.db.add_user(new_user)
+        return new_user
 
     def embed(self, cards: List[dict]) -> List[dict]:
         to_be_embedded = []
@@ -278,8 +303,7 @@ class MovingAvgScheduler(Scheduler):
         cards, scores = self.retrieve(card)
         if len(cards) > 0:
             return np.dot([x['prob'] for x in cards], scores)
-        # 2. use model to predict
-        # TODO
+        # TODO 2. use model to predict
         return 0
 
     def set_params(self, params: dict):
@@ -385,6 +409,7 @@ class MovingAvgScheduler(Scheduler):
             self.qrep = b * card['qrep'] + (1 - b) * self.qrep
             self.category = card['category']
         # TODO update Leitner and SM2
+        # TODO insert to history table
 
 
 class Leitner:
