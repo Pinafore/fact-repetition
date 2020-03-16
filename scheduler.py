@@ -1,5 +1,7 @@
 # TODO translate all prob to skill
 # TODO remove self.prob
+# TODO add category to user
+# TODO separate leitner_scheduled_time and sm2_scheduled_time
 import os
 import pickle
 import numpy as np
@@ -216,6 +218,7 @@ class MovingAvgScheduler:
             user_id=user_id,
             qrep=np.array([1 / k for _ in range(k)]),
             skill=self.estimate_avg(),
+            category='HISTORY',
         )
         self.db.add_user(new_user)
         return new_user
@@ -272,7 +275,7 @@ class MovingAvgScheduler:
     # def dist_category(self, card: dict) -> float:
     #     if self.category is None:
     #         return 0
-    #     return int(card['category'] != self.category)
+    #     return int(card['category'].lower() != self.category.lower())
 
     # def dist_prob(self, card: dict) -> float:
     #     if 'qrep' not in card:
@@ -354,52 +357,54 @@ class MovingAvgScheduler:
         # first group cards by user
         # card index for each user
         user_card_index_mapping = defaultdict(list)
+        responses, history_ids = [], []
         for i, c in cards:
             user_card_index_mapping[c['user_id']].append(i)
-        all_cards = self.get_cards(cards)
+            responses.append(c['label'])
+            history_ids.append(c['history_id'])
+        cards = self.get_cards(cards)
         users = [self.get_user(x) for x in user_card_index_mapping.keys()]
         # TODO assuming single user here
         assert len(users) == 1
 
         # for user in users:
         user = users[0]
-        cards = [all_cards[i] for i in user_card_index_mapping[user.user_id]]
-
-        for card in cards:
-            topic_idx = np.argmax(card['qrep'])
-            if card['label'] == 'correct':
-                a = self.params['step_correct']
-                self.prob[topic_idx] = a * card['prob'] + (1 - a) * self.prob[topic_idx]
+        for i in user_card_index_mapping[user.user_id]:
+            card, response, history_id = cards[i], responses[i], history_ids[i]
+            # TODO better, discounted moving average for skill estimate
+            if response == 'correct':
+                a = self.params.step_correct
+                user.skill = a * card.skill + (1 - a) * user.skill
             else:
-                self.prob[topic_idx] += self.params['step_wrong']
-            self.prob[topic_idx] = min(1.0, self.prob[topic_idx])
+                user.skill[np.argmax(card.qrep)] += self.params['step_wrong']
+            user.skill = np.clip(user.skill, a_min=1.0)
+            # TODO better, discounted update of topical representation
             b = self.params['step_qrep']
-            self.qrep = b * card['qrep'] + (1 - b) * self.qrep
-            self.category = card['category']
+            user.qrep = b * card.qrep + (1 - b) * user.qrep
+            # TODO update user category user.category = card['category']
         # TODO update Leitner and SM2
+
+        # TODO update user
+        self.db.update_user(user)
         # TODO insert to history table
 
 
 class Leitner:
 
     def __init__(self):
-        self.scheduled_time = dict()
-        self.card_to_box = dict()
         increment_days = [0, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 9999]
         self.increment_days = {i: x for i, x in enumerate(increment_days)}
 
-    def update(self, card: dict):
-        qid = card['question_id']
-        curr_box = self.card_to_box.get(qid, None)
+    def update(self, user: User, card: Card, response: str):
+        # TODO verify that this is correct, looks sketchy
+        curr_box = user.leitner_box.get(card.card_id, None)
         if curr_box is None:
-            self.card_to_box[qid] = 1
             curr_box = 0
-        new_box = curr_box + (1 if card['label'] == 'correct' else -1)
+        new_box = curr_box + (1 if response == 'correct' else -1)
         new_box = max(min(new_box, 9), 0)
-        self.card_to_box[qid] = new_box
+        user.leitner_box[card.card_id] = new_box
         interval = timedelta(days=self.increment_days[new_box])
-        print(new_box, interval)
-        self.scheduled_time[qid] = datetime.now() + interval
+        user.leitner_scheduled_time[card.card_id] = datetime.now() + interval
 
 
 class SM2:
@@ -411,35 +416,32 @@ class SM2:
     def get_quality_from_response(self, response: str) -> int:
         return 4 if response == 'correct' else 1
 
-    def update(self, card: dict):
+    def update(self, user: User, card: Card, response: str):
         date_studied = datetime.now()
-        qid = card['question_id']
-        quality = self.get_quality_from_response(card['label'])
 
-        if card['label'] != 'correct':
-            self.scheduled_time[qid] = date_studied
-            self.study[qid] = (2.5, 0, 0)
-            # return self.study[qid], self.scheduled_time[qid]
+        scheduled_time
+        if response != 'correct':
+            user.sm2_scheduled_time[card.card_id] = date_studied
+            user.sm2_efactor[card.card_id] = 2.5
+            user.repetition[card.card_id] = 0
+            user.sm2_interval[card.card_id] = 0
 
-        if qid not in self.study:
-            self.scheduled_time[qid] = date_studied
-            self.study[qid] = (2.5, 1, 1)
-            # return self.study[qid], self.scheduled_time[qid]
+        if card.card_id not in user.sm2_efactor:
+            user.sm2_scheduled_time[card.card_id] = date_studied
+            user.sm2_efactor[card.card_id] = 2.5
+            user.repetition[card.card_id] = 1
+            user.sm2_interval[card.card_id] = 1
 
-        e_factor, repetition, interval = self.study[qid]
-        e_factor = max(1.3, e_factor + 0.1 - (5.0 - quality) * (0.08 + (5.0 - quality) * 0.02))
-        repetition += 1
+        e_f = user.sm2_efactor[card.card_id]
+        q = self.get_quality_from_response(response)
+        user.e_factor[card.card_id] = max(1.3, e_f + 0.1 - (5.0 - q) * (0.08 + (5.0 - q) * 0.02))
+        user.repetition[card.card_id] += 1
 
-        if repetition == 1:
-            interval = 1
-        elif repetition == 2:
-            interval = 6
+        if user.repetition[card.card_id] == 1:
+            user.sm2_interval[card.card_id] = 1
+        elif user.repetition[card.card_id] == 2:
+            user.sm2_interval[card.card_id] = 6
         else:
-            interval *= e_factor
+            user.sm2_interval[card.card_id] *= user.sm2_efactor[card.card_id]
 
-        self.scheduled_time[qid] = datetime.now() + timedelta(days=interval)
-        self.study[qid] = (e_factor, repetition, interval)
-
-
-if __name__ == '__main__':
-    test_add_get()
+        user.sm2_scheduled_time[card.card_id] = datetime.now() + timedelta(days=user.sm2_interval[card.card_id])

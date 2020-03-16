@@ -6,11 +6,6 @@ from typing import Optional, Dict, List
 from dataclasses import dataclass, field
 
 
-'''
-BaseModels are used for fastapi
-NamedTuples and TypedDicts are used for DB
-'''
-
 @dataclass
 class Card:
     card_id: str
@@ -50,8 +45,7 @@ class Flashcard(BaseModel):
 #     category: Optional[str]
 
 
-@dataclass
-class Params:
+class Params(BaseModel):
     n_components: int = 20
     qrep: float = 0.1
     skill: float = 0.7
@@ -65,21 +59,8 @@ class Params:
     lda: str = 'checkpoints/lda.pkl'
     whoosh_index: str = 'whoosh_index'
 
-
-class Hyperparams(BaseModel):
-    # TODO merge this with Params
-    n_components: Optional[int]
-    qrep: Optional[float]
-    skill: Optional[float]
-    category: Optional[float]
-    leitner: Optional[float]
-    sm2: Optional[float]
-    step_correct: Optional[float]
-    step_wrong: Optional[float]
-    step_qrep: Optional[float]
-    vectorizer: Optional[str]
-    lda: Optional[str]
-    whoosh_index: Optional[str]
+    class Config:
+        arbitrary_types_allowed = True
 
 
 @dataclass
@@ -101,24 +82,29 @@ class User:
     user_id: str
     qrep: np.ndarray
     skill: np.ndarray
+    category: str
     repetition: Dict[str, int] = field(default_factory=dict)
     last_study_time: Dict[str, datetime] = field(default_factory=dict)
-    scheduled_time: Dict[str, datetime] = field(default_factory=dict)
+    leitner_box: Dict[str, int] = field(default_factory=dict)
+    leitner_scheduled_time: Dict[str, datetime] = field(default_factory=dict)
     sm2_efactor: Dict[str, float] = field(default_factory=dict)
     sm2_interval: Dict[str, float] = field(default_factory=dict)
-    leitner_box: Dict[str, int] = field(default_factory=dict)
+    sm2_scheduled_time: Dict[str, datetime] = field(default_factory=dict)
     date: datetime = field(default_factory=datetime.now)
 
     def to_snapshot(self):
         x = self.__dict__.copy()
+        # user_id: str
         x['qrep'] = x['qrep'].tolist()
         x['skill'] = x['skill'].tolist()
+        # category: str
         # repetition: Dict[str, int]
         x['last_study_time'] = {k: str(v) for k, v in x['last_study_time'].items()}
-        x['scheduled_time'] = {k: str(v) for k, v in x['scheduled_time'].items()}
+        # leitner_box: Dict[str, int]
+        x['leitner_scheduled_time'] = {k: str(v) for k, v in x['leitner_scheduled_time'].items()}
         # sm2_efactor: Dict[str, float]
         # sm2_interval: Dict[str, float]
-        # leitner_box: Dict[str, int]
+        x['sm2_scheduled_time'] = {k: str(v) for k, v in x['sm2_scheduled_time'].items()}
         x['date'] = str(x['date'])
         return json.dumps(x)
 
@@ -129,13 +115,16 @@ class User:
             user_id=x['user_id'],
             qrep=np.array(x['qrep']),
             skill=np.array(x['skill']),
+            category=x['category'],
             repetition=x['repetition'],
             last_study_time={k: datetime.strptime(v, "%Y-%m-%d %H:%M:%S.%f")
                              for k, v in x['last_study_time'].items()},
-            scheduled_time={k: datetime.strptime(v, "%Y-%m-%d %H:%M:%S.%f")
-                            for k, v in x['scheduled_time'].items()},
+            leitner_box=x['leitner_box'],
+            leitner_scheduled_time={k: datetime.strptime(v, "%Y-%m-%d %H:%M:%S.%f")
+                                    for k, v in x['leitner_scheduled_time'].items()},
             sm2_efactor=x['sm2_efactor'],
             sm2_interval=x['sm2_interval'],
-            leitner_box=x['leitner_box'],
+            sm2_scheduled_time={k: datetime.strptime(v, "%Y-%m-%d %H:%M:%S.%f")
+                                for k, v in x['sm2_scheduled_time'].items()},
             date=datetime.strptime(x['date'], "%Y-%m-%d %H:%M:%S.%f")
         )

@@ -27,12 +27,14 @@ class TestDB(unittest.TestCase):
             user_id='user 1',
             qrep=np.array([0.1, 0.2, 0.3]),
             skill=np.array([0.1, 0.2, 0.3]),
+            category='History',
             repetition={'card 1': 10},
             last_study_time={'card 1': datetime.now()},
-            scheduled_time={'card 2': datetime.now()},
+            leitner_box={'card 1': 2},
+            leitner_scheduled_time={'card 2': datetime.now()},
             sm2_efactor={'card 1': 0.5},
             sm2_interval={'card 1': 6},
-            leitner_box={'card 1': 2},
+            sm2_scheduled_time={'card 2': datetime.now()},
             date=datetime.now()
         )
         self.assertFalse(self.db.check_user(user.user_id))
@@ -57,10 +59,11 @@ class TestDB(unittest.TestCase):
         np.testing.assert_array_equal(u1.skill, u2.skill)
         self.assertEqual(u1.repetition, u2.repetition)
         self.assertEqual(u1.last_study_time, u2.last_study_time)
-        self.assertEqual(u1.scheduled_time, u2.scheduled_time)
+        self.assertEqual(u1.leitner_box, u2.leitner_box)
+        self.assertEqual(u1.leitner_scheduled_time, u2.leitner_scheduled_time)
         self.assertEqual(u1.sm2_efactor, u2.sm2_efactor)
         self.assertEqual(u1.sm2_interval, u2.sm2_interval)
-        self.assertEqual(u1.leitner_box, u2.leitner_box)
+        self.assertEqual(u1.sm2_scheduled_time, u2.sm2_scheduled_time)
         self.assertEqual(u1.date, u2.date)
 
     def assert_card_equal(self, c1, c2):
@@ -107,11 +110,13 @@ class TestDB(unittest.TestCase):
             qrep=np.array([0.1, 0.2, 0.3]),
             skill=np.array([0.1, 0.2, 0.3]),
             repetition={'card 1': 10},
+            category='History',
             last_study_time={'card 1': datetime.now()},
-            scheduled_time={'card 2': datetime.now()},
+            leitner_box={'card 1': 2},
+            leitner_scheduled_time={'card 2': datetime.now()},
             sm2_efactor={'card 1': 0.5},
             sm2_interval={'card 1': 6},
-            leitner_box={'card 1': 2},
+            sm2_scheduled_time={'card 2': datetime.now()},
             date=datetime.now()
         )
         card = Card(
@@ -172,10 +177,11 @@ class TestScheduler(unittest.TestCase):
         np.testing.assert_array_equal(u1.skill, u2.skill)
         self.assertEqual(u1.repetition, u2.repetition)
         self.assertEqual(u1.last_study_time, u2.last_study_time)
-        self.assertEqual(u1.scheduled_time, u2.scheduled_time)
+        self.assertEqual(u1.leitner_box, u2.leitner_box)
+        self.assertEqual(u1.leitner_scheduled_time, u2.leitner_scheduled_time)
         self.assertEqual(u1.sm2_efactor, u2.sm2_efactor)
         self.assertEqual(u1.sm2_interval, u2.sm2_interval)
-        self.assertEqual(u1.leitner_box, u2.leitner_box)
+        self.assertEqual(u1.sm2_scheduled_time, u2.sm2_scheduled_time)
         self.assertEqual(u1.date, u2.date)
 
     def assert_card_equal(self, c1, c2):

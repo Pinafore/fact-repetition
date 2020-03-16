@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from fastapi import FastAPI
 from typing import List, Optional
 
-from util import Flashcard, Hyperparams
+from util import Flashcard, Params
 from scheduler import MovingAvgScheduler
 
 
@@ -35,5 +35,5 @@ def karl_reset():
     scheduler.reset()
 
 @app.post('/api/karl/set_hyperparameter')
-def karl_set_params(params: Hyperparams):
+def karl_set_params(params: Params):
     scheduler.set_params(params.dict())

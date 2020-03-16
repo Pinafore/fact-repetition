@@ -26,12 +26,14 @@ class SchedulerDB:
                      user_id PRIMARY KEY, \
                      qrep TEXT, \
                      skill TEXT, \
+                     category TEXT, \
                      repetition TEXT, \
                      last_study_time TEXT, \
-                     scheduled_time TEXT, \
+                     leitner_box TEXT, \
+                     leitner_scheduled_time TEXT, \
                      sm2_efactor TEXT, \
                      sm2_interval TEXT, \
-                     leitner_box TEXT, \
+                     sm2_scheduled_time TEXT, \
                      date timestamp)')
 
         # *current* cache of cards
@@ -66,17 +68,19 @@ class SchedulerDB:
     def add_user(self, u: User):
         cur = self.conn.cursor()
         try:
-            cur.execute('INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?,?)',
+            cur.execute('INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
                         (
                             u.user_id,
                             json.dumps(u.qrep.tolist()),
                             json.dumps(u.skill.tolist()),
+                            u.category,
                             json.dumps(u.repetition),
                             json.dumps({k: str(v) for k, v in u.last_study_time.items()}),
-                            json.dumps({k: str(v) for k, v in u.scheduled_time.items()}),
+                            json.dumps(u.leitner_box),
+                            json.dumps({k: str(v) for k, v in u.leitner_scheduled_time.items()}),
                             json.dumps(u.sm2_efactor),
                             json.dumps(u.sm2_interval),
-                            json.dumps(u.leitner_box),
+                            json.dumps({k: str(v) for k, v in u.sm2_scheduled_time.items()}),
                             u.date))
         except sqlite3.IntegrityError:
             logger.info("user {} exists".format(u.user_id))
@@ -89,15 +93,18 @@ class SchedulerDB:
                 user_id=r[0],
                 qrep=np.array(json.loads(r[1])),
                 skill=np.array(json.loads(r[2])),
-                repetition=json.loads(r[3]),
+                category=r[3],
+                repetition=json.loads(r[4]),
                 last_study_time={k: datetime.strptime(v, "%Y-%m-%d %H:%M:%S.%f")
-                                 for k, v in json.loads(r[4]).items()},
-                scheduled_time={k: datetime.strptime(v, "%Y-%m-%d %H:%M:%S.%f")
-                                for k, v in json.loads(r[5]).items()},
-                sm2_efactor=json.loads(r[6]),
-                sm2_interval=json.loads(r[7]),
-                leitner_box=json.loads(r[8]),
-                date=r[9])
+                                 for k, v in json.loads(r[5]).items()},
+                leitner_box=json.loads(r[6]),
+                leitner_scheduled_time={k: datetime.strptime(v, "%Y-%m-%d %H:%M:%S.%f")
+                                        for k, v in json.loads(r[7]).items()},
+                sm2_efactor=json.loads(r[8]),
+                sm2_interval=json.loads(r[9]),
+                sm2_scheduled_time={k: datetime.strptime(v, "%Y-%m-%d %H:%M:%S.%f")
+                                    for k, v in json.loads(r[10]).items()},
+                date=r[11])
         cur = self.conn.cursor()
         if user_id is None:
             cur.execute("SELECT * FROM users")
@@ -113,27 +120,30 @@ class SchedulerDB:
         return True if cur.fetchone() else False
 
     def update_user(self, u: User):
-        # TODO maybe update timestamp here?
         cur = self.conn.cursor()
         cur.execute("UPDATE users SET\
                      qrep=?, \
                      skill=?, \
+                     category=?, \
                      repetition=?, \
                      last_study_time=?, \
-                     scheduled_time=?, \
+                     leitner_box=?, \
+                     leitner_scheduled_time=?, \
                      sm2_efactor=?, \
                      sm2_interval=?, \
-                     leitner_box=?, \
-                     date=?\
+                     sm2_scheduled_time=?, \
+                     date=? \
                      WHERE user_id=?", (
             json.dumps(u.qrep.tolist()),
             json.dumps(u.skill.tolist()),
+            u.category,
             json.dumps(u.repetition),
             json.dumps({k: str(v) for k, v in u.last_study_time.items()}),
-            json.dumps({k: str(v) for k, v in u.scheduled_time.items()}),
+            json.dumps(u.leitner_box),
+            json.dumps({k: str(v) for k, v in u.leitner_scheduled_time.items()}),
             json.dumps(u.sm2_efactor),
             json.dumps(u.sm2_interval),
-            json.dumps(u.leitner_box),
+            json.dumps({k: str(v) for k, v in u.sm2_scheduled_time.items()}),
             u.date,
             u.user_id))
         self.conn.commit()
@@ -180,7 +190,6 @@ class SchedulerDB:
             return row_to_dict(r) if r else None
 
     def update_card(self, c: Card):
-        # TODO maybe update timestamp here?
         cur = self.conn.cursor()
         cur.execute("UPDATE cards SET \
                      text=?, \
@@ -200,7 +209,6 @@ class SchedulerDB:
         self.conn.commit()
 
     def add_history(self, h: History):
-        # TODO maybe decide timestamp here?
         cur = self.conn.cursor()
         try:
             cur.execute('INSERT INTO history VALUES (?,?,?,?,?,?,?,?,?,?)',
