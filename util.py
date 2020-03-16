@@ -17,7 +17,7 @@ class Card:
     text: str
     answer: str
     qrep: np.ndarray
-    skill: float
+    skill: np.ndarray
     category: str
     date: datetime
 
@@ -100,7 +100,7 @@ class History:
 class User:
     user_id: str
     qrep: np.ndarray
-    skill: List[float]
+    skill: np.ndarray
     repetition: Dict[str, int] = field(default_factory=dict)
     last_study_time: Dict[str, datetime] = field(default_factory=dict)
     scheduled_time: Dict[str, datetime] = field(default_factory=dict)
@@ -112,7 +112,7 @@ class User:
     def to_snapshot(self):
         x = self.__dict__.copy()
         x['qrep'] = x['qrep'].tolist()
-        # skill: List[float]
+        x['skill'] = x['skill'].tolist()
         # repetition: Dict[str, int]
         x['last_study_time'] = {k: str(v) for k, v in x['last_study_time'].items()}
         x['scheduled_time'] = {k: str(v) for k, v in x['scheduled_time'].items()}
@@ -128,7 +128,7 @@ class User:
         return User(
             user_id=x['user_id'],
             qrep=np.array(x['qrep']),
-            skill=x['skill'],
+            skill=np.array(x['skill']),
             repetition=x['repetition'],
             last_study_time={k: datetime.strptime(v, "%Y-%m-%d %H:%M:%S.%f")
                              for k, v in x['last_study_time'].items()},

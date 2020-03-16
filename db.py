@@ -70,7 +70,7 @@ class SchedulerDB:
                         (
                             u.user_id,
                             json.dumps(u.qrep.tolist()),
-                            json.dumps(u.skill),
+                            json.dumps(u.skill.tolist()),
                             json.dumps(u.repetition),
                             json.dumps({k: str(v) for k, v in u.last_study_time.items()}),
                             json.dumps({k: str(v) for k, v in u.scheduled_time.items()}),
@@ -88,7 +88,7 @@ class SchedulerDB:
             return User(
                 user_id=r[0],
                 qrep=np.array(json.loads(r[1])),
-                skill=json.loads(r[2]),
+                skill=np.array(json.loads(r[2])),
                 repetition=json.loads(r[3]),
                 last_study_time={k: datetime.strptime(v, "%Y-%m-%d %H:%M:%S.%f")
                                  for k, v in json.loads(r[4]).items()},
@@ -127,7 +127,7 @@ class SchedulerDB:
                      date=?\
                      WHERE user_id=?", (
             json.dumps(u.qrep.tolist()),
-            json.dumps(u.skill),
+            json.dumps(u.skill.tolist()),
             json.dumps(u.repetition),
             json.dumps({k: str(v) for k, v in u.last_study_time.items()}),
             json.dumps({k: str(v) for k, v in u.scheduled_time.items()}),
@@ -152,7 +152,7 @@ class SchedulerDB:
                             c.text,
                             c.answer,
                             json.dumps(c.qrep.tolist()),
-                            str(c.skill),
+                            json.dumps(c.skill.tolist()),
                             c.category,
                             c.date))
         except sqlite3.IntegrityError:
@@ -167,7 +167,7 @@ class SchedulerDB:
                 text=r[1],
                 answer=r[2],
                 qrep=np.array(json.loads(r[3])),
-                skill=float(r[4]),
+                skill=np.array(json.loads(r[4])),
                 category=r[5],
                 date=r[6])
         cur = self.conn.cursor()
@@ -193,7 +193,7 @@ class SchedulerDB:
             c.text,
             c.answer,
             json.dumps(c.qrep.tolist()),
-            str(c.skill),
+            json.dumps(c.skill.tolist()),
             c.category,
             c.date,
             c.card_id))
