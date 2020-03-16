@@ -2,9 +2,8 @@ import os
 import pickle
 import numpy as np
 from tqdm import tqdm
-from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
-from typing import Optional, List, Tuple, Dict
+from typing import List, Tuple
 
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
@@ -154,7 +153,7 @@ class MovingAvgScheduler:
             qrep=self.embed_one(card),
             skill=self.predict_one(card),
             category=card['category'],
-            last_update=datetime.now()
+            date=datetime.now()
         )
         self.db.add_card(new_card)
         # TODO translate all prob to skill
@@ -186,7 +185,7 @@ class MovingAvgScheduler:
                 qrep=qreps[i],
                 skill=c['skill'],
                 category=c['category'],
-                last_update=datetime.now()
+                date=datetime.now()
             )
             self.db.add_card(new_card)
             assert cards[c['index']]['question_id'] == new_card.card_id
@@ -410,6 +409,7 @@ def test_add_get():
     scheduler = MovingAvgScheduler()
     c0 = scheduler.get_card(cards[0])
     print(c0)
+    c0.card_id = 'new id see if this works'
     c0.qrep = np.array([1, 2, 3, 4])
     scheduler.db.update_card(c0)
     print()

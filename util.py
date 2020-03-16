@@ -4,10 +4,6 @@ from datetime import datetime
 from pydantic import BaseModel
 from typing import Optional, Dict, List
 from dataclasses import dataclass, field
-try:
-    from typing import TypedDict  # >=3.8
-except ImportError:
-    from mypy_extensions import TypedDict  # <=3.7
 
 
 '''
@@ -23,7 +19,7 @@ class Card:
     qrep: np.ndarray
     skill: float
     category: str
-    last_update: datetime
+    date: datetime
 
 
 class Flashcard(BaseModel):
@@ -97,7 +93,7 @@ class History:
     scheduler_snapshot: str
     card_ids: List[str]
     scheduler_output: str
-    timestamp: datetime
+    date: datetime
 
 
 @dataclass
@@ -111,7 +107,7 @@ class User:
     sm2_efactor: Dict[str, float] = field(default_factory=dict)
     sm2_interval: Dict[str, float] = field(default_factory=dict)
     leitner_box: Dict[str, int] = field(default_factory=dict)
-    last_update: datetime = field(default_factory=datetime.now)
+    date: datetime = field(default_factory=datetime.now)
 
     def to_snapshot(self):
         x = self.__dict__.copy()
@@ -123,7 +119,7 @@ class User:
         # sm2_efactor: Dict[str, float]
         # sm2_interval: Dict[str, float]
         # leitner_box: Dict[str, int]
-        x['last_update'] = str(x['last_update'])
+        x['date'] = str(x['date'])
         return json.dumps(x)
 
     @classmethod
@@ -141,5 +137,5 @@ class User:
             sm2_efactor=x['sm2_efactor'],
             sm2_interval=x['sm2_interval'],
             leitner_box=x['leitner_box'],
-            last_update=datetime.strptime(x['last_update'], "%Y-%m-%d %H:%M:%S.%f")
+            date=datetime.strptime(x['date'], "%Y-%m-%d %H:%M:%S.%f")
         )
