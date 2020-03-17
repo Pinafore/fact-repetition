@@ -27,12 +27,12 @@ class SchedulerDB:
                      qrep TEXT, \
                      skill TEXT, \
                      category TEXT, \
-                     repetition TEXT, \
                      last_study_time TEXT, \
                      leitner_box TEXT, \
                      leitner_scheduled_time TEXT, \
                      sm2_efactor TEXT, \
                      sm2_interval TEXT, \
+                     sm2_repetition TEXT, \
                      sm2_scheduled_time TEXT, \
                      date timestamp)')
 
@@ -74,12 +74,12 @@ class SchedulerDB:
                             json.dumps(u.qrep.tolist()),
                             json.dumps(u.skill.tolist()),
                             u.category,
-                            json.dumps(u.repetition),
                             json.dumps({k: str(v) for k, v in u.last_study_time.items()}),
                             json.dumps(u.leitner_box),
                             json.dumps({k: str(v) for k, v in u.leitner_scheduled_time.items()}),
                             json.dumps(u.sm2_efactor),
                             json.dumps(u.sm2_interval),
+                            json.dumps(u.sm2_repetition),
                             json.dumps({k: str(v) for k, v in u.sm2_scheduled_time.items()}),
                             u.date))
         except sqlite3.IntegrityError:
@@ -94,14 +94,14 @@ class SchedulerDB:
                 qrep=np.array(json.loads(r[1])),
                 skill=np.array(json.loads(r[2])),
                 category=r[3],
-                repetition=json.loads(r[4]),
                 last_study_time={k: datetime.strptime(v, "%Y-%m-%d %H:%M:%S.%f")
-                                 for k, v in json.loads(r[5]).items()},
-                leitner_box=json.loads(r[6]),
+                                 for k, v in json.loads(r[4]).items()},
+                leitner_box=json.loads(r[5]),
                 leitner_scheduled_time={k: datetime.strptime(v, "%Y-%m-%d %H:%M:%S.%f")
-                                        for k, v in json.loads(r[7]).items()},
-                sm2_efactor=json.loads(r[8]),
-                sm2_interval=json.loads(r[9]),
+                                        for k, v in json.loads(r[6]).items()},
+                sm2_efactor=json.loads(r[7]),
+                sm2_interval=json.loads(r[8]),
+                sm2_repetition=json.loads(r[9]),
                 sm2_scheduled_time={k: datetime.strptime(v, "%Y-%m-%d %H:%M:%S.%f")
                                     for k, v in json.loads(r[10]).items()},
                 date=r[11])
@@ -125,24 +125,24 @@ class SchedulerDB:
                      qrep=?, \
                      skill=?, \
                      category=?, \
-                     repetition=?, \
                      last_study_time=?, \
                      leitner_box=?, \
                      leitner_scheduled_time=?, \
                      sm2_efactor=?, \
                      sm2_interval=?, \
+                     sm2_repetition=?, \
                      sm2_scheduled_time=?, \
                      date=? \
                      WHERE user_id=?", (
             json.dumps(u.qrep.tolist()),
             json.dumps(u.skill.tolist()),
             u.category,
-            json.dumps(u.repetition),
             json.dumps({k: str(v) for k, v in u.last_study_time.items()}),
             json.dumps(u.leitner_box),
             json.dumps({k: str(v) for k, v in u.leitner_scheduled_time.items()}),
             json.dumps(u.sm2_efactor),
             json.dumps(u.sm2_interval),
+            json.dumps(u.sm2_repetition),
             json.dumps({k: str(v) for k, v in u.sm2_scheduled_time.items()}),
             u.date,
             u.user_id))

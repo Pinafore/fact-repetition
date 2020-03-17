@@ -1,5 +1,6 @@
 import os
 import json
+import copy
 import pickle
 import unittest
 import numpy as np
@@ -28,12 +29,12 @@ class TestDB(unittest.TestCase):
             qrep=np.array([0.1, 0.2, 0.3]),
             skill=np.array([0.1, 0.2, 0.3]),
             category='History',
-            repetition={'card 1': 10},
             last_study_time={'card 1': datetime.now()},
             leitner_box={'card 1': 2},
             leitner_scheduled_time={'card 2': datetime.now()},
             sm2_efactor={'card 1': 0.5},
             sm2_interval={'card 1': 6},
+            sm2_repetition={'card 1': 10},
             sm2_scheduled_time={'card 2': datetime.now()},
             date=datetime.now()
         )
@@ -57,12 +58,12 @@ class TestDB(unittest.TestCase):
         self.assertEqual(u1.user_id, u2.user_id)
         np.testing.assert_array_equal(u1.qrep, u2.qrep)
         np.testing.assert_array_equal(u1.skill, u2.skill)
-        self.assertEqual(u1.repetition, u2.repetition)
         self.assertEqual(u1.last_study_time, u2.last_study_time)
         self.assertEqual(u1.leitner_box, u2.leitner_box)
         self.assertEqual(u1.leitner_scheduled_time, u2.leitner_scheduled_time)
         self.assertEqual(u1.sm2_efactor, u2.sm2_efactor)
         self.assertEqual(u1.sm2_interval, u2.sm2_interval)
+        self.assertEqual(u1.sm2_repetition, u2.sm2_repetition)
         self.assertEqual(u1.sm2_scheduled_time, u2.sm2_scheduled_time)
         self.assertEqual(u1.date, u2.date)
 
@@ -109,13 +110,13 @@ class TestDB(unittest.TestCase):
             user_id='user 1',
             qrep=np.array([0.1, 0.2, 0.3]),
             skill=np.array([0.1, 0.2, 0.3]),
-            repetition={'card 1': 10},
             category='History',
             last_study_time={'card 1': datetime.now()},
             leitner_box={'card 1': 2},
             leitner_scheduled_time={'card 2': datetime.now()},
             sm2_efactor={'card 1': 0.5},
             sm2_interval={'card 1': 6},
+            sm2_repetition={'card 1': 10},
             sm2_scheduled_time={'card 2': datetime.now()},
             date=datetime.now()
         )
@@ -175,12 +176,12 @@ class TestScheduler(unittest.TestCase):
         self.assertEqual(u1.user_id, u2.user_id)
         np.testing.assert_array_equal(u1.qrep, u2.qrep)
         np.testing.assert_array_equal(u1.skill, u2.skill)
-        self.assertEqual(u1.repetition, u2.repetition)
         self.assertEqual(u1.last_study_time, u2.last_study_time)
         self.assertEqual(u1.leitner_box, u2.leitner_box)
         self.assertEqual(u1.leitner_scheduled_time, u2.leitner_scheduled_time)
         self.assertEqual(u1.sm2_efactor, u2.sm2_efactor)
         self.assertEqual(u1.sm2_interval, u2.sm2_interval)
+        self.assertEqual(u1.sm2_repetition, u2.sm2_repetition)
         self.assertEqual(u1.sm2_scheduled_time, u2.sm2_scheduled_time)
         self.assertEqual(u1.date, u2.date)
 
@@ -193,16 +194,40 @@ class TestScheduler(unittest.TestCase):
         self.assertEqual(c1.category, c2.category)
         self.assertEqual(c1.date, c2.date)
 
-    def test_scheduler_add_card(self):
+    def test_scheduler_update(self):
         with open('data/diagnostic_questions.pkl', 'rb') as f:
             cards = pickle.load(f)
-        card = self.scheduler.get_card(cards[0])
-        print(card)
-        returned_card = self.scheduler.db.get_card(card.card_id)
-        self.assert_card_equal(card, returned_card)
+        cards = cards[:5]
+        for i, c in enumerate(cards):
+            cards[i]['user_id'] = 'shi'
 
-        user_id = 'Matthew'
-        user = self.scheduler.get_user(user_id)
+        print(cards[0])
+
+        # using deepcopy here because DB lookup converts dict cards into Card
+        # cards. not a problem in actual use because objects go through web API
+        # and not reused
+        order, ranking, rationale = self.scheduler.schedule(
+            copy.deepcopy(cards))
+
+        print()
+        print()
+        print(cards[0])
+
+        card_selected = cards[order[0]]
+        card_selected.update({
+            'label': 'correct',
+            'history_id': 'real_history_id'
+        })
+
+        self.scheduler.update([card_selected])
+
+        h = self.scheduler.db.get_history()[0]
+        for key, value in h.__dict__.items():
+            print(key, value)
+
+        print()
+        print()
+        user = self.scheduler.db.get_user('shi')
         print(user)
 
 

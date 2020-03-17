@@ -83,12 +83,12 @@ class User:
     qrep: np.ndarray
     skill: np.ndarray
     category: str
-    repetition: Dict[str, int] = field(default_factory=dict)
     last_study_time: Dict[str, datetime] = field(default_factory=dict)
     leitner_box: Dict[str, int] = field(default_factory=dict)
     leitner_scheduled_time: Dict[str, datetime] = field(default_factory=dict)
     sm2_efactor: Dict[str, float] = field(default_factory=dict)
     sm2_interval: Dict[str, float] = field(default_factory=dict)
+    sm2_repetition: Dict[str, int] = field(default_factory=dict)
     sm2_scheduled_time: Dict[str, datetime] = field(default_factory=dict)
     date: datetime = field(default_factory=datetime.now)
 
@@ -98,12 +98,12 @@ class User:
         x['qrep'] = x['qrep'].tolist()
         x['skill'] = x['skill'].tolist()
         # category: str
-        # repetition: Dict[str, int]
         x['last_study_time'] = {k: str(v) for k, v in x['last_study_time'].items()}
         # leitner_box: Dict[str, int]
         x['leitner_scheduled_time'] = {k: str(v) for k, v in x['leitner_scheduled_time'].items()}
         # sm2_efactor: Dict[str, float]
         # sm2_interval: Dict[str, float]
+        # sm2_repetition: Dict[str, int]
         x['sm2_scheduled_time'] = {k: str(v) for k, v in x['sm2_scheduled_time'].items()}
         x['date'] = str(x['date'])
         return json.dumps(x)
@@ -116,7 +116,6 @@ class User:
             qrep=np.array(x['qrep']),
             skill=np.array(x['skill']),
             category=x['category'],
-            repetition=x['repetition'],
             last_study_time={k: datetime.strptime(v, "%Y-%m-%d %H:%M:%S.%f")
                              for k, v in x['last_study_time'].items()},
             leitner_box=x['leitner_box'],
@@ -124,6 +123,7 @@ class User:
                                     for k, v in x['leitner_scheduled_time'].items()},
             sm2_efactor=x['sm2_efactor'],
             sm2_interval=x['sm2_interval'],
+            sm2_repetition=x['sm2_repetition'],
             sm2_scheduled_time={k: datetime.strptime(v, "%Y-%m-%d %H:%M:%S.%f")
                                 for k, v in x['sm2_scheduled_time'].items()},
             date=datetime.strptime(x['date'], "%Y-%m-%d %H:%M:%S.%f")
