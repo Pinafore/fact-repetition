@@ -2,6 +2,7 @@ import os
 import json
 import pickle
 import numpy as np
+import logging
 from tqdm import tqdm
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -16,6 +17,8 @@ from whoosh.fields import Schema, ID, TEXT
 
 from util import Params, Card, User, History
 from db import SchedulerDB
+
+logger = logging.getLogger('scheduler')
 
 
 # find this in util.py
@@ -43,8 +46,7 @@ class MovingAvgScheduler:
         self.db_filename = db_filename
         self.db = SchedulerDB(db_filename)
 
-        # TODO change to logger
-        print('loading question and records...')
+        logger.info('loading question and records...')
         with open('data/jeopardy_310326_question_player_pairs_20190612.pkl', 'rb') as f:
             records_df = pickle.load(f)
         with open('data/jeopardy_358974_questions_20190612.pkl', 'rb') as f:
@@ -52,7 +54,7 @@ class MovingAvgScheduler:
         self.karl_to_question_id = questions_df.to_dict()['question_id']
 
         # augment question_df with record stats
-        print('merging dfs...')
+        logger.info('merging dfs...')
         df = questions_df.set_index('question_id').join(records_df.set_index('question_id'))
         df = df[df['correct'].notna()]
         df['correct'] = df['correct'].apply(lambda x: 1 if x == 1 else 0)
@@ -66,7 +68,7 @@ class MovingAvgScheduler:
 
         # setup whoosh for text search
         if not os.path.exists(self.params.whoosh_index):
-            print('building whoosh...')
+            logger.info('building whoosh...')
             self.build_whoosh()
         self.ix = open_dir(self.params.whoosh_index)
 
@@ -75,14 +77,14 @@ class MovingAvgScheduler:
         if not (os.path.exists(self.params.vectorizer) and os.path.exists(self.params.lda)):
             with open(diagnostic_file, 'rb') as f:
                 diagnostic_cards = pickle.load(f)
-            print('building lda...')
+            logger.info('building lda...')
             self.build_lda(diagnostic_cards)
         with open(self.params.vectorizer, 'rb') as f:
             self.tf_vectorizer = pickle.load(f)
         with open(self.params.lda, 'rb') as f:
             self.lda = pickle.load(f)
 
-        print('scheduler ready')
+        logger.info('scheduler ready')
 
     def estimate_avg(self) -> np.ndarray:
         # estimate the average acccuracy for each component
@@ -264,46 +266,39 @@ class MovingAvgScheduler:
     def set_params(self, params: dict):
         self.params.__dict__.update(params)
 
-    # def dist_rep(self, card: dict) -> float:
-    #     # distance penalty due to repetition
-    #     # TODO
-    #     return self.round_num
+    def dist_category(self, user: User, card: Card) -> float:
+        if user.category is None:
+            return 0
+        return float(card.category.lower() != user.category.lower())
 
-    # def dist_category(self, card: dict) -> float:
-    #     if self.category is None:
-    #         return 0
-    #     return int(card['category'].lower() != self.category.lower())
+    def dist_skill(self, user: User, card: Card) -> float:
+        topic_idx = np.argmax(card.qrep)
+        d = card.skill[topic_idx] - user.skill[topic_idx]
+        # penalize easier questions
+        d *= 1 if d < 0 else 10
+        return abs(d)
 
-    # def dist_prob(self, card: dict) -> float:
-    #     if 'qrep' not in card:
-    #         card['qrep'] = self.embed_one(card)
-    #     topic_idx = np.argmax(card['qrep'])
-    #     d = card['prob'] - self.prob[topic_idx]
-    #     # penalize easier questions
-    #     d *= 1 if d < 0 else 10
-    #     return abs(d)
+    def dist_qrep(self, user: User, card: Card) -> float:
+        def cosine_distance(a, b):
+            return 1 - (a @ b.T) / (np.linalg.norm(a) * np.linalg.norm(b))
+        return cosine_distance(user.qrep, card.qrep)
 
-    # def dist_qrep(self, card: dict) -> float:
-    #     def cosine_distance(a, b):
-    #         return 1 - (a @ b.T) / (np.linalg.norm(a) * np.linalg.norm(b))
-    #     return cosine_distance(self.qrep, card['qrep'])
+    def dist_leitner(self, user: User, card: Card) -> float:
+        t = user.leitner_scheduled_time.get(card.card_id, None)
+        return 0 if t is None else (t - datetime.now()).days
 
-    # def dist_leitner(self, card: dict) -> float:
-    #     # distance to leitner scheduled time
-    #     t = self.leitner.scheduled_time.get(card['question_id'], None)
-    #     return 0 if t is None else (t - datetime.now()).days
+    def dist_sm2(self, user: User, card: Card) -> float:
+        t = user.sm2_scheduled_time.get(card.card_id, None)
+        return 0 if t is None else (t - datetime.now()).days
 
-    # def dist_sm2(self, card: dict) -> float:
-    #     # distance to sm2 scheduled time
-    #     t = self.sm2.scheduled_time.get(card['question_id'], None)
-    #     return 0 if t is None else (t - datetime.now()).days
-
-    def score(self, cards: List[Card]) -> List[float]:
+    def score(self, user: User, cards: List[Card]) -> List[float]:
         return [{
-            'qrep': 0.1,
-            'skill': 0.2,
-            'category': 1,
-        } for _ in cards]
+            'qrep': self.dist_qrep(user, card),
+            'skill': self.dist_skill(user, card),
+            'category': self.dist_category(user, card),
+            'leitner': self.dist_leitner(user, card),
+            'sm2': self.dist_sm2(user, card),
+        } for card in cards]
 
     def schedule(self, cards: List[dict]) -> Tuple[List[int], List[int], str]:
         if len(cards) == 0:
@@ -324,7 +319,7 @@ class MovingAvgScheduler:
         user = users[0]
         cards = [all_cards[i] for i in user_card_index_mapping[user.user_id]]
 
-        scores = self.score(cards)
+        scores = self.score(user, cards)
         scores_summed = [
             sum([self.params.__dict__[key] * value for key, value in ss.items()])
             for ss in scores
