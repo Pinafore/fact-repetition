@@ -18,6 +18,7 @@ from whoosh.fields import Schema, ID, TEXT
 from util import Params, Card, User, History
 from db import SchedulerDB
 
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger('scheduler')
 
 
@@ -417,13 +418,12 @@ class MovingAvgScheduler:
                                               'card_id': card.card_id})
                 # logger.debug('asking {} {}'.format(temp_history_id, card.answer))
                 history = self.db.get_history(temp_history_id)
-                if history is not None:
-                    history.__dict__.update({
-                        'history_id': history_id,
-                        'response': response,
-                        'judgement': response,
-                    })
-                    self.db.update_history(temp_history_id, history)
+                history.__dict__.update({
+                    'history_id': history_id,
+                    'response': response,
+                    'judgement': response,
+                })
+                self.db.update_history(temp_history_id, history)
             self.db.update_user(user)
 
     def leitner_update(self, user: User, card: Card, response: str):
