@@ -19,8 +19,8 @@ class Card:
 
 class Flashcard(BaseModel):
     text: str
-    answer: str
-    category: str
+    answer: Optional[str]
+    category: Optional[str]
     user_id: Optional[str]
     question_id: Optional[str]
     label: Optional[str]

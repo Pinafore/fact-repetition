@@ -14,7 +14,8 @@ class SchedulerDB:
         self.filename = filename
         if not os.path.exists(filename):
             self.create()
-        self.conn = sqlite3.connect(filename, detect_types=sqlite3.PARSE_DECLTYPES)
+        self.conn = sqlite3.connect(
+            filename, detect_types=sqlite3.PARSE_DECLTYPES, check_same_thread=False)
 
     def create(self):
         conn = sqlite3.connect(self.filename)
@@ -84,7 +85,6 @@ class SchedulerDB:
                             u.date))
         except sqlite3.IntegrityError:
             logger.info("user {} exists".format(u.user_id))
-            print("user {} exists".format(u.user_id))
         self.conn.commit()
 
     def get_user(self, user_id: str = None):
@@ -148,6 +148,16 @@ class SchedulerDB:
             u.user_id))
         self.conn.commit()
 
+    def delete_user(self, user_id: str = None):
+        cur = self.conn.cursor()
+        if user_id is None:
+            logger.info('deleting all users from db')
+            cur.execute("DELETE FROM users")
+        else:
+            logger.info('deleting user {} from db'.format(user_id))
+            cur.execute("DELETE * FROM users WHERE user_id=?", (user_id,))
+        self.conn.commit()
+
     def check_card(self, card_id: str) -> bool:
         cur = self.conn.cursor()
         cur.execute("SELECT * FROM cards WHERE card_id=?", (card_id,))
@@ -167,7 +177,6 @@ class SchedulerDB:
                             c.date))
         except sqlite3.IntegrityError:
             logger.info("card {} exists".format(c.card_id))
-            print("card {} exists".format(c.card_id))
         self.conn.commit()
 
     def get_card(self, card_id: str = None):
@@ -208,6 +217,16 @@ class SchedulerDB:
             c.card_id))
         self.conn.commit()
 
+    def delete_card(self, card_id: str):
+        cur = self.conn.cursor()
+        if card_id is None:
+            logger.info('deleting all cards from db')
+            cur.execute("DELETE FROM cards")
+        else:
+            logger.info('deleting card {} from db'.format(card_id))
+            cur.execute("DELETE * FROM cards WHERE card_id=?", (card_id,))
+        self.conn.commit()
+
     def add_history(self, h: History):
         cur = self.conn.cursor()
         try:
@@ -225,7 +244,6 @@ class SchedulerDB:
                             h.date))
         except sqlite3.IntegrityError:
             logger.info("history {} exists".format(h.history_id))
-            print("history {} exists".format(h.history_id))
         self.conn.commit()
 
     def get_history(self, history_id: str = None):
@@ -281,4 +299,14 @@ class SchedulerDB:
             h.scheduler_output,
             h.date,
             old_history_id))
+        self.conn.commit()
+
+    def delete_history(self, history_id: str):
+        cur = self.conn.cursor()
+        if history_id is None:
+            logger.info('deleting all history from db')
+            cur.execute("DELETE FROM history")
+        else:
+            logger.info('deleting history {} from db'.format(history_id))
+            cur.execute("DELETE * FROM history WHERE history_id=?", (history_id,))
         self.conn.commit()

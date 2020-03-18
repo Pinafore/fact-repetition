@@ -108,6 +108,11 @@ class MovingAvgScheduler:
                 f.write(str(e) + '\n')
         return np.array(estimates)
 
+    def reset(self):
+        # delete users and history from db
+        self.db.delete_user()
+        self.db.delete_history()
+
     def build_lda(self, cards: List[dict]):
         texts = [card['text'] for card in cards]
         tf_vectorizer = CountVectorizer(max_df=0.95, min_df=2,
@@ -208,6 +213,7 @@ class MovingAvgScheduler:
     def get_user(self, user_id: str) -> User:
         '''get user from DB, insert if new'''
         # retrieve from db if exists
+        # need to handle empty user_id
         u = self.db.get_user(user_id)
         if u is not None:
             return u
@@ -267,7 +273,7 @@ class MovingAvgScheduler:
         self.params.__dict__.update(params)
 
     def dist_category(self, user: User, card: Card) -> float:
-        if user.category is None:
+        if user.category is None or card.category is None:
             return 0
         return float(card.category.lower() != user.category.lower())
 
@@ -346,6 +352,11 @@ class MovingAvgScheduler:
         # add temporary history, to be completed by a call to `update`
         temp_history_id = json.dumps({'user_id': user.user_id,
                                       'card_id': card_selected.card_id})
+        logger.debug('adding {} {}'.format(temp_history_id, card_selected.answer))
+        # logger.debug('ranking')
+        # for i in ranking[:10]:
+        #     logger.debug('    {}'.format(cards[i].card_id))
+
         history = History(
             history_id=temp_history_id,
             user_id=user.user_id,
@@ -361,7 +372,10 @@ class MovingAvgScheduler:
                 'rationale': rationale}),
             date=datetime.now())
         self.db.add_history(history)
-        return order, ranking, rationale
+        # logger.debug('existing')
+        # for x in self.db.get_history():
+        #     logger.debug('    {}'.format(x.history_id))
+        return ranking, order, rationale
 
     def update(self, cards: List[dict]):
         # a schedule request might contain that of many users
@@ -374,45 +388,43 @@ class MovingAvgScheduler:
             responses.append(c['label'])
             history_ids.append(c['history_id'])
         cards = self.get_cards(cards)
-        users = [self.get_user(x) for x in user_card_index_mapping.keys()]
-        # TODO assuming single user here
-        assert len(users) == 1
+        for u in user_card_index_mapping.keys():
+            user = self.get_user(u)
+            for i in user_card_index_mapping[user.user_id]:
+                card, response, history_id = cards[i], responses[i], history_ids[i]
 
-        # for user in users:
-        user = users[0]
-        for i in user_card_index_mapping[user.user_id]:
-            card, response, history_id = cards[i], responses[i], history_ids[i]
+                # update qrep
+                # TODO better, discounted update of topical representation
+                b = self.params.step_qrep
+                user.qrep = b * card.qrep + (1 - b) * user.qrep
 
-            # update qrep
-            # TODO better, discounted update of topical representation
-            b = self.params.step_qrep
-            user.qrep = b * card.qrep + (1 - b) * user.qrep
+                # update skill
+                # TODO better, discounted moving average for skill estimate
+                if response == 'correct':
+                    a = self.params.step_correct
+                    user.skill = a * card.skill + (1 - a) * user.skill
+                else:
+                    user.skill[np.argmax(card.qrep)] += self.params.step_wrong
+                user.skill = np.clip(user.skill, a_min=0.0, a_max=1.0)
 
-            # update skill
-            # TODO better, discounted moving average for skill estimate
-            if response == 'correct':
-                a = self.params.step_correct
-                user.skill = a * card.skill + (1 - a) * user.skill
-            else:
-                user.skill[np.argmax(card.qrep)] += self.params['step_wrong']
-            user.skill = np.clip(user.skill, a_min=0.0, a_max=1.0)
+                user.category = card.category
+                user.last_study_time[card.card_id] = datetime.now()
 
-            user.category = card.category
-            user.last_study_time[card.card_id] = datetime.now()
+                self.leitner_update(user, card, response)
+                self.sm2_update(user, card, response)
 
-            self.leitner_update(user, card, response)
-            self.sm2_update(user, card, response)
-
-            temp_history_id = json.dumps({'user_id': user.user_id,
-                                          'card_id': card.card_id})
-            history = self.db.get_history(temp_history_id)
-            history.__dict__.update({
-                'history_id': history_id,
-                'response': response,
-                'judgement': response,
-            })
-            self.db.update_history(temp_history_id, history)
-        self.db.update_user(user)
+                temp_history_id = json.dumps({'user_id': user.user_id,
+                                              'card_id': card.card_id})
+                # logger.debug('asking {} {}'.format(temp_history_id, card.answer))
+                history = self.db.get_history(temp_history_id)
+                if history is not None:
+                    history.__dict__.update({
+                        'history_id': history_id,
+                        'response': response,
+                        'judgement': response,
+                    })
+                    self.db.update_history(temp_history_id, history)
+            self.db.update_user(user)
 
     def leitner_update(self, user: User, card: Card, response: str):
         days = [None, 0, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 9999]
