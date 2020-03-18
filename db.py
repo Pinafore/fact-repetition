@@ -18,6 +18,7 @@ class SchedulerDB:
             filename, detect_types=sqlite3.PARSE_DECLTYPES, check_same_thread=False)
 
     def create(self):
+        logger.info('creating {}'.format(self.filename))
         conn = sqlite3.connect(self.filename)
         cur = conn.cursor()
 
@@ -301,7 +302,7 @@ class SchedulerDB:
             old_history_id))
         self.conn.commit()
 
-    def delete_history(self, history_id: str):
+    def delete_history(self, history_id: str = None):
         cur = self.conn.cursor()
         if history_id is None:
             logger.info('deleting all history from db')
