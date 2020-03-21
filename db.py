@@ -3,8 +3,7 @@ import json
 import sqlite3
 import logging
 import numpy as np
-from datetime import datetime
-from util import User, Card, History
+from util import User, Card, History, parse_date
 
 logger = logging.getLogger('scheduler')
 
@@ -95,16 +94,13 @@ class SchedulerDB:
                 qrep=np.array(json.loads(r[1])),
                 skill=np.array(json.loads(r[2])),
                 category=r[3],
-                last_study_time={k: datetime.strptime(v, "%Y-%m-%d %H:%M:%S.%f")
-                                 for k, v in json.loads(r[4]).items()},
+                last_study_time={k: parse_date(v) for k, v in json.loads(r[4]).items()},
                 leitner_box=json.loads(r[5]),
-                leitner_scheduled_time={k: datetime.strptime(v, "%Y-%m-%d %H:%M:%S.%f")
-                                        for k, v in json.loads(r[6]).items()},
+                leitner_scheduled_time={k: parse_date(v) for k, v in json.loads(r[6]).items()},
                 sm2_efactor=json.loads(r[7]),
                 sm2_interval=json.loads(r[8]),
                 sm2_repetition=json.loads(r[9]),
-                sm2_scheduled_time={k: datetime.strptime(v, "%Y-%m-%d %H:%M:%S.%f")
-                                    for k, v in json.loads(r[10]).items()},
+                sm2_scheduled_time={k: parse_date(v) for k, v in json.loads(r[10]).items()},
                 date=r[11])
         cur = self.conn.cursor()
         if user_id is None:

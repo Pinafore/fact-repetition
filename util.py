@@ -6,6 +6,10 @@ from typing import Optional, Dict, List
 from dataclasses import dataclass, field
 
 
+def parse_date(date: str):
+    return datetime.strptime(date, "%Y-%m-%d %H:%M:%S.%f")
+
+
 @dataclass
 class Card:
     card_id: str
@@ -25,28 +29,11 @@ class Flashcard(BaseModel):
     question_id: Optional[str]
     label: Optional[str]
     history_id: Optional[str]
-
-
-# class Flashcard(BaseModel):
-#     text: str
-#     user_id: Optional[str]
-#     question_id: Optional[str]
-#     user_accuracy: Optional[float]
-#     user_buzzratio: Optional[float]
-#     user_count: Optional[float]
-#     question_accuracy: Optional[float]
-#     question_buzzratio: Optional[float]
-#     question_count: Optional[float]
-#     times_seen: Optional[float]
-#     times_correct: Optional[float]
-#     times_wrong: Optional[float]
-#     label: Optional[str]
-#     answer: Optional[str]
-#     category: Optional[str]
+    date: Optional[str]
 
 
 class Params(BaseModel):
-    n_components: int = 20
+    n_topics: int = 20
     qrep: float = 0.1
     skill: float = 0.7
     category: float = 0.3
@@ -59,8 +46,8 @@ class Params(BaseModel):
     lda: str = 'checkpoints/lda.pkl'
     whoosh_index: str = 'whoosh_index'
 
-    class Config:
-        arbitrary_types_allowed = True
+    # class Config:
+    #     arbitrary_types_allowed = True
 
 
 @dataclass
@@ -116,15 +103,30 @@ class User:
             qrep=np.array(x['qrep']),
             skill=np.array(x['skill']),
             category=x['category'],
-            last_study_time={k: datetime.strptime(v, "%Y-%m-%d %H:%M:%S.%f")
-                             for k, v in x['last_study_time'].items()},
+            last_study_time={k: parse_date(v) for k, v in x['last_study_time'].items()},
             leitner_box=x['leitner_box'],
-            leitner_scheduled_time={k: datetime.strptime(v, "%Y-%m-%d %H:%M:%S.%f")
-                                    for k, v in x['leitner_scheduled_time'].items()},
+            leitner_scheduled_time={k: parse_date(v) for k, v in x['leitner_scheduled_time'].items()},
             sm2_efactor=x['sm2_efactor'],
             sm2_interval=x['sm2_interval'],
             sm2_repetition=x['sm2_repetition'],
-            sm2_scheduled_time={k: datetime.strptime(v, "%Y-%m-%d %H:%M:%S.%f")
-                                for k, v in x['sm2_scheduled_time'].items()},
-            date=datetime.strptime(x['date'], "%Y-%m-%d %H:%M:%S.%f")
+            sm2_scheduled_time={k: parse_date(v) for k, v in x['sm2_scheduled_time'].items()},
+            date=parse_date(x['date'])
         )
+
+
+# class Flashcard(BaseModel):
+#     text: str
+#     user_id: Optional[str]
+#     question_id: Optional[str]
+#     user_accuracy: Optional[float]
+#     user_buzzratio: Optional[float]
+#     user_count: Optional[float]
+#     question_accuracy: Optional[float]
+#     question_buzzratio: Optional[float]
+#     question_count: Optional[float]
+#     times_seen: Optional[float]
+#     times_correct: Optional[float]
+#     times_wrong: Optional[float]
+#     label: Optional[str]
+#     answer: Optional[str]
+#     category: Optional[str]

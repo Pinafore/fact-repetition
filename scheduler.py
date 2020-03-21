@@ -9,13 +9,13 @@ from datetime import datetime, timedelta
 from typing import List, Tuple
 
 from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.decomposition import LatentDirichletAllocation
+from sklearn.decomposition import LatentDirichletAllocation as SklearnLDA
 
 from whoosh.index import create_in, open_dir
 from whoosh.qparser import QueryParser
 from whoosh.fields import Schema, ID, TEXT
 
-from util import Params, Card, User, History
+from util import Params, Card, User, History, parse_date
 from db import SchedulerDB
 
 logger = logging.getLogger('scheduler')
@@ -24,7 +24,7 @@ logger.setLevel(logging.DEBUG)
 
 # find this in util.py
 # class Params(TypedDict):
-#     n_components: int = 20
+#     n_topics: int = 20
 #     qrep: float = 0.1
 #     skill: float = 0.7
 #     category: float = 0.3
@@ -98,7 +98,7 @@ class MovingAvgScheduler:
                 return np.array([float(x) for x in f.readlines()])
         texts = [x['text'] for x in cards]
         qreps = self.lda.transform(self.tf_vectorizer.transform(texts))
-        estimates = [[] for _ in range(self.params.n_components)]
+        estimates = [[] for _ in range(self.params.n_topics)]
         for card, qrep in zip(cards, qreps):
             topic_idx = np.argmax(qrep)
             prob = self.predict_one(card)
@@ -120,10 +120,10 @@ class MovingAvgScheduler:
                                         max_features=50000,
                                         stop_words='english')
         tf = tf_vectorizer.fit_transform(texts)
-        lda = LatentDirichletAllocation(n_components=self.params.n_components,
-                                        max_iter=5, learning_method='online',
-                                        learning_offset=50.,
-                                        random_state=0)
+        lda = SklearnLDA(n_topics=self.params.n_topics,
+                         max_iter=5, learning_method='online',
+                         learning_offset=50.,
+                         random_state=0)
         lda.fit(tf)
         # tf_feature_names = tf_vectorizer.get_feature_names()
         with open(self.params.vectorizer, 'wb') as f:
@@ -161,6 +161,9 @@ class MovingAvgScheduler:
         skill = np.zeros_like(qrep)
         skill[np.argmax(qrep)] = 1
         skill *= self.predict_one(card)
+        date = card['date']
+        if isinstance(date, str):
+            date = parse_date(date)
         new_card = Card(
             card_id=card['question_id'],
             text=card['text'],
@@ -168,7 +171,7 @@ class MovingAvgScheduler:
             qrep=qrep,
             skill=skill,
             category=card['category'],
-            date=datetime.now()
+            date=date
         )
         self.db.add_card(new_card)
         return new_card
@@ -197,6 +200,9 @@ class MovingAvgScheduler:
             skill = np.zeros_like(qreps[i])
             skill[np.argmax(qreps[i])] = 1
             skill *= c['prob']
+            date = c['date']
+            if isinstance(date, str):
+                date = parse_date(date)
             new_card = Card(
                 card_id=c['question_id'],
                 text=c['text'],
@@ -204,7 +210,7 @@ class MovingAvgScheduler:
                 qrep=qreps[i],
                 skill=skill,
                 category=c['category'],
-                date=datetime.now()
+                date=date
             )
             self.db.add_card(new_card)
             assert cards[c['index']]['question_id'] == new_card.card_id
@@ -219,12 +225,13 @@ class MovingAvgScheduler:
         if u is not None:
             return u
         # create new user and insert to db
-        k = self.params.n_components
+        k = self.params.n_topics
         new_user = User(
             user_id=user_id,
             qrep=np.array([1 / k for _ in range(k)]),
             skill=self.estimate_avg(),
             category='HISTORY',
+            date=datetime.now()
         )
         self.db.add_user(new_user)
         return new_user
@@ -295,14 +302,14 @@ class MovingAvgScheduler:
         if t is None:
             return 0
         else:
-            return max(0, (t - datetime.now()).days)
+            return max(0, (t - card.date).days)
 
     def dist_sm2(self, user: User, card: Card) -> float:
         t = user.sm2_scheduled_time.get(card.card_id, None)
         if t is None:
             return 0
         else:
-            return max(0, (t - datetime.now()).days)
+            return max(0, (t - card.date).days)
 
     def score(self, user: User, cards: List[Card]) -> List[float]:
         return [{
@@ -316,8 +323,6 @@ class MovingAvgScheduler:
     def schedule(self, cards: List[dict]) -> Tuple[List[int], List[int], str]:
         if len(cards) == 0:
             return [], [], ''
-        
-        t0 = datetime.now()
 
         # a schedule request might contain that of many users
         # first group cards by user
@@ -327,22 +332,15 @@ class MovingAvgScheduler:
             user_card_index_mapping[c['user_id']].append(i)
         all_cards = self.get_cards(cards)
 
-        t1 = datetime.now()
-
         users = [self.get_user(x) for x in user_card_index_mapping.keys()]
-        # TODO assuming single user here
+        # NOTE assuming single user here
         assert len(users) == 1
-
-        t2 = datetime.now()
 
         # for user in users:
         user = users[0]
         cards = [all_cards[i] for i in user_card_index_mapping[user.user_id]]
 
         scores = self.score(user, cards)
-
-        t3 = datetime.now()
-
         scores_summed = [
             sum([self.params.__dict__[key] * value for key, value in ss.items()])
             for ss in scores
@@ -366,8 +364,6 @@ class MovingAvgScheduler:
             for key, value in info.items()
         ])
 
-        t4 = datetime.now()
-
         # add temporary history, to be completed by a call to `update`
         temp_history_id = json.dumps({'user_id': user.user_id,
                                       'card_id': card_selected.card_id})
@@ -387,87 +383,60 @@ class MovingAvgScheduler:
                 'rationale': rationale}),
             date=datetime.now())
         self.db.add_history(history)
-
-        t5 = datetime.now()
-
-        logger.info('    {: <20}{: <20}'.format('get_cards', str(t1 - t0)))
-        logger.info('    {: <20}{: <20}'.format('get_user', str(t2 - t1)))
-        logger.info('    {: <20}{: <20}'.format('score', str(t3 - t2)))
-        logger.info('    {: <20}{: <20}'.format('sorting', str(t4 - t3)))
-        logger.info('    {: <20}{: <20}'.format('history', str(t5 - t4)))
-        logger.info('    {: <20}{: <20}'.format('total', str(t5 - t0)))
-
         return ranking, order, rationale
 
     def update(self, cards: List[dict]):
         # a schedule request might contain that of many users
         # first group cards by user
         # card index for each user
-        t0 = datetime.now()
-
         user_card_index_mapping = defaultdict(list)
-        responses, history_ids = [], []
+        responses, history_ids, dates = [], [], []
         for i, c in enumerate(cards):
             user_card_index_mapping[c['user_id']].append(i)
             responses.append(c['label'])
             history_ids.append(c['history_id'])
+            dates.append(parse_date(c['date']))
         cards = self.get_cards(cards)
 
-        t1 = datetime.now()
+        for u, indices in user_card_index_mapping.items():
+            user = self.get_user(u)
+            for i in indices:
+                card, response, history_id = cards[i], responses[i], history_ids[i]
+                date = dates[i]
+                if isinstance(date, str):
+                    date = parse_date(date)
 
-        # for u, indices in user_card_index_mapping.items():
-        u, indices = list(user_card_index_mapping.items())[0]
+                # update qrep
+                # TODO better, discounted update of topical representation
+                b = self.params.step_qrep
+                user.qrep = b * card.qrep + (1 - b) * user.qrep
 
-        user = self.get_user(u)
-        # for i in indices:
-        i = indices[0]
-        card, response, history_id = cards[i], responses[i], history_ids[i]
+                # update skill
+                # TODO better, discounted moving average for skill estimate
+                if response == 'correct':
+                    a = self.params.step_correct
+                    user.skill = a * card.skill + (1 - a) * user.skill
+                else:
+                    user.skill[np.argmax(card.qrep)] += self.params.step_wrong
+                user.skill = np.clip(user.skill, a_min=0.0, a_max=1.0)
 
-        # update qrep
-        # TODO better, discounted update of topical representation
-        b = self.params.step_qrep
-        user.qrep = b * card.qrep + (1 - b) * user.qrep
+                user.category = card.category
+                user.last_study_time[card.card_id] = date
 
-        # update skill
-        # TODO better, discounted moving average for skill estimate
-        if response == 'correct':
-            a = self.params.step_correct
-            user.skill = a * card.skill + (1 - a) * user.skill
-        else:
-            user.skill[np.argmax(card.qrep)] += self.params.step_wrong
-        user.skill = np.clip(user.skill, a_min=0.0, a_max=1.0)
+                self.leitner_update(user, card, response)
+                self.sm2_update(user, card, response)
 
-        user.category = card.category
-        user.last_study_time[card.card_id] = datetime.now()
-
-        t2 = datetime.now()
-
-        self.leitner_update(user, card, response)
-        self.sm2_update(user, card, response)
-
-        t3 = datetime.now()
-
-        temp_history_id = json.dumps({'user_id': user.user_id, 'card_id': card.card_id})
-        history = self.db.get_history(temp_history_id)
-        if history is not None:
-            history.__dict__.update({
-                'history_id': history_id,
-                'response': response,
-                'judgement': response,
-            })
-            self.db.update_history(temp_history_id, history)
-
-        t4 = datetime.now()
-
-        self.db.update_user(user)
-
-        t5 = datetime.now()
-        logger.info('    {: <20}{: <20}'.format('get_cards', str(t1 - t0)))
-        logger.info('    {: <20}{: <20}'.format('update calc', str(t2 - t1)))
-        logger.info('    {: <20}{: <20}'.format('leitner sm2', str(t3 - t2)))
-        logger.info('    {: <20}{: <20}'.format('update hist', str(t4 - t3)))
-        logger.info('    {: <20}{: <20}'.format('update user', str(t5 - t4)))
-        logger.info('    {: <20}{: <20}'.format('total', str(t5 - t0)))
+                temp_history_id = json.dumps({'user_id': user.user_id, 'card_id': card.card_id})
+                history = self.db.get_history(temp_history_id)
+                if history is not None:
+                    history.__dict__.update({
+                        'history_id': history_id,
+                        'response': response,
+                        'judgement': response,
+                        'date': date
+                    })
+                    self.db.update_history(temp_history_id, history)
+            self.db.update_user(user)
 
     def leitner_update(self, user: User, card: Card, response: str):
         days = [None, 0, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 9999]
@@ -481,18 +450,13 @@ class MovingAvgScheduler:
         new_box = max(min(new_box, 10), 1)
         user.leitner_box[card.card_id] = new_box
         interval = timedelta(days=increment_days[new_box])
-        # TODO should use review time instead of now() here
-        # using review time leads to spacing between cards in the same box
-        date_studied = datetime.now()
+        date_studied = user.last_study_time[card.card_id]
         user.leitner_scheduled_time[card.card_id] = date_studied + interval
 
     def get_quality_from_response(self, response: str) -> int:
         return 4 if response == 'correct' else 1
 
     def sm2_update(self, user: User, card: Card, response: str):
-        # TODO should use review time instead of now()
-        date_studied = datetime.now()
-
         e_f = user.sm2_efactor.get(card.card_id, 2.5)
         inv = user.sm2_interval.get(card.card_id, 1)
         rep = user.sm2_repetition.get(card.card_id, 0) + 1
@@ -514,4 +478,5 @@ class MovingAvgScheduler:
         user.sm2_repetition[card.card_id] = rep
         user.sm2_efactor[card.card_id] = e_f
         user.sm2_interval[card.card_id] = inv
+        date_studied = user.last_study_time[card.card_id]
         user.sm2_scheduled_time[card.card_id] = date_studied + timedelta(days=inv)

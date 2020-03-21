@@ -1,6 +1,6 @@
-from pydantic import BaseModel
 from fastapi import FastAPI
-from typing import List, Optional
+from typing import List
+from datetime import datetime
 
 from util import Flashcard, Params
 from scheduler import MovingAvgScheduler
@@ -19,7 +19,11 @@ def karl_predict(card: Flashcard):
 
 @app.post('/api/karl/schedule')
 def karl_schedule(cards: List[Flashcard]):
-    order, ranking, rationale = scheduler.schedule([x.dict() for x in cards])
+    for i, _ in enumerate(cards):
+        cards[i] = cards[i].dict()
+        if cards[i]['date'] is None:
+            cards[i]['date'] = str(datetime.now())
+    order, ranking, rationale = scheduler.schedule(cards)
     return {
         'order': order,
         'ranking': ranking,
@@ -28,7 +32,12 @@ def karl_schedule(cards: List[Flashcard]):
 
 @app.post('/api/karl/update')
 def karl_update(cards: List[Flashcard]):
-    scheduler.update([x.dict() for x in cards])
+    # add date to card if missing
+    for i, _ in enumerate(cards):
+        cards[i] = cards[i].dict()
+        if cards[i]['date'] is None:
+            cards[i]['date'] = str(datetime.now())
+    scheduler.update(cards)
 
 @app.post('/api/karl/reset')
 def karl_reset():
