@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import pickle
 import numpy as np
 import logging
@@ -8,8 +9,8 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import List, Tuple
 
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.decomposition import LatentDirichletAllocation as SklearnLDA
+import gensim
+import en_core_web_lg
 
 from whoosh.index import create_in, open_dir
 from whoosh.qparser import QueryParser
@@ -18,24 +19,15 @@ from whoosh.fields import Schema, ID, TEXT
 from util import Params, Card, User, History, parse_date
 from db import SchedulerDB
 
+from build_lda import process
+nlp = en_core_web_lg.load()
+nlp.add_pipe(process, name='process', last=True)
+
 logger = logging.getLogger('scheduler')
 logger.setLevel(logging.DEBUG)
 
-
-# find this in util.py
-# class Params(TypedDict):
-#     n_topics: int = 20
-#     qrep: float = 0.1
-#     skill: float = 0.7
-#     category: float = 0.3
-#     leitner: float = 1.0
-#     sm2: float = 1.0
-#     step_correct: float = 0.5
-#     step_wrong: float = 0.05
-#     step_qrep: float = 0.3
-#     vectorizer: str = 'checkpoints/tf_vectorizer.pkl'
-#     lda: str = 'checkpoints/lda.pkl'
-#     whoosh_index: str = 'whoosh_index'
+# current qrep is the discounted average of qreps of the past MAX_QREPS cards
+MAX_QREPS = 10
 
 
 class MovingAvgScheduler:
@@ -73,17 +65,9 @@ class MovingAvgScheduler:
             self.build_whoosh()
         self.ix = open_dir(self.params.whoosh_index)
 
-        diagnostic_file = 'data/diagnostic_questions.pkl'
-        # setup LDA
-        if not (os.path.exists(self.params.vectorizer) and os.path.exists(self.params.lda)):
-            with open(diagnostic_file, 'rb') as f:
-                diagnostic_cards = pickle.load(f)
-            logger.info('building lda...')
-            self.build_lda(diagnostic_cards)
-        with open(self.params.vectorizer, 'rb') as f:
-            self.tf_vectorizer = pickle.load(f)
-        with open(self.params.lda, 'rb') as f:
-            self.lda = pickle.load(f)
+        # LDA gensim
+        self.lda = gensim.models.LdaModel.load(os.path.join(params.lda_dir, 'lda'))
+        self.vocab = gensim.corpora.Dictionary.load_from_text(os.path.join(params.lda_dir, 'vocab.txt'))
 
         logger.info('scheduler ready')
 
@@ -96,8 +80,7 @@ class MovingAvgScheduler:
         if os.path.exists(estimate_file):
             with open(estimate_file) as f:
                 return np.array([float(x) for x in f.readlines()])
-        texts = [x['text'] for x in cards]
-        qreps = self.lda.transform(self.tf_vectorizer.transform(texts))
+        qreps = self.embed([x['text'] for x in cards])
         estimates = [[] for _ in range(self.params.n_topics)]
         for card, qrep in zip(cards, qreps):
             topic_idx = np.argmax(qrep)
@@ -113,23 +96,6 @@ class MovingAvgScheduler:
         # delete users and history from db
         self.db.delete_user()
         self.db.delete_history()
-
-    def build_lda(self, cards: List[dict]):
-        texts = [card['text'] for card in cards]
-        tf_vectorizer = CountVectorizer(max_df=0.95, min_df=2,
-                                        max_features=50000,
-                                        stop_words='english')
-        tf = tf_vectorizer.fit_transform(texts)
-        lda = SklearnLDA(n_topics=self.params.n_topics,
-                         max_iter=5, learning_method='online',
-                         learning_offset=50.,
-                         random_state=0)
-        lda.fit(tf)
-        # tf_feature_names = tf_vectorizer.get_feature_names()
-        with open(self.params.vectorizer, 'wb') as f:
-            pickle.dump(tf_vectorizer, f)
-        with open(self.params.lda, 'wb') as f:
-            pickle.dump(lda, f)
 
     def build_whoosh(self):
         if not os.path.exists(self.params.whoosh_index):
@@ -157,13 +123,11 @@ class MovingAvgScheduler:
         if c is not None:
             return c
         # create new card and insert to db
-        qrep = self.embed_one(card)
+        qrep = self.embed([card['text']])
         skill = np.zeros_like(qrep)
         skill[np.argmax(qrep)] = 1
         skill *= self.predict_one(card)
         date = card['date']
-        if isinstance(date, str):
-            date = parse_date(date)
         new_card = Card(
             card_id=card['question_id'],
             text=card['text'],
@@ -171,10 +135,16 @@ class MovingAvgScheduler:
             qrep=qrep,
             skill=skill,
             category=card['category'],
-            date=date
+            date=parse_date(date)
         )
         self.db.add_card(new_card)
         return new_card
+
+    def embed(self, texts: List[str]) -> List[np.ndarray]:
+        texts = [self.vocab.doc2bow(x) for x in nlp.pipe(texts)]
+        topics = self.lda.get_document_topics(texts, minimum_probability=-1)
+        # TODO speed up
+        return [np.asarray([value for i, value in ts]) for ts in topics]
 
     def get_cards(self, cards: List[dict]) -> List[Card]:
         '''get cards from db, insert if new
@@ -192,8 +162,7 @@ class MovingAvgScheduler:
         if len(to_be_embedded) == 0:
             return cards
 
-        texts = [x['text'] for x in to_be_embedded]
-        qreps = self.lda.transform(self.tf_vectorizer.transform(texts))
+        qreps = self.embed([x['text'] for x in to_be_embedded])
         to_be_embedded = self.predict(to_be_embedded)
 
         for i, c in enumerate(to_be_embedded):
@@ -201,8 +170,6 @@ class MovingAvgScheduler:
             skill[np.argmax(qreps[i])] = 1
             skill *= c['prob']
             date = c['date']
-            if isinstance(date, str):
-                date = parse_date(date)
             new_card = Card(
                 card_id=c['question_id'],
                 text=c['text'],
@@ -210,7 +177,7 @@ class MovingAvgScheduler:
                 qrep=qreps[i],
                 skill=skill,
                 category=c['category'],
-                date=date
+                date=parse_date(date)
             )
             self.db.add_card(new_card)
             assert cards[c['index']]['question_id'] == new_card.card_id
@@ -228,8 +195,8 @@ class MovingAvgScheduler:
         k = self.params.n_topics
         new_user = User(
             user_id=user_id,
-            qrep=np.array([1 / k for _ in range(k)]),
-            skill=self.estimate_avg(),
+            qrep=[np.array([1 / k for _ in range(k)])],
+            skill=[self.estimate_avg()],
             category='HISTORY',
             date=datetime.now()
         )
@@ -245,6 +212,9 @@ class MovingAvgScheduler:
             if len(hits) > 0:
                 cards = [card.to_dict() for idx, card in hits.iterrows()]
                 return cards, [1 / len(hits) for _ in range(len(hits))]
+        else:
+            # TODO
+            return 0.5
 
         # 2. do text search
         with self.ix.searcher() as searcher:
@@ -267,15 +237,13 @@ class MovingAvgScheduler:
         if len(cards) > 0:
             return np.dot([x['prob'] for x in cards], scores)
         # TODO 2. use model to predict
-        return 0
+        return 0.5
 
     def predict(self, cards: List[dict]) -> List[dict]:
+        # TODO batch predict here
         for i, card in enumerate(cards):
             cards[i]['prob'] = self.predict_one(card)
         return cards
-
-    def embed_one(self, card: dict) -> np.ndarray:
-        return self.lda.transform(self.tf_vectorizer.transform([card['text']]))[0]
 
     def set_params(self, params: dict):
         self.params.__dict__.update(params)
@@ -286,16 +254,41 @@ class MovingAvgScheduler:
         return float(card.category.lower() != user.category.lower())
 
     def dist_skill(self, user: User, card: Card) -> float:
+        alpha = 0.9
+        skills, alphas = [], []
+        for q in user.skill:
+            skills.append(alpha * q)
+            alphas.append(alpha)
+            alpha *= alpha
+        skill = np.sum(skills, axis=0) / np.sum(alphas)
+        skill = np.clip(skill, a_min=0.0, a_max=1.0)
         topic_idx = np.argmax(card.qrep)
-        d = card.skill[topic_idx] - user.skill[topic_idx]
+        d = card.skill[topic_idx] - skill[topic_idx]
         # penalize easier questions
         d *= 1 if d < 0 else 10
         return abs(d)
 
+    def dist_time(self, user: User, card: Card) -> float:
+        t = user.last_study_time.get(card.card_id, None)
+        if t is None:
+            return 0
+        else:
+            t1 = time.mktime(datetime.now().timetuple())
+            t0 = time.mktime(t.timetuple())
+            # cool down for 10 minutes
+            return max(10 - float(t1 - t0) / 60, 0)
+
     def dist_qrep(self, user: User, card: Card) -> float:
         def cosine_distance(a, b):
             return 1 - (a @ b.T) / (np.linalg.norm(a) * np.linalg.norm(b))
-        return cosine_distance(user.qrep, card.qrep)
+        alpha = 0.9
+        qreps, alphas = [], []
+        for q in user.qrep:
+            qreps.append(alpha * q)
+            alphas.append(alpha)
+            alpha *= alpha
+        qrep = np.sum(qreps, axis=0) / np.sum(alphas)
+        return cosine_distance(qrep, card.qrep)
 
     def dist_leitner(self, user: User, card: Card) -> float:
         t = user.leitner_scheduled_time.get(card.card_id, None)
@@ -315,6 +308,7 @@ class MovingAvgScheduler:
         return [{
             'qrep': self.dist_qrep(user, card),
             'skill': self.dist_skill(user, card),
+            'time': self.dist_time(user, card),
             'category': self.dist_category(user, card),
             'leitner': self.dist_leitner(user, card),
             'sm2': self.dist_sm2(user, card),
@@ -352,17 +346,23 @@ class MovingAvgScheduler:
         index_selected = order[0]
         card_selected = cards[index_selected]
         topic_idx = np.argmax(card_selected.qrep)
+        # scores before scaled of the selected card
         info = scores[index_selected]
         info.update({
             'sum': scores_summed[index_selected],
-            'user': user.skill[topic_idx],
             'card': card_selected.skill[topic_idx],
             'topic': topic_idx,
         })
-        rationale = '\n'.join([
+
+        rationale = '  '.join([
             '{}: {:.3f}'.format(key, value)
             for key, value in info.items()
         ])
+
+        print('************************')
+        for key, value in info.items():
+            print(key, value)
+        print('************************')
 
         # add temporary history, to be completed by a call to `update`
         temp_history_id = json.dumps({'user_id': user.user_id,
@@ -401,24 +401,21 @@ class MovingAvgScheduler:
         for u, indices in user_card_index_mapping.items():
             user = self.get_user(u)
             for i in indices:
-                card, response, history_id = cards[i], responses[i], history_ids[i]
+                card = cards[i]
+                response = responses[i]
+                history_id = history_ids[i]
                 date = dates[i]
-                if isinstance(date, str):
-                    date = parse_date(date)
 
                 # update qrep
-                # TODO better, discounted update of topical representation
-                b = self.params.step_qrep
-                user.qrep = b * card.qrep + (1 - b) * user.qrep
+                user.qrep.append(card.qrep)
+                if len(user.qrep) >= MAX_QREPS:
+                    user.qrep.pop(0)
 
                 # update skill
-                # TODO better, discounted moving average for skill estimate
                 if response == 'correct':
-                    a = self.params.step_correct
-                    user.skill = a * card.skill + (1 - a) * user.skill
-                else:
-                    user.skill[np.argmax(card.qrep)] += self.params.step_wrong
-                user.skill = np.clip(user.skill, a_min=0.0, a_max=1.0)
+                    user.skill.append(card.skill)
+                    if len(user.skill) >= MAX_QREPS:
+                        user.skill.pop(0)
 
                 user.category = card.category
                 user.last_study_time[card.card_id] = date

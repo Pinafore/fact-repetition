@@ -7,7 +7,12 @@ from dataclasses import dataclass, field
 
 
 def parse_date(date: str):
-    return datetime.strptime(date, "%Y-%m-%d %H:%M:%S.%f")
+    if isinstance(date, datetime):
+        return date
+    if isinstance(date, str):
+        return datetime.strptime(date, "%Y-%m-%d %H:%M:%S.%f")
+    else:
+        raise TypeError("unrecognized type for parse_date")
 
 
 @dataclass
@@ -33,21 +38,18 @@ class Flashcard(BaseModel):
 
 
 class Params(BaseModel):
-    n_topics: int = 20
-    qrep: float = 0.1
+    n_topics: int = 10
+    qrep: float = 1.0
     skill: float = 0.7
+    time: float = 1.0
     category: float = 0.3
     leitner: float = 1.0
     sm2: float = 1.0
     step_correct: float = 0.5
     step_wrong: float = 0.05
     step_qrep: float = 0.3
-    vectorizer: str = 'checkpoints/tf_vectorizer.pkl'
-    lda: str = 'checkpoints/lda.pkl'
+    lda_dir: str = 'checkpoints/gensim_diagnostic_10_1585033130.8875217'
     whoosh_index: str = 'whoosh_index'
-
-    # class Config:
-    #     arbitrary_types_allowed = True
 
 
 @dataclass
@@ -67,8 +69,8 @@ class History:
 @dataclass
 class User:
     user_id: str
-    qrep: np.ndarray
-    skill: np.ndarray
+    qrep: List[np.ndarray]
+    skill: List[np.ndarray]
     category: str
     last_study_time: Dict[str, datetime] = field(default_factory=dict)
     leitner_box: Dict[str, int] = field(default_factory=dict)
@@ -82,8 +84,8 @@ class User:
     def to_snapshot(self):
         x = self.__dict__.copy()
         # user_id: str
-        x['qrep'] = x['qrep'].tolist()
-        x['skill'] = x['skill'].tolist()
+        x['qrep'] = [q.tolist() for q in x['qrep']]
+        x['skill'] = [q.tolist() for q in x['skill']]
         # category: str
         x['last_study_time'] = {k: str(v) for k, v in x['last_study_time'].items()}
         # leitner_box: Dict[str, int]
@@ -100,8 +102,8 @@ class User:
         x = json.loads(s)
         return User(
             user_id=x['user_id'],
-            qrep=np.array(x['qrep']),
-            skill=np.array(x['skill']),
+            qrep=[np.array(q) for q in x['qrep']],
+            skill=[np.array(q) for q in x['skill']],
             category=x['category'],
             last_study_time={k: parse_date(v) for k, v in x['last_study_time'].items()},
             leitner_box=x['leitner_box'],

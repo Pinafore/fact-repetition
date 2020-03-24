@@ -26,8 +26,8 @@ class TestDB(unittest.TestCase):
     def test_user(self):
         user = User(
             user_id='user 1',
-            qrep=np.array([0.1, 0.2, 0.3]),
-            skill=np.array([0.1, 0.2, 0.3]),
+            qrep=[np.array([0.1, 0.2, 0.3])],
+            skill=[np.array([0.1, 0.2, 0.3])],
             category='History',
             last_study_time={'card 1': datetime.now()},
             leitner_box={'card 1': 2},
@@ -45,11 +45,9 @@ class TestDB(unittest.TestCase):
         returned_user = self.db.get_user(user.user_id)
         self.assert_user_equal(user, returned_user)
 
-        user.__dict__.update({
-            'qrep': np.array([0.7, 0.8, 0.9]),
-            'skill': np.array([0.4, 0.5, 0.6]),
-            'date': datetime.now()
-        })
+        user.qrep.append(np.array([0.7, 0.8, 0.9]))
+        user.skill.append(np.array([0.4, 0.5, 0.6]))
+        user.date = datetime.now()
         self.db.update_user(user)
         returned_user = self.db.get_user(user.user_id)
         self.assert_user_equal(user, returned_user)
@@ -108,8 +106,8 @@ class TestDB(unittest.TestCase):
     def test_history(self):
         user = User(
             user_id='user 1',
-            qrep=np.array([0.1, 0.2, 0.3]),
-            skill=np.array([0.1, 0.2, 0.3]),
+            qrep=[np.array([0.1, 0.2, 0.3])],
+            skill=[np.array([0.1, 0.2, 0.3])],
             category='History',
             last_study_time={'card 1': datetime.now()},
             leitner_box={'card 1': 2},
@@ -200,6 +198,7 @@ class TestScheduler(unittest.TestCase):
         cards = cards[:5]
         for i, c in enumerate(cards):
             cards[i]['user_id'] = 'shi'
+            cards[i]['date'] = str(datetime.now())
 
         print(cards[0])
 

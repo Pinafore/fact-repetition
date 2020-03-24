@@ -17,7 +17,7 @@ n_topics = [10, 15]
 min_df = [2, 5, 10, 20]
 max_df = [0.5, 0.8]
 args = [data, model, n_vocab, n_topics, min_df, max_df]
-cmd = 'python build_lda.py --data {} --model {} --vocab {} --topic {} --min_df {} --max_df {}'
+cmd = 'python build_lda.py --data {} --model {} --n_vocab {} --n_topics {} --min_df {} --max_df {}'
 for d, m, v, t, mi, ma in itertools.product(*args):
     with open('build_lda.sh', 'w') as f:
         f.write(header)

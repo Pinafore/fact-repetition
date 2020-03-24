@@ -72,8 +72,8 @@ class SchedulerDB:
             cur.execute('INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
                         (
                             u.user_id,
-                            json.dumps(u.qrep.tolist()),
-                            json.dumps(u.skill.tolist()),
+                            json.dumps([x.tolist() for x in u.qrep]),
+                            json.dumps([x.tolist() for x in u.skill]),
                             u.category,
                             json.dumps({k: str(v) for k, v in u.last_study_time.items()}),
                             json.dumps(u.leitner_box),
@@ -91,8 +91,8 @@ class SchedulerDB:
         def row_to_dict(r):
             return User(
                 user_id=r[0],
-                qrep=np.array(json.loads(r[1])),
-                skill=np.array(json.loads(r[2])),
+                qrep=[np.array(x) for x in json.loads(r[1])],
+                skill=[np.array(x) for x in json.loads(r[2])],
                 category=r[3],
                 last_study_time={k: parse_date(v) for k, v in json.loads(r[4]).items()},
                 leitner_box=json.loads(r[5]),
@@ -131,8 +131,8 @@ class SchedulerDB:
                      sm2_scheduled_time=?, \
                      date=? \
                      WHERE user_id=?", (
-            json.dumps(u.qrep.tolist()),
-            json.dumps(u.skill.tolist()),
+            json.dumps([x.tolist() for x in u.qrep]),
+            json.dumps([x.tolist() for x in u.skill]),
             u.category,
             json.dumps({k: str(v) for k, v in u.last_study_time.items()}),
             json.dumps(u.leitner_box),
