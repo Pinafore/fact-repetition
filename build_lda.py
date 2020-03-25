@@ -69,13 +69,14 @@ def process(doc):
     return tokens
 
 
-def build_mallet(texts, args, model_dir):
-    # TODO
+def build_mallet(texts, args, checkpoint_dir):
+    # TODO mallet wrapper
     pass
 
 
-def build_gensim(texts, args, model_dir):
-    processed_docs_dir = os.path.join(os.path.dirname(model_dir), 'tokenized_{}.pkl'.format(args.data))
+def build_gensim(texts, args, checkpoint_dir):
+    # save processed docs in the parent dir of checkpoint_dir
+    processed_docs_dir = os.path.join(os.path.dirname(checkpoint_dir), 'tokenized_{}.pkl'.format(args.data))
     if os.path.exists(processed_docs_dir):
         with open(processed_docs_dir, 'rb') as f:
             processed_docs = pickle.load(f)
@@ -108,9 +109,9 @@ def build_gensim(texts, args, model_dir):
         eval_every=None
     )
 
-    lda.save(os.path.join(model_dir, 'lda'))
-    vocab.save_as_text(os.path.join(model_dir, 'vocab.txt'))
-    with open(os.path.join(model_dir, 'args.json'), 'w') as f:
+    lda.save(os.path.join(checkpoint_dir, 'lda'))
+    vocab.save_as_text(os.path.join(checkpoint_dir, 'vocab.txt'))
+    with open(os.path.join(checkpoint_dir, 'args.json'), 'w') as f:
         json.dump(vars(args), f)
 
     topic_words = lda.top_topics(corpus)  # , num_words=20)
@@ -124,7 +125,7 @@ def build_gensim(texts, args, model_dir):
     print('coherence', cm.get_coherence())
 
 
-def build_sklearn(texts, args, model_dir):
+def build_sklearn(texts, args, checkpoint_dir):
     vectorizer = CountVectorizer(max_df=args.max_df,
                                  min_df=args.min_df,
                                  max_features=args.n_vocab,
@@ -137,11 +138,11 @@ def build_sklearn(texts, args, model_dir):
                      random_state=0)
     lda.fit(vectorizer.fit_transform(texts))
 
-    with open(os.path.join(model_dir, 'args.json'), 'w') as f:
+    with open(os.path.join(checkpoint_dir, 'args.json'), 'w') as f:
         json.dump(vars(args), f)
-    with open(os.path.join(model_dir, 'vectorizer.pkl'), 'wb') as f:
+    with open(os.path.join(checkpoint_dir, 'vectorizer.pkl'), 'wb') as f:
         pickle.dump(vectorizer, f)
-    with open(os.path.join(model_dir, 'lda.pkl'), 'wb') as f:
+    with open(os.path.join(checkpoint_dir, 'lda.pkl'), 'wb') as f:
         pickle.dump(lda, f)
 
     print()
@@ -164,15 +165,19 @@ if __name__ == '__main__':
 
     root_dir = '/fs/clip-scratch/shifeng/karl/checkpoints/'
     model_name = '{}_{}_{}_{}'.format(args.model, args.data, args.n_topics, time.time())
-    model_dir = os.path.join(root_dir, model_name)
-    os.mkdir(model_dir)
-    print(model_dir)
+    checkpoint_dir = os.path.join(root_dir, model_name)
+    os.mkdir(checkpoint_dir)
+    print(checkpoint_dir)
     print(vars(args))
     print()
+
+    print('************')
+    print(type(vars(args)))
+    print('************')
 
     texts = get_texts(args.data)
 
     if args.model == 'sklearn':
-        build_sklearn(texts, args, model_dir)
+        build_sklearn(texts, args, checkpoint_dir)
     elif args.model == 'gensim':
-        build_gensim(texts, args, model_dir)
+        build_gensim(texts, args, checkpoint_dir)

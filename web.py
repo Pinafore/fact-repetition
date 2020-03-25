@@ -46,3 +46,7 @@ def karl_reset():
 @app.post('/api/karl/set_hyperparameter')
 def karl_set_params(params: Params):
     scheduler.set_params(params.dict())
+
+@app.post('/api/karl/status')
+def karl_status():
+    return True

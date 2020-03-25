@@ -10,9 +10,9 @@ header = '''#!/bin/bash
 
 '''
 
-data = ['quizbowl']
+data = ['all']
 model = ['gensim']
-n_vocab = [20000]
+n_vocab = [50000]
 n_topics = [10, 15]
 min_df = [2, 5, 10, 20]
 max_df = [0.5, 0.8]

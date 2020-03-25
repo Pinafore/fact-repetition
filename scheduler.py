@@ -141,9 +141,11 @@ class MovingAvgScheduler:
         return new_card
 
     def embed(self, texts: List[str]) -> List[np.ndarray]:
-        texts = [self.vocab.doc2bow(x) for x in nlp.pipe(texts)]
+        texts = (self.vocab.doc2bow(x) for x in nlp.pipe(texts))
+        # need to set minimum_probability to a negative value to prevent output
+        # skilping topics
         topics = self.lda.get_document_topics(texts, minimum_probability=-1)
-        # TODO speed up
+        # TODO speed up?
         return [np.asarray([value for i, value in ts]) for ts in topics]
 
     def get_cards(self, cards: List[dict]) -> List[Card]:
@@ -213,7 +215,7 @@ class MovingAvgScheduler:
                 cards = [card.to_dict() for idx, card in hits.iterrows()]
                 return cards, [1 / len(hits) for _ in range(len(hits))]
         else:
-            # TODO
+            # TODO return better default value without text search
             return 0.5
 
         # 2. do text search
