@@ -68,6 +68,11 @@ class MovingAvgScheduler:
         # LDA gensim
         self.lda = gensim.models.LdaModel.load(os.path.join(params.lda_dir, 'lda'))
         self.vocab = gensim.corpora.Dictionary.load_from_text(os.path.join(params.lda_dir, 'vocab.txt'))
+        with open(os.path.join(params.lda_dir, 'topic_words.txt'), 'r') as f:
+            self.topic_words = [l.strip() for l in f.readlines()]
+        logger.info(self.topic_words)
+
+        self.estimate_avg()
 
         logger.info('scheduler ready')
 
@@ -76,10 +81,14 @@ class MovingAvgScheduler:
         # use for initializing user estimate
         with open('data/diagnostic_questions.pkl', 'rb') as f:
             cards = pickle.load(f)
-        estimate_file = 'data/diagnostic_avg_estimate.txt'
-        if os.path.exists(estimate_file):
-            with open(estimate_file) as f:
+        estimate_file_dir = os.path.join(
+            self.params.lda_dir, 'diagnostic_avg_estimate.txt')
+        if os.path.exists(estimate_file_dir):
+            logger.info('load user skill estimate')
+            with open(estimate_file_dir) as f:
                 return np.array([float(x) for x in f.readlines()])
+
+        logger.info('estimate average user skill')
         qreps = self.embed([x['text'] for x in cards])
         estimates = [[] for _ in range(self.params.n_topics)]
         for card, qrep in zip(cards, qreps):
@@ -87,7 +96,7 @@ class MovingAvgScheduler:
             prob = self.predict_one(card)
             estimates[topic_idx].append(prob)
         estimates = [np.mean(x) for x in estimates]
-        with open('data/diagnostic_avg_estimate.txt', 'w') as f:
+        with open(estimate_file_dir, 'w') as f:
             for e in estimates:
                 f.write(str(e) + '\n')
         return np.array(estimates)
@@ -157,21 +166,27 @@ class MovingAvgScheduler:
             card_id = card['question_id']
             cc = self.db.get_card(card_id)
             if cc is None:
+                # where in the list to put this card back
                 cards[i]['index'] = i
                 to_be_embedded.append(card)
             else:
                 cards[i] = cc
+
         if len(to_be_embedded) == 0:
+            # all cards embedded & predicted
             return cards
 
+        # batch embed and predict for speed up
         qreps = self.embed([x['text'] for x in to_be_embedded])
-        to_be_embedded = self.predict(to_be_embedded)
+        probs = self.predict(to_be_embedded)
 
         for i, c in enumerate(to_be_embedded):
+            # card skill is an one-hot vector
+            # can be a distribution
             skill = np.zeros_like(qreps[i])
             skill[np.argmax(qreps[i])] = 1
-            skill *= c['prob']
-            date = c['date']
+            skill *= probs[i]
+
             new_card = Card(
                 card_id=c['question_id'],
                 text=c['text'],
@@ -179,9 +194,11 @@ class MovingAvgScheduler:
                 qrep=qreps[i],
                 skill=skill,
                 category=c['category'],
-                date=parse_date(date)
+                date=parse_date(c['date'])
             )
+
             self.db.add_card(new_card)
+            # put it back
             assert cards[c['index']]['question_id'] == new_card.card_id
             cards[c['index']] = new_card
         return cards
@@ -189,10 +206,11 @@ class MovingAvgScheduler:
     def get_user(self, user_id: str) -> User:
         '''get user from DB, insert if new'''
         # retrieve from db if exists
-        # need to handle empty user_id
+        # TODO handle empty user_id
         u = self.db.get_user(user_id)
         if u is not None:
             return u
+
         # create new user and insert to db
         k = self.params.n_topics
         new_user = User(
@@ -234,18 +252,16 @@ class MovingAvgScheduler:
         return [], []
 
     def predict_one(self, card: dict) -> float:
-        # 1. find same or similar card in records
-        cards, scores = self.retrieve(card)
-        if len(cards) > 0:
-            return np.dot([x['prob'] for x in cards], scores)
-        # TODO 2. use model to predict
         return 0.5
+        # # 1. find same or similar card in records
+        # cards, scores = self.retrieve(card)
+        # if len(cards) > 0:
+        #     return np.dot([x['prob'] for x in cards], scores)
+        # # TODO 2. use model to predict
 
-    def predict(self, cards: List[dict]) -> List[dict]:
+    def predict(self, cards: List[dict]) -> List[float]:
         # TODO batch predict here
-        for i, card in enumerate(cards):
-            cards[i]['prob'] = self.predict_one(card)
-        return cards
+        return [self.predict_one(card) for card in cards]
 
     def set_params(self, params: dict):
         self.params.__dict__.update(params)
@@ -256,43 +272,53 @@ class MovingAvgScheduler:
         return float(card.category.lower() != user.category.lower())
 
     def dist_skill(self, user: User, card: Card) -> float:
-        alpha = 0.9
-        skills, alphas = [], []
+        # measures difficulty difference
+        weight = 1
+        skills, weights = [], []
         for q in user.skill:
-            skills.append(alpha * q)
-            alphas.append(alpha)
-            alpha *= alpha
-        skill = np.sum(skills, axis=0) / np.sum(alphas)
+            skills.append(weight * q)
+            weights.append(weight)
+            weight *= 0.9  # TODO use params instead of hard-coded
+        skill = np.sum(skills, axis=0) / np.sum(weights)
+        # skill is a (vector of) probability
         skill = np.clip(skill, a_min=0.0, a_max=1.0)
         topic_idx = np.argmax(card.qrep)
         d = card.skill[topic_idx] - skill[topic_idx]
-        # penalize easier questions
-        d *= 1 if d < 0 else 10
+        # penalize easier questions by ten
+        d *= 1 if d <= 0 else 10
         return abs(d)
 
     def dist_time(self, user: User, card: Card) -> float:
+        # cool down question for 10 minutes
         t = user.last_study_time.get(card.card_id, None)
         if t is None:
             return 0
         else:
             t1 = time.mktime(datetime.now().timetuple())
             t0 = time.mktime(t.timetuple())
-            # cool down for 10 minutes
-            return max(10 - float(t1 - t0) / 60, 0)
+            return max(10 - float(t1 - t0) / 60, 0)  # TODO use params instead of hard code
 
     def dist_qrep(self, user: User, card: Card) -> float:
+        # measures topical similarity
         def cosine_distance(a, b):
             return 1 - (a @ b.T) / (np.linalg.norm(a) * np.linalg.norm(b))
-        alpha = 0.9
-        qreps, alphas = [], []
+        weight = 1
+        qreps, weights = [], []
         for q in user.qrep:
-            qreps.append(alpha * q)
-            alphas.append(alpha)
-            alpha *= alpha
-        qrep = np.sum(qreps, axis=0) / np.sum(alphas)
-        return cosine_distance(qrep, card.qrep)
+            qreps.append(weight * q)
+            weights.append(weight)
+            weight *= self.params.decay_qrep
+        qrep = np.sum(qreps, axis=0) / np.sum(weights)
+        d = cosine_distance(qrep, card.qrep)
+        # print('user qrep norm', np.linalg.norm(qrep))
+        # print('card qrep norm', np.linalg.norm(card.qrep))
+        # print('dot product', qrep @ card.qrep)
+        # print('normalized', 1 - d)
+        # print('cosine distance', d)
+        return d
 
     def dist_leitner(self, user: User, card: Card) -> float:
+        # time till scheduled date by Leitner
         t = user.leitner_scheduled_time.get(card.card_id, None)
         if t is None:
             return 0
@@ -300,6 +326,7 @@ class MovingAvgScheduler:
             return max(0, (t - card.date).days)
 
     def dist_sm2(self, user: User, card: Card) -> float:
+        # time till scheduled date by sm2
         t = user.sm2_scheduled_time.get(card.card_id, None)
         if t is None:
             return 0
@@ -332,7 +359,7 @@ class MovingAvgScheduler:
         # NOTE assuming single user here
         assert len(users) == 1
 
-        # for user in users:
+        # for user in users:  # not in use since we assume single user
         user = users[0]
         cards = [all_cards[i] for i in user_card_index_mapping[user.user_id]]
 
@@ -351,22 +378,22 @@ class MovingAvgScheduler:
         # scores before scaled of the selected card
         info = scores[index_selected]
         info.update({
+            'text': card_selected.text,
+            'answer': card_selected.answer,
+            'category': card_selected.category,
             'sum': scores_summed[index_selected],
-            'card': card_selected.skill[topic_idx],
-            'topic': topic_idx,
+            'topic': self.topic_words[topic_idx]
         })
 
-        rationale = '  '.join([
-            '{}: {:.3f}'.format(key, value)
-            for key, value in info.items()
-        ])
+        rationale = '    '.join(['{}: {}'.format(key, value) for key, value in info.items()])
 
         print('************************')
         for key, value in info.items():
-            print(key, value)
+            print('{: <8} : {: <20}'.format(key, value))
         print('************************')
 
-        # add temporary history, to be completed by a call to `update`
+        # add temporary history
+        # ID and response will be completed by a call to `update`
         temp_history_id = json.dumps({'user_id': user.user_id,
                                       'card_id': card_selected.card_id})
 
@@ -388,9 +415,7 @@ class MovingAvgScheduler:
         return ranking, order, rationale
 
     def update(self, cards: List[dict]):
-        # a schedule request might contain that of many users
-        # first group cards by user
-        # card index for each user
+        # where in the list are cards for each user
         user_card_index_mapping = defaultdict(list)
         responses, history_ids, dates = [], [], []
         for i, c in enumerate(cards):
@@ -398,6 +423,7 @@ class MovingAvgScheduler:
             responses.append(c['label'])
             history_ids.append(c['history_id'])
             dates.append(parse_date(c['date']))
+
         cards = self.get_cards(cards)
 
         for u, indices in user_card_index_mapping.items():
@@ -406,7 +432,7 @@ class MovingAvgScheduler:
                 card = cards[i]
                 response = responses[i]
                 history_id = history_ids[i]
-                date = dates[i]
+                date = parse_date(dates[i])
 
                 # update qrep
                 user.qrep.append(card.qrep)
@@ -425,6 +451,7 @@ class MovingAvgScheduler:
                 self.leitner_update(user, card, response)
                 self.sm2_update(user, card, response)
 
+                # find that temporary history entry and update
                 temp_history_id = json.dumps({'user_id': user.user_id, 'card_id': card.card_id})
                 history = self.db.get_history(temp_history_id)
                 if history is not None:
@@ -438,6 +465,7 @@ class MovingAvgScheduler:
             self.db.update_user(user)
 
     def leitner_update(self, user: User, card: Card, response: str):
+        # leitner boxes 1~10, None as placeholder since we don't have box 0
         days = [None, 0, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 9999]
         increment_days = {i: x for i, x in enumerate(days)}
 

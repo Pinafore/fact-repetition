@@ -21,7 +21,7 @@ class Card:
     text: str
     answer: str
     qrep: np.ndarray
-    skill: np.ndarray
+    skill: np.ndarray  # skill estimate for each topic
     category: str
     date: datetime
 
@@ -40,15 +40,15 @@ class Flashcard(BaseModel):
 class Params(BaseModel):
     n_topics: int = 10
     qrep: float = 1.0
-    skill: float = 0.7
+    skill: float = 1.0
     time: float = 1.0
-    category: float = 0.3
+    category: float = 1.0
     leitner: float = 1.0
     sm2: float = 1.0
-    step_correct: float = 0.5
-    step_wrong: float = 0.05
-    step_qrep: float = 0.3
-    lda_dir: str = 'checkpoints/gensim_diagnostic_10_1585033130.8875217'
+    decay_correct: float = 0.5
+    decay_wrong: float = 0.5
+    decay_qrep: float = 0.9
+    lda_dir: str = 'checkpoints/gensim_quizbowl_10_1585102364.5221019'
     whoosh_index: str = 'whoosh_index'
 
 
@@ -69,7 +69,9 @@ class History:
 @dataclass
 class User:
     user_id: str
+    # qrep of recently studied cards
     qrep: List[np.ndarray]
+    # skill of recently studied cards
     skill: List[np.ndarray]
     category: str
     last_study_time: Dict[str, datetime] = field(default_factory=dict)

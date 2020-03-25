@@ -171,10 +171,6 @@ if __name__ == '__main__':
     print(vars(args))
     print()
 
-    print('************')
-    print(type(vars(args)))
-    print('************')
-
     texts = get_texts(args.data)
 
     if args.model == 'sklearn':

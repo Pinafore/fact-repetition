@@ -152,7 +152,7 @@ class SchedulerDB:
             cur.execute("DELETE FROM users")
         else:
             logger.info('deleting user {} from db'.format(user_id))
-            cur.execute("DELETE * FROM users WHERE user_id=?", (user_id,))
+            cur.execute("DELETE FROM users WHERE user_id=?", (user_id,))
         self.conn.commit()
 
     def check_card(self, card_id: str) -> bool:
@@ -221,7 +221,7 @@ class SchedulerDB:
             cur.execute("DELETE FROM cards")
         else:
             logger.info('deleting card {} from db'.format(card_id))
-            cur.execute("DELETE * FROM cards WHERE card_id=?", (card_id,))
+            cur.execute("DELETE FROM cards WHERE card_id=?", (card_id,))
         self.conn.commit()
 
     def add_history(self, h: History):
@@ -240,7 +240,11 @@ class SchedulerDB:
                             h.scheduler_output,
                             h.date))
         except sqlite3.IntegrityError:
-            logger.info("history {} exists".format(h.history_id))
+            # this means the card was shown to user but we didn't receive a
+            # response, replace
+            logger.info("history {} exists, replacing".format(h.history_id))
+            self.delete_history(h.history_id)
+            self.add_history(h)
         self.conn.commit()
 
     def get_history(self, history_id: str = None):
@@ -305,5 +309,5 @@ class SchedulerDB:
             cur.execute("DELETE FROM history")
         else:
             logger.info('deleting history {} from db'.format(history_id))
-            cur.execute("DELETE * FROM history WHERE history_id=?", (history_id,))
+            cur.execute("DELETE FROM history WHERE history_id=?", (history_id,))
         self.conn.commit()
