@@ -1,6 +1,11 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+import atexit
 from fastapi import FastAPI
 from typing import List
 from datetime import datetime
+from pydantic import BaseModel
 
 from util import Flashcard, Params
 from scheduler import MovingAvgScheduler
@@ -23,12 +28,7 @@ def karl_schedule(cards: List[Flashcard]):
         cards[i] = cards[i].dict()
         if cards[i]['date'] is None:
             cards[i]['date'] = str(datetime.now())
-    order, ranking, rationale = scheduler.schedule(cards)
-    return {
-        'order': order,
-        'ranking': ranking,
-        'rationale': rationale
-    }
+    return scheduler.schedule(cards)
 
 @app.post('/api/karl/update')
 def karl_update(cards: List[Flashcard]):
@@ -39,14 +39,24 @@ def karl_update(cards: List[Flashcard]):
             cards[i]['date'] = str(datetime.now())
     scheduler.update(cards)
 
-@app.post('/api/karl/reset')
-def karl_reset():
-    scheduler.reset()
 
-@app.post('/api/karl/set_hyperparameter')
+class UserID(BaseModel):
+    user_id: str = None
+
+
+@app.post('/api/karl/reset')
+def karl_reset(user_id: UserID):
+    print(user_id)
+    scheduler.reset(user_id=user_id.dict().get('user_id', None))
+
+@app.post('/api/karl/set_params')
 def karl_set_params(params: Params):
     scheduler.set_params(params.dict())
 
 @app.post('/api/karl/status')
 def karl_status():
     return True
+
+@atexit.register
+def finalize_db():
+    scheduler.db.finalize()

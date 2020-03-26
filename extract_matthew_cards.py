@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# coding: utf-8
+
 import pickle
 
 selected_qids = [
@@ -237,7 +240,7 @@ for i, qid in enumerate(qids):
         'question_id': qids[i],
         'label': 'null',
         'answer': answers[i],
-        })
+    })
 print('# flashcards', len(flashcards))
 print()
 

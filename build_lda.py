@@ -1,10 +1,12 @@
+#!/usr/bin/env python
+# coding: utf-8
+
 import os
 import time
 import json
 import pickle
 import argparse
 from typing import List
-from pprint import pprint
 
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.decomposition import LatentDirichletAllocation as SklearnLDA

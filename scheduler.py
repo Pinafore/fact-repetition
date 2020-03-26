@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# coding: utf-8
+
 import os
 import json
 import time
@@ -7,7 +10,7 @@ import logging
 from tqdm import tqdm
 from collections import defaultdict
 from datetime import datetime, timedelta
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 
 import gensim
 import en_core_web_lg
@@ -24,7 +27,6 @@ nlp = en_core_web_lg.load()
 nlp.add_pipe(process, name='process', last=True)
 
 logger = logging.getLogger('scheduler')
-logger.setLevel(logging.DEBUG)
 
 # current qrep is the discounted average of qreps of the past MAX_QREPS cards
 MAX_QREPS = 10
@@ -101,10 +103,10 @@ class MovingAvgScheduler:
                 f.write(str(e) + '\n')
         return np.array(estimates)
 
-    def reset(self):
+    def reset(self, user_id: str = None):
         # delete users and history from db
-        self.db.delete_user()
-        self.db.delete_history()
+        self.db.delete_user(user_id=user_id)
+        self.db.delete_history(user_id=user_id)
 
     def build_whoosh(self):
         if not os.path.exists(self.params.whoosh_index):
@@ -177,9 +179,11 @@ class MovingAvgScheduler:
             return cards
 
         # batch embed and predict for speed up
+        t0 = datetime.now()
         qreps = self.embed([x['text'] for x in to_be_embedded])
+        t1 = datetime.now()
         probs = self.predict(to_be_embedded)
-
+        t2 = datetime.now()
         for i, c in enumerate(to_be_embedded):
             # card skill is an one-hot vector
             # can be a distribution
@@ -197,16 +201,21 @@ class MovingAvgScheduler:
                 date=parse_date(c['date'])
             )
 
+            # TODO batch add to db for speed up?
             self.db.add_card(new_card)
             # put it back
             assert cards[c['index']]['question_id'] == new_card.card_id
             cards[c['index']] = new_card
+        t3 = datetime.now()
+        logger.debug('************************')
+        logger.debug('embed ' + str(t1 - t0))
+        logger.debug('predict ' + str(t2 - t1))
+        logger.debug('add to db ' + str(t3 - t2))
         return cards
 
     def get_user(self, user_id: str) -> User:
         '''get user from DB, insert if new'''
         # retrieve from db if exists
-        # TODO handle empty user_id
         u = self.db.get_user(user_id)
         if u is not None:
             return u
@@ -260,7 +269,7 @@ class MovingAvgScheduler:
         # # TODO 2. use model to predict
 
     def predict(self, cards: List[dict]) -> List[float]:
-        # TODO batch predict here
+        # TODO batch predict here?
         return [self.predict_one(card) for card in cards]
 
     def set_params(self, params: dict):
@@ -343,7 +352,7 @@ class MovingAvgScheduler:
             'sm2': self.dist_sm2(user, card),
         } for card in cards]
 
-    def schedule(self, cards: List[dict]) -> Tuple[List[int], List[int], str]:
+    def schedule(self, cards: List[dict]) -> Dict:
         if len(cards) == 0:
             return [], [], ''
 
@@ -369,28 +378,22 @@ class MovingAvgScheduler:
             for ss in scores
         ]
         order = np.argsort(scores_summed).tolist()
-        ranking = [order.index(i) for i, _ in enumerate(cards)]
+        # ranking = [order.index(i) for i, _ in enumerate(cards)]
 
         # create rationale
         index_selected = order[0]
         card_selected = cards[index_selected]
         topic_idx = np.argmax(card_selected.qrep)
         # scores before scaled of the selected card
-        info = scores[index_selected]
-        info.update({
-            'text': card_selected.text,
-            'answer': card_selected.answer,
-            'category': card_selected.category,
+        detail = scores[index_selected]
+        detail.update({
             'sum': scores_summed[index_selected],
-            'topic': self.topic_words[topic_idx]
+            'topic': self.topic_words[topic_idx],
         })
 
-        rationale = '    '.join(['{}: {}'.format(key, value) for key, value in info.items()])
-
-        print('************************')
-        for key, value in info.items():
-            print('{: <8} : {: <20}'.format(key, value))
-        print('************************')
+        rationale = '\n'.join([
+            '{}: {}'.format(key, value) for key, value in detail.items()
+        ])
 
         # add temporary history
         # ID and response will be completed by a call to `update`
@@ -408,11 +411,14 @@ class MovingAvgScheduler:
             card_ids=json.dumps([x.card_id for x in cards]),
             scheduler_output=json.dumps({
                 'order': order,
-                'ranking': ranking,
                 'rationale': rationale}),
             date=datetime.now())
         self.db.add_history(history)
-        return ranking, order, rationale
+        return {
+            'order': order,
+            'rationale': rationale,
+            'detail': detail
+        }
 
     def update(self, cards: List[dict]):
         # where in the list are cards for each user

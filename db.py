@@ -1,8 +1,12 @@
+#!/usr/bin/env python
+# coding: utf-8
+
 import os
 import json
 import sqlite3
 import logging
 import numpy as np
+from typing import List
 from util import User, Card, History, parse_date
 
 logger = logging.getLogger('scheduler')
@@ -85,7 +89,8 @@ class SchedulerDB:
                             u.date))
         except sqlite3.IntegrityError:
             logger.info("user {} exists".format(u.user_id))
-        self.conn.commit()
+        # NOTE web.py will commit at exit
+        # self.conn.commit()
 
     def get_user(self, user_id: str = None):
         def row_to_dict(r):
@@ -143,7 +148,8 @@ class SchedulerDB:
             json.dumps({k: str(v) for k, v in u.sm2_scheduled_time.items()}),
             u.date,
             u.user_id))
-        self.conn.commit()
+        # NOTE web.py will commit at exit
+        # self.conn.commit()
 
     def delete_user(self, user_id: str = None):
         cur = self.conn.cursor()
@@ -153,7 +159,8 @@ class SchedulerDB:
         else:
             logger.info('deleting user {} from db'.format(user_id))
             cur.execute("DELETE FROM users WHERE user_id=?", (user_id,))
-        self.conn.commit()
+        # NOTE web.py will commit at exit
+        # self.conn.commit()
 
     def check_card(self, card_id: str) -> bool:
         cur = self.conn.cursor()
@@ -174,7 +181,26 @@ class SchedulerDB:
                             c.date))
         except sqlite3.IntegrityError:
             logger.info("card {} exists".format(c.card_id))
-        self.conn.commit()
+        # NOTE web.py will commit at exit
+        # self.conn.commit()
+
+    def add_cards(self, cards: List[Card]):
+        cur = self.conn.cursor()
+        for c in cards:
+            try:
+                cur.execute('INSERT INTO cards VALUES (?,?,?,?,?,?,?)',
+                            (
+                                c.card_id,
+                                c.text,
+                                c.answer,
+                                json.dumps(c.qrep.tolist()),
+                                json.dumps(c.skill.tolist()),
+                                c.category,
+                                c.date))
+            except sqlite3.IntegrityError:
+                logger.info("card {} exists".format(c.card_id))
+        # NOTE web.py will commit at exit
+        # self.conn.commit()
 
     def get_card(self, card_id: str = None):
         def row_to_dict(r):
@@ -212,7 +238,8 @@ class SchedulerDB:
             c.category,
             c.date,
             c.card_id))
-        self.conn.commit()
+        # NOTE web.py will commit at exit
+        # self.conn.commit()
 
     def delete_card(self, card_id: str):
         cur = self.conn.cursor()
@@ -222,7 +249,8 @@ class SchedulerDB:
         else:
             logger.info('deleting card {} from db'.format(card_id))
             cur.execute("DELETE FROM cards WHERE card_id=?", (card_id,))
-        self.conn.commit()
+        # NOTE web.py will commit at exit
+        # self.conn.commit()
 
     def add_history(self, h: History):
         cur = self.conn.cursor()
@@ -245,7 +273,8 @@ class SchedulerDB:
             logger.info("history {} exists, replacing".format(h.history_id))
             self.delete_history(h.history_id)
             self.add_history(h)
-        self.conn.commit()
+        # NOTE web.py will commit at exit
+        # self.conn.commit()
 
     def get_history(self, history_id: str = None):
         def row_to_dict(r):
@@ -300,14 +329,24 @@ class SchedulerDB:
             h.scheduler_output,
             h.date,
             old_history_id))
-        self.conn.commit()
+        # NOTE web.py will commit at exit
+        # self.conn.commit()
 
-    def delete_history(self, history_id: str = None):
+    def delete_history(self, history_id: str = None, user_id: str = None):
         cur = self.conn.cursor()
-        if history_id is None:
-            logger.info('deleting all history from db')
-            cur.execute("DELETE FROM history")
-        else:
+        if history_id is not None:
             logger.info('deleting history {} from db'.format(history_id))
             cur.execute("DELETE FROM history WHERE history_id=?", (history_id,))
+        elif user_id is not None:
+            logger.info('deleting history of user {} from db'.format(user_id))
+            cur.execute("DELETE FROM history WHERE user_id=?", (user_id,))
+        else:
+            logger.info('deleting all history from db')
+            cur.execute("DELETE FROM history")
+        # NOTE web.py will commit at exit
+        # self.conn.commit()
+
+    def finalize(self):
         self.conn.commit()
+        self.conn.close()
+        logger.info('db commit')

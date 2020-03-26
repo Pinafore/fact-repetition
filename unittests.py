@@ -205,8 +205,8 @@ class TestScheduler(unittest.TestCase):
         # using deepcopy here because DB lookup converts dict cards into Card
         # cards. not a problem in actual use because objects go through web API
         # and not reused
-        order, ranking, rationale = self.scheduler.schedule(
-            copy.deepcopy(cards))
+        result = self.scheduler.schedule(copy.deepcopy(cards))
+        order = result['order']
 
         print()
         print()

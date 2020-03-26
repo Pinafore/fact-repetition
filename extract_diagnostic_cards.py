@@ -1,9 +1,8 @@
-import json
+#!/usr/bin/env python
+# coding: utf-8
+
 import pickle
-import requests
-import collections
 import pandas as pd
-import numpy as np
 
 category_whitelist = [
     'SCIENCE',
@@ -81,7 +80,7 @@ with open('data/jeopardy_310326_question_player_pairs_20190612.pkl', 'rb') as f:
     records_df = pickle.load(f)
 
 # merge question_df and records_df into one
-questions_df['karl_id'] = questions_df.index # what KARL db uses as ID
+questions_df['karl_id'] = questions_df.index  # what KARL db uses as ID
 records_df = questions_df.set_index('question_id').join(records_df.set_index('question_id'))
 records_df['question_id'] = records_df.index
 # get number of records per question
@@ -102,10 +101,10 @@ records_df = records_df[records_df['category_ranking'] <= 30]
 
 records_grouped = records_df.drop('question_id', axis=1).groupby('question_id')
 flashcards = []
-for question_id, records_group in records_grouped:
 # if True:
-    # question_id = '1014-6-5'
-    # records_group = records_grouped.get_group(question_id)
+#     question_id = '1014-6-5'
+#     records_group = records_grouped.get_group(question_id)
+for question_id, records_group in records_grouped:
     question = records_group.iloc[0]
     flashcards.append({
         'text': question['text'],

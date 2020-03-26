@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# coding: utf-8
+
 import json
 import numpy as np
 from datetime import datetime
@@ -45,8 +48,6 @@ class Params(BaseModel):
     category: float = 1.0
     leitner: float = 1.0
     sm2: float = 1.0
-    decay_correct: float = 0.5
-    decay_wrong: float = 0.5
     decay_qrep: float = 0.9
     lda_dir: str = 'checkpoints/gensim_quizbowl_10_1585102364.5221019'
     whoosh_index: str = 'whoosh_index'
