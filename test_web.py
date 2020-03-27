@@ -4,29 +4,11 @@
 import json
 import pickle
 import requests
-import numpy as np
 import textwrap
-from datetime import datetime
+from datetime import datetime, timedelta
 
 USER_ID = 'dummy'
-
-
-with open('data/jeopardy_358974_questions_20190612.pkl', 'rb') as f:
-    karl_to_question_id = pickle.load(f).to_dict()['question_id']
-with open('data/jeopardy_310326_question_player_pairs_20190612.pkl', 'rb') as f:
-    records_df = pickle.load(f)
-with open('data/diagnostic_questions.pkl', 'rb') as f:
-    cards = pickle.load(f)
-    for i, card in enumerate(cards):
-        cards[i]['user_id'] = USER_ID
-        cards[i]['date'] = str(datetime.now())
-
-
-def get_result(card):
-    record_id = karl_to_question_id[int(card['question_id'])]
-    prob = (records_df[records_df.question_id == record_id]['correct'] / 2 + 0.5).mean()
-    return 'correct' if prob > 0.5 else 'wrong'
-
+N_CARDS = 3
 
 params = {
     'n_topics': 10,
@@ -40,41 +22,92 @@ params = {
 }
 
 
-requests.post('http://127.0.0.1:8000/api/karl/set_params',
-              data=json.dumps(params))
+with open('data/jeopardy_358974_questions_20190612.pkl', 'rb') as f:
+    karl_to_question_id = pickle.load(f).to_dict()['question_id']
+with open('data/jeopardy_310326_question_player_pairs_20190612.pkl', 'rb') as f:
+    records_df = pickle.load(f)
+with open('data/diagnostic_questions.pkl', 'rb') as f:
+    diagnostic_cards = pickle.load(f)
 
 
-requests.post('http://127.0.0.1:8000/api/karl/reset',
-              data=json.dumps({'user_id': USER_ID}))
+def get_result(card):
+    record_id = karl_to_question_id[int(card['question_id'])]
+    prob = (records_df[records_df.question_id == record_id]['correct'] / 2 + 0.5).mean()
+    return 'correct' if prob > 0.5 else 'wrong'
 
-cards_selected = []
-results = []
-while len(cards_selected) < 5:
+
+def schedule_and_update(cards):
     r = requests.post('http://127.0.0.1:8000/api/karl/schedule',
                       data=json.dumps(cards))
-    r = json.loads(r.text)
-    order = r['order']
-    detail = r['detail']
-    card_selected = cards[order[0]]
-    card_selected['label'] = get_result(card_selected)
-    cards_selected.append(card_selected)
-    results.append(1 if card_selected['label'] == 'correct' else 0)
+    schedule_outputs = json.loads(r.text)
+    order = schedule_outputs['order']
+    detail_schedule = schedule_outputs['detail']
 
-    print('{: <8} : {}'.format('card_id', card_selected['question_id']))
+    card_selected = cards[order[0]]
+    card_id = card_selected['question_id']
+    if 'label' not in card_selected:
+        card_selected['label'] = get_result(card_selected)
+
+    r = requests.post('http://127.0.0.1:8000/api/karl/update',
+                      data=json.dumps([card_selected]))
+    update_outputs = json.loads(r.text)
+    detail_update = update_outputs['detail']
+
+    print('{: <8} : {}'.format('card_id', card_id))
     print('{: <8} : {}'.format('result', card_selected['label']))
     print('{: <8} : {}'.format('text', textwrap.fill(
         card_selected['text'], width=50, subsequent_indent=' ' * 11)))
     print('{: <8} : {}'.format('answer', card_selected['answer']))
     print('{: <8} : {}'.format('category', card_selected['category']))
-    print('-----------')
-    for key, value in detail.items():
-        if key in params:
-            print('{: <8} : {:.3f} x {:.3f}'.format(key, value, params[key]))
-        elif isinstance(value, str):
-            print('{: <8} : {}'.format(key, value))
-    print('************************')
 
-    r = requests.post('http://127.0.0.1:8000/api/karl/update',
-                      data=json.dumps([card_selected]))
-    cards = [x for x in cards
-             if x['question_id'] != card_selected['question_id']]
+    for key, value in detail_schedule.items():
+        if key in params:
+            print('{: <8} : {:.4f} x {:.2f}'.format(key, value, params[key]))
+        elif isinstance(value, float):
+            print('{: <8} : {:.4f}'.format(key, value))
+        else:
+            print('{: <8} : {}'.format(key, value))
+
+    print('---')
+
+    for key, value in detail_update.items():
+        if key in params:
+            print('{: <8} : {:.4f} x {:.2f}'.format(key, value, params[key]))
+        elif isinstance(value, float):
+            print('{: <8} : {:.4f}'.format(key, value))
+        else:
+            print('{: <8} : {}'.format(key, value))
+
+    return schedule_outputs, update_outputs
+
+
+def regular(cards):
+    for i, card in enumerate(cards):
+        cards[i]['user_id'] = USER_ID
+        cards[i]['date'] = str(datetime.now())
+
+    cards_selected = []
+    while len(cards_selected) < N_CARDS:
+        schedule_outputs, update_outputs = schedule_and_update(cards)
+        card_id = cards[schedule_outputs['order'][0]]['question_id']
+        cards_selected.append(card_id)
+        cards = list(filter(lambda x: x['question_id'] != card_id, cards))
+
+
+def repeat(cards):
+    card = cards[0]
+    card['user_id'] = USER_ID
+    current_date = datetime.now()
+    for i in range(10):
+        card['date'] = str(current_date)
+        schedule_outputs, update_outputs = schedule_and_update([card])
+        current_date += timedelta(days=1)
+        print(i, '----------------------')
+
+
+if __name__ == '__main__':
+    requests.post('http://127.0.0.1:8000/api/karl/set_params',
+                  data=json.dumps(params))
+    requests.post('http://127.0.0.1:8000/api/karl/reset',
+                  data=json.dumps({'user_id': USER_ID}))
+    repeat(diagnostic_cards)

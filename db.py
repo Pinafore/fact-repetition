@@ -32,13 +32,13 @@ class SchedulerDB:
                      qrep TEXT, \
                      skill TEXT, \
                      category TEXT, \
-                     last_study_time TEXT, \
+                     last_study_date TEXT, \
                      leitner_box TEXT, \
-                     leitner_scheduled_time TEXT, \
+                     leitner_scheduled_date TEXT, \
                      sm2_efactor TEXT, \
                      sm2_interval TEXT, \
                      sm2_repetition TEXT, \
-                     sm2_scheduled_time TEXT, \
+                     sm2_scheduled_date TEXT, \
                      date timestamp)')
 
         # *current* cache of cards
@@ -79,13 +79,13 @@ class SchedulerDB:
                             json.dumps([x.tolist() for x in u.qrep]),
                             json.dumps([x.tolist() for x in u.skill]),
                             u.category,
-                            json.dumps({k: str(v) for k, v in u.last_study_time.items()}),
+                            json.dumps({k: str(v) for k, v in u.last_study_date.items()}),
                             json.dumps(u.leitner_box),
-                            json.dumps({k: str(v) for k, v in u.leitner_scheduled_time.items()}),
+                            json.dumps({k: str(v) for k, v in u.leitner_scheduled_date.items()}),
                             json.dumps(u.sm2_efactor),
                             json.dumps(u.sm2_interval),
                             json.dumps(u.sm2_repetition),
-                            json.dumps({k: str(v) for k, v in u.sm2_scheduled_time.items()}),
+                            json.dumps({k: str(v) for k, v in u.sm2_scheduled_date.items()}),
                             u.date))
         except sqlite3.IntegrityError:
             logger.info("user {} exists".format(u.user_id))
@@ -99,13 +99,13 @@ class SchedulerDB:
                 qrep=[np.array(x) for x in json.loads(r[1])],
                 skill=[np.array(x) for x in json.loads(r[2])],
                 category=r[3],
-                last_study_time={k: parse_date(v) for k, v in json.loads(r[4]).items()},
+                last_study_date={k: parse_date(v) for k, v in json.loads(r[4]).items()},
                 leitner_box=json.loads(r[5]),
-                leitner_scheduled_time={k: parse_date(v) for k, v in json.loads(r[6]).items()},
+                leitner_scheduled_date={k: parse_date(v) for k, v in json.loads(r[6]).items()},
                 sm2_efactor=json.loads(r[7]),
                 sm2_interval=json.loads(r[8]),
                 sm2_repetition=json.loads(r[9]),
-                sm2_scheduled_time={k: parse_date(v) for k, v in json.loads(r[10]).items()},
+                sm2_scheduled_date={k: parse_date(v) for k, v in json.loads(r[10]).items()},
                 date=r[11])
         cur = self.conn.cursor()
         if user_id is None:
@@ -127,25 +127,25 @@ class SchedulerDB:
                      qrep=?, \
                      skill=?, \
                      category=?, \
-                     last_study_time=?, \
+                     last_study_date=?, \
                      leitner_box=?, \
-                     leitner_scheduled_time=?, \
+                     leitner_scheduled_date=?, \
                      sm2_efactor=?, \
                      sm2_interval=?, \
                      sm2_repetition=?, \
-                     sm2_scheduled_time=?, \
+                     sm2_scheduled_date=?, \
                      date=? \
                      WHERE user_id=?", (
             json.dumps([x.tolist() for x in u.qrep]),
             json.dumps([x.tolist() for x in u.skill]),
             u.category,
-            json.dumps({k: str(v) for k, v in u.last_study_time.items()}),
+            json.dumps({k: str(v) for k, v in u.last_study_date.items()}),
             json.dumps(u.leitner_box),
-            json.dumps({k: str(v) for k, v in u.leitner_scheduled_time.items()}),
+            json.dumps({k: str(v) for k, v in u.leitner_scheduled_date.items()}),
             json.dumps(u.sm2_efactor),
             json.dumps(u.sm2_interval),
             json.dumps(u.sm2_repetition),
-            json.dumps({k: str(v) for k, v in u.sm2_scheduled_time.items()}),
+            json.dumps({k: str(v) for k, v in u.sm2_scheduled_date.items()}),
             u.date,
             u.user_id))
         # NOTE web.py will commit at exit

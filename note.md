@@ -1,11 +1,15 @@
 # Improve Human Learning with Representation + Spaced Repetition
 
+## 03-06-2020
+- dist_time is wrong, very large values
+- check topic assignment, not just topic-word dist
+
 ## 03-25-2020
 - finalze LDA on Quizbowl
 - "point" and "10" are still in the vocab
-- improve debug string
+x improve debug string
 x make sure that commiting only at exit is fine
-- return schedule & update details via web API for debug
+x return schedule & update details via web API for debug
 - weird sequences in possibly snapshot
 
 ## 03-23-2020

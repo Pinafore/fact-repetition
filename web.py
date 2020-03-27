@@ -37,7 +37,7 @@ def karl_update(cards: List[Flashcard]):
         cards[i] = cards[i].dict()
         if cards[i]['date'] is None:
             cards[i]['date'] = str(datetime.now())
-    scheduler.update(cards)
+    return scheduler.update(cards)
 
 
 class UserID(BaseModel):
@@ -46,7 +46,6 @@ class UserID(BaseModel):
 
 @app.post('/api/karl/reset')
 def karl_reset(user_id: UserID):
-    print(user_id)
     scheduler.reset(user_id=user_id.dict().get('user_id', None))
 
 @app.post('/api/karl/set_params')

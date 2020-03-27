@@ -75,13 +75,13 @@ class User:
     # skill of recently studied cards
     skill: List[np.ndarray]
     category: str
-    last_study_time: Dict[str, datetime] = field(default_factory=dict)
+    last_study_date: Dict[str, datetime] = field(default_factory=dict)
     leitner_box: Dict[str, int] = field(default_factory=dict)
-    leitner_scheduled_time: Dict[str, datetime] = field(default_factory=dict)
+    leitner_scheduled_date: Dict[str, datetime] = field(default_factory=dict)
     sm2_efactor: Dict[str, float] = field(default_factory=dict)
     sm2_interval: Dict[str, float] = field(default_factory=dict)
     sm2_repetition: Dict[str, int] = field(default_factory=dict)
-    sm2_scheduled_time: Dict[str, datetime] = field(default_factory=dict)
+    sm2_scheduled_date: Dict[str, datetime] = field(default_factory=dict)
     date: datetime = field(default_factory=datetime.now)
 
     def to_snapshot(self):
@@ -90,13 +90,13 @@ class User:
         x['qrep'] = [q.tolist() for q in x['qrep']]
         x['skill'] = [q.tolist() for q in x['skill']]
         # category: str
-        x['last_study_time'] = {k: str(v) for k, v in x['last_study_time'].items()}
+        x['last_study_date'] = {k: str(v) for k, v in x['last_study_date'].items()}
         # leitner_box: Dict[str, int]
-        x['leitner_scheduled_time'] = {k: str(v) for k, v in x['leitner_scheduled_time'].items()}
+        x['leitner_scheduled_date'] = {k: str(v) for k, v in x['leitner_scheduled_date'].items()}
         # sm2_efactor: Dict[str, float]
         # sm2_interval: Dict[str, float]
         # sm2_repetition: Dict[str, int]
-        x['sm2_scheduled_time'] = {k: str(v) for k, v in x['sm2_scheduled_time'].items()}
+        x['sm2_scheduled_date'] = {k: str(v) for k, v in x['sm2_scheduled_date'].items()}
         x['date'] = str(x['date'])
         return json.dumps(x)
 
@@ -108,13 +108,13 @@ class User:
             qrep=[np.array(q) for q in x['qrep']],
             skill=[np.array(q) for q in x['skill']],
             category=x['category'],
-            last_study_time={k: parse_date(v) for k, v in x['last_study_time'].items()},
+            last_study_date={k: parse_date(v) for k, v in x['last_study_date'].items()},
             leitner_box=x['leitner_box'],
-            leitner_scheduled_time={k: parse_date(v) for k, v in x['leitner_scheduled_time'].items()},
+            leitner_scheduled_date={k: parse_date(v) for k, v in x['leitner_scheduled_date'].items()},
             sm2_efactor=x['sm2_efactor'],
             sm2_interval=x['sm2_interval'],
             sm2_repetition=x['sm2_repetition'],
-            sm2_scheduled_time={k: parse_date(v) for k, v in x['sm2_scheduled_time'].items()},
+            sm2_scheduled_date={k: parse_date(v) for k, v in x['sm2_scheduled_date'].items()},
             date=parse_date(x['date'])
         )
 
