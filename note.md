@@ -1,8 +1,12 @@
 # Improve Human Learning with Representation + Spaced Repetition
 
 ## 03-06-2020
-- dist_time is wrong, very large values
+x dist_time is wrong, very large values
+- how come timedelta is negative? timedelta is negative when card.date is
+  earlier than user.last_study_date[card.card_id]
 - check topic assignment, not just topic-word dist
+- maybe card date should be a field but not stored in DB, so is user date
+- flashcard should be renamed to schedule_request
 
 ## 03-25-2020
 - finalze LDA on Quizbowl

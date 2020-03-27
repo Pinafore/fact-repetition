@@ -7,6 +7,8 @@ import requests
 import textwrap
 from datetime import datetime, timedelta
 
+from util import parse_date
+
 USER_ID = 'dummy'
 N_CARDS = 3
 
@@ -77,14 +79,14 @@ def schedule_and_update(cards):
             print('{: <8} : {:.4f}'.format(key, value))
         else:
             print('{: <8} : {}'.format(key, value))
-
     return schedule_outputs, update_outputs
 
 
 def regular(cards):
+    current_date = '2028-06-1 18:27:08.172341'
     for i, card in enumerate(cards):
         cards[i]['user_id'] = USER_ID
-        cards[i]['date'] = str(datetime.now())
+        cards[i]['date'] = current_date
 
     cards_selected = []
     while len(cards_selected) < N_CARDS:
@@ -97,7 +99,7 @@ def regular(cards):
 def repeat(cards):
     card = cards[0]
     card['user_id'] = USER_ID
-    current_date = datetime.now()
+    current_date = parse_date('2028-06-1 18:27:08.172341')
     for i in range(10):
         card['date'] = str(current_date)
         schedule_outputs, update_outputs = schedule_and_update([card])

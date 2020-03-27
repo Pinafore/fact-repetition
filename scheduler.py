@@ -132,6 +132,7 @@ class MovingAvgScheduler:
         # retrieve from db if exists
         c = self.db.get_card(card['question_id'])
         if c is not None:
+            c.date = parse_date(card['date'])
             return c
         # create new card and insert to db
         qrep = self.embed([card['text']])
@@ -172,6 +173,7 @@ class MovingAvgScheduler:
                 cards[i]['index'] = i
                 to_be_embedded.append(card)
             else:
+                cc.date = parse_date(card['date'])
                 cards[i] = cc
 
         if len(to_be_embedded) == 0:
@@ -304,7 +306,7 @@ class MovingAvgScheduler:
         else:
             current_time = time.mktime(card.date.timetuple())
             last_study_date = time.mktime(last_study_date.timetuple())
-            delta_minutes = float(current_time - last_study_date) / 60
+            delta_minutes = max(float(current_time - last_study_date) / 60, 0)
             # TODO use params instead of hard code
             return max(10 - delta_minutes, 0)
 
@@ -390,6 +392,8 @@ class MovingAvgScheduler:
         detail.update({
             'sum': scores_summed[index_selected],
             'topic': self.topic_words[topic_idx],
+            'current date': card_selected.date,
+            'last study date': user.last_study_date.get(card_selected.card_id, '-')
         })
 
         rationale = ''
@@ -456,7 +460,12 @@ class MovingAvgScheduler:
                     'response': response,
                     'last_study_date': user.last_study_date.get(card.card_id, '-'),
                     'current_date': date,
+
+                }
+
+                tmp = {
                     'old ltn box': user.leitner_box.get(card.card_id, '-'),
+                    'old ltn dat': user.leitner_scheduled_date.get(card.card_id, '-'),
                     'old sm2 rep': user.sm2_repetition.get(card.card_id, '-'),
                     'old sm2 inv': user.sm2_interval.get(card.card_id, '-'),
                     'old sm2 e_f': user.sm2_efactor.get(card.card_id, '-'),
@@ -479,14 +488,20 @@ class MovingAvgScheduler:
                 user.last_study_date[card.card_id] = date
 
                 self.leitner_update(user, card, response)
-
                 self.sm2_update(user, card, response)
 
                 detail.update({
+                    'old ltn box': tmp['old ltn box'],
                     'new ltn box': user.leitner_box.get(card.card_id, '-'),
+                    'old ltn dat': tmp['old ltn dat'],
+                    'new ltn dat': user.leitner_scheduled_date.get(card.card_id, '-'),
+                    'old sm2 rep': tmp['old sm2 rep'],
                     'new sm2 rep': user.sm2_repetition.get(card.card_id, '-'),
+                    'old sm2 inv': tmp['old sm2 inv'],
                     'new sm2 inv': user.sm2_interval.get(card.card_id, '-'),
+                    'old sm2 e_f': tmp['old sm2 e_f'],
                     'new sm2 e_f': user.sm2_efactor.get(card.card_id, '-'),
+                    'old sm2 dat': tmp['old sm2 dat'],
                     'new sm2 dat': user.sm2_scheduled_date.get(card.card_id, '-')
                 })
 

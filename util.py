@@ -26,7 +26,7 @@ class Card:
     qrep: np.ndarray
     skill: np.ndarray  # skill estimate for each topic
     category: str
-    date: datetime
+    date: datetime = field(default_factory=datetime.now)
 
 
 class Flashcard(BaseModel):

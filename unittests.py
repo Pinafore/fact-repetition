@@ -63,7 +63,6 @@ class TestDB(unittest.TestCase):
         self.assertEqual(u1.sm2_interval, u2.sm2_interval)
         self.assertEqual(u1.sm2_repetition, u2.sm2_repetition)
         self.assertEqual(u1.sm2_scheduled_date, u2.sm2_scheduled_date)
-        self.assertEqual(u1.date, u2.date)
 
     def assert_card_equal(self, c1, c2):
         self.assertEqual(c1.card_id, c2.card_id)
@@ -72,7 +71,6 @@ class TestDB(unittest.TestCase):
         np.testing.assert_array_equal(c1.qrep, c2.qrep)
         np.testing.assert_array_equal(c1.skill, c2.skill)
         self.assertEqual(c1.category, c2.category)
-        self.assertEqual(c1.date, c2.date)
 
     def test_card(self):
         card = Card(
@@ -115,8 +113,7 @@ class TestDB(unittest.TestCase):
             sm2_efactor={'card 1': 0.5},
             sm2_interval={'card 1': 6},
             sm2_repetition={'card 1': 10},
-            sm2_scheduled_date={'card 2': datetime.now()},
-            date=datetime.now()
+            sm2_scheduled_date={'card 2': datetime.now()}
         )
         card = Card(
             card_id='card 1',
@@ -124,8 +121,7 @@ class TestDB(unittest.TestCase):
             answer='Answer Text III',
             qrep=np.array([1, 2, 3, 4]),
             skill=np.array([0.1, 0.2, 0.3, 0.4]),
-            category='WORLD',
-            date=datetime.now()
+            category='WORLD'
         )
         params = Params()
         old_history_id = json.dumps({'user_id': user.user_id, 'card_id': card.card_id})
@@ -181,7 +177,6 @@ class TestScheduler(unittest.TestCase):
         self.assertEqual(u1.sm2_interval, u2.sm2_interval)
         self.assertEqual(u1.sm2_repetition, u2.sm2_repetition)
         self.assertEqual(u1.sm2_scheduled_date, u2.sm2_scheduled_date)
-        self.assertEqual(u1.date, u2.date)
 
     def assert_card_equal(self, c1, c2):
         self.assertEqual(c1.card_id, c2.card_id)
@@ -190,7 +185,6 @@ class TestScheduler(unittest.TestCase):
         np.testing.assert_array_equal(c1.qrep, c2.qrep)
         np.testing.assert_array_equal(c1.skill, c2.skill)
         self.assertEqual(c1.category, c2.category)
-        self.assertEqual(c1.date, c2.date)
 
     def test_scheduler_update(self):
         with open('data/diagnostic_questions.pkl', 'rb') as f:
