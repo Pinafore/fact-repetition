@@ -26,7 +26,7 @@ x plots & probing & retention next steps
 x discount
 x LDA improvement
 - define labels for Quizbowl sentences
-- simulation
+x simulation
 
 ### Query speed optimization
 Currently the speed of the schedule API is bad. The bottleneck is doing

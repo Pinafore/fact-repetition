@@ -23,21 +23,20 @@ class Card:
     card_id: str
     text: str
     answer: str
+    category: str
     qrep: np.ndarray
     skill: np.ndarray  # skill estimate for each topic
-    category: str
-    date: datetime = field(default_factory=datetime.now)
 
 
-class Flashcard(BaseModel):
+class ScheduleRequest(BaseModel):
     text: str
+    date: Optional[str]
     answer: Optional[str]
     category: Optional[str]
     user_id: Optional[str]
     question_id: Optional[str]
     label: Optional[str]
     history_id: Optional[str]
-    date: Optional[str]
 
 
 class Params(BaseModel):
@@ -82,7 +81,6 @@ class User:
     sm2_interval: Dict[str, float] = field(default_factory=dict)
     sm2_repetition: Dict[str, int] = field(default_factory=dict)
     sm2_scheduled_date: Dict[str, datetime] = field(default_factory=dict)
-    date: datetime = field(default_factory=datetime.now)
 
     def to_snapshot(self):
         x = self.__dict__.copy()
@@ -97,7 +95,6 @@ class User:
         # sm2_interval: Dict[str, float]
         # sm2_repetition: Dict[str, int]
         x['sm2_scheduled_date'] = {k: str(v) for k, v in x['sm2_scheduled_date'].items()}
-        x['date'] = str(x['date'])
         return json.dumps(x)
 
     @classmethod
@@ -114,8 +111,7 @@ class User:
             sm2_efactor=x['sm2_efactor'],
             sm2_interval=x['sm2_interval'],
             sm2_repetition=x['sm2_repetition'],
-            sm2_scheduled_date={k: parse_date(v) for k, v in x['sm2_scheduled_date'].items()},
-            date=parse_date(x['date'])
+            sm2_scheduled_date={k: parse_date(v) for k, v in x['sm2_scheduled_date'].items()}
         )
 
 

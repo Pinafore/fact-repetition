@@ -7,7 +7,7 @@ import numpy as np
 from datetime import datetime
 
 from db import SchedulerDB
-from util import User, Card, History, Params
+from util import User, Card, History, Params, ScheduleRequest
 from scheduler import MovingAvgScheduler
 
 
@@ -35,8 +35,7 @@ class TestDB(unittest.TestCase):
             sm2_efactor={'card 1': 0.5},
             sm2_interval={'card 1': 6},
             sm2_repetition={'card 1': 10},
-            sm2_scheduled_date={'card 2': datetime.now()},
-            date=datetime.now()
+            sm2_scheduled_date={'card 2': datetime.now()}
         )
         self.assertFalse(self.db.check_user(user.user_id))
         self.assertFalse(self.db.get_user(user.user_id))
@@ -56,6 +55,7 @@ class TestDB(unittest.TestCase):
         self.assertEqual(u1.user_id, u2.user_id)
         np.testing.assert_array_equal(u1.qrep, u2.qrep)
         np.testing.assert_array_equal(u1.skill, u2.skill)
+        self.assertEqual(u1.category, u2.category)
         self.assertEqual(u1.last_study_date, u2.last_study_date)
         self.assertEqual(u1.leitner_box, u2.leitner_box)
         self.assertEqual(u1.leitner_scheduled_date, u2.leitner_scheduled_date)
@@ -68,19 +68,18 @@ class TestDB(unittest.TestCase):
         self.assertEqual(c1.card_id, c2.card_id)
         self.assertEqual(c1.text, c2.text)
         self.assertEqual(c1.answer, c2.answer)
+        self.assertEqual(c1.category, c2.category)
         np.testing.assert_array_equal(c1.qrep, c2.qrep)
         np.testing.assert_array_equal(c1.skill, c2.skill)
-        self.assertEqual(c1.category, c2.category)
 
     def test_card(self):
         card = Card(
             card_id='card 1',
             text='This is the question text',
             answer='Answer Text III',
+            category='WORLD',
             qrep=np.array([1, 2, 3, 4]),
             skill=np.array([0.1, 0.2, 0.3, 0.4]),
-            category='WORLD',
-            date=datetime.now()
         )
 
         self.assertFalse(self.db.check_card(card.card_id))
@@ -92,10 +91,9 @@ class TestDB(unittest.TestCase):
         card.__dict__.update({
             'text': 'This is the NEWWWWWWW question text',
             'answer': 'Answer Text IVVVV',
+            'category': 'WORLD',
             'qrep': np.array([1, 2, 3, 4]),
             'skill': np.array([0.1, 0.7, 0.3, 0.8]),
-            'category': 'WORLD',
-            'date': datetime.now()
         })
         self.db.update_card(card)
         returned_card = self.db.get_card(card.card_id)
@@ -119,9 +117,9 @@ class TestDB(unittest.TestCase):
             card_id='card 1',
             text='This is the question text',
             answer='Answer Text III',
+            category='WORLD',
             qrep=np.array([1, 2, 3, 4]),
-            skill=np.array([0.1, 0.2, 0.3, 0.4]),
-            category='WORLD'
+            skill=np.array([0.1, 0.2, 0.3, 0.4])
         )
         params = Params()
         old_history_id = json.dumps({'user_id': user.user_id, 'card_id': card.card_id})
@@ -170,6 +168,7 @@ class TestScheduler(unittest.TestCase):
         self.assertEqual(u1.user_id, u2.user_id)
         np.testing.assert_array_equal(u1.qrep, u2.qrep)
         np.testing.assert_array_equal(u1.skill, u2.skill)
+        self.assertEqual(u1.category, u2.category)
         self.assertEqual(u1.last_study_date, u2.last_study_date)
         self.assertEqual(u1.leitner_box, u2.leitner_box)
         self.assertEqual(u1.leitner_scheduled_date, u2.leitner_scheduled_date)
@@ -182,24 +181,29 @@ class TestScheduler(unittest.TestCase):
         self.assertEqual(c1.card_id, c2.card_id)
         self.assertEqual(c1.text, c2.text)
         self.assertEqual(c1.answer, c2.answer)
+        self.assertEqual(c1.category, c2.category)
         np.testing.assert_array_equal(c1.qrep, c2.qrep)
         np.testing.assert_array_equal(c1.skill, c2.skill)
-        self.assertEqual(c1.category, c2.category)
 
     def test_scheduler_update(self):
         with open('data/diagnostic_questions.pkl', 'rb') as f:
             cards = pickle.load(f)
         cards = cards[:5]
         for i, c in enumerate(cards):
-            cards[i]['user_id'] = 'shi'
-            cards[i]['date'] = str(datetime.now())
+            cards[i] = ScheduleRequest(
+                text=c['text'],
+                answer=c['answer'],
+                category=c['category'],
+                user_id='shi',
+                question_id=c['question_id']
+            )
 
         print(cards[0])
 
         # using deepcopy here because DB lookup converts dict cards into Card
         # cards. not a problem in actual use because objects go through web API
         # and not reused
-        result = self.scheduler.schedule(copy.deepcopy(cards))
+        result = self.scheduler.schedule(copy.deepcopy(cards), datetime.now())
         order = result['order']
 
         print()
@@ -207,12 +211,12 @@ class TestScheduler(unittest.TestCase):
         print(cards[0])
 
         card_selected = cards[order[0]]
-        card_selected.update({
+        card_selected.__dict__.update({
             'label': 'correct',
             'history_id': 'real_history_id'
         })
 
-        self.scheduler.update([card_selected])
+        self.scheduler.update([card_selected], datetime.now())
 
         h = self.scheduler.db.get_history()[0]
         for key, value in h.__dict__.items():

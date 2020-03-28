@@ -38,16 +38,18 @@ class SchedulerDB:
                      sm2_efactor TEXT, \
                      sm2_interval TEXT, \
                      sm2_repetition TEXT, \
-                     sm2_scheduled_date TEXT)')
+                     sm2_scheduled_date TEXT)'
+                    )
 
         # *current* cache of cards
         cur.execute('CREATE TABLE cards (\
                      card_id PRIMARY KEY, \
                      text TEXT, \
                      answer TEXT, \
+                     category TEXT, \
                      qrep TEXT, \
-                     skill TEXT, \
-                     category TEXT)')
+                     skill TEXT)'
+                    )
 
         # input to and output from the schedule API
         # at the end of each schedule API call we write to the history table
@@ -63,7 +65,8 @@ class SchedulerDB:
                      scheduler_snapshot TEXT, \
                      card_ids TEXT, \
                      scheduler_output TEXT, \
-                     date timestamp)')
+                     date timestamp)'
+                    )
 
         conn.commit()
         conn.close()
@@ -132,18 +135,20 @@ class SchedulerDB:
                      sm2_interval=?, \
                      sm2_repetition=?, \
                      sm2_scheduled_date=? \
-                     WHERE user_id=?", (
-            json.dumps([x.tolist() for x in u.qrep]),
-            json.dumps([x.tolist() for x in u.skill]),
-            u.category,
-            json.dumps({k: str(v) for k, v in u.last_study_date.items()}),
-            json.dumps(u.leitner_box),
-            json.dumps({k: str(v) for k, v in u.leitner_scheduled_date.items()}),
-            json.dumps(u.sm2_efactor),
-            json.dumps(u.sm2_interval),
-            json.dumps(u.sm2_repetition),
-            json.dumps({k: str(v) for k, v in u.sm2_scheduled_date.items()}),
-            u.user_id))
+                     WHERE user_id=?",
+                    (
+                        json.dumps([x.tolist() for x in u.qrep]),
+                        json.dumps([x.tolist() for x in u.skill]),
+                        u.category,
+                        json.dumps({k: str(v) for k, v in u.last_study_date.items()}),
+                        json.dumps(u.leitner_box),
+                        json.dumps({k: str(v) for k, v in u.leitner_scheduled_date.items()}),
+                        json.dumps(u.sm2_efactor),
+                        json.dumps(u.sm2_interval),
+                        json.dumps(u.sm2_repetition),
+                        json.dumps({k: str(v) for k, v in u.sm2_scheduled_date.items()}),
+                        u.user_id
+                    ))
         # NOTE web.py will commit at exit
         # self.conn.commit()
 
@@ -171,9 +176,10 @@ class SchedulerDB:
                             c.card_id,
                             c.text,
                             c.answer,
+                            c.category,
                             json.dumps(c.qrep.tolist()),
-                            json.dumps(c.skill.tolist()),
-                            c.category))
+                            json.dumps(c.skill.tolist())
+                        ))
         except sqlite3.IntegrityError:
             logger.info("card {} exists".format(c.card_id))
         # NOTE web.py will commit at exit
@@ -188,9 +194,10 @@ class SchedulerDB:
                                 c.card_id,
                                 c.text,
                                 c.answer,
+                                c.category,
                                 json.dumps(c.qrep.tolist()),
-                                json.dumps(c.skill.tolist()),
-                                c.category))
+                                json.dumps(c.skill.tolist())
+                            ))
             except sqlite3.IntegrityError:
                 logger.info("card {} exists".format(c.card_id))
         # NOTE web.py will commit at exit
@@ -202,9 +209,10 @@ class SchedulerDB:
                 card_id=r[0],
                 text=r[1],
                 answer=r[2],
-                qrep=np.array(json.loads(r[3])),
-                skill=np.array(json.loads(r[4])),
-                category=r[5])
+                category=r[3],
+                qrep=np.array(json.loads(r[4])),
+                skill=np.array(json.loads(r[5]))
+            )
         cur = self.conn.cursor()
         if card_id is None:
             cur.execute("SELECT * FROM cards")
@@ -219,16 +227,18 @@ class SchedulerDB:
         cur.execute("UPDATE cards SET \
                      text=?, \
                      answer=?, \
+                     category=?, \
                      qrep=?, \
-                     skill=?, \
-                     category=? \
-                     WHERE card_id=?", (
-            c.text,
-            c.answer,
-            json.dumps(c.qrep.tolist()),
-            json.dumps(c.skill.tolist()),
-            c.category,
-            c.card_id))
+                     skill=? \
+                     WHERE card_id=?", 
+                    (
+                        c.text,
+                        c.answer,
+                        c.category,
+                        json.dumps(c.qrep.tolist()),
+                        json.dumps(c.skill.tolist()),
+                        c.card_id
+                    ))
         # NOTE web.py will commit at exit
         # self.conn.commit()
 
@@ -257,7 +267,8 @@ class SchedulerDB:
                             h.scheduler_snapshot,
                             json.dumps(h.card_ids),
                             h.scheduler_output,
-                            h.date))
+                            h.date
+                        ))
         except sqlite3.IntegrityError:
             # this means the card was shown to user but we didn't receive a
             # response, replace

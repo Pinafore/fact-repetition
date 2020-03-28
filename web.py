@@ -7,50 +7,40 @@ from typing import List
 from datetime import datetime
 from pydantic import BaseModel
 
-from util import Flashcard, Params
+from util import ScheduleRequest, Params, parse_date
 from scheduler import MovingAvgScheduler
-
 
 app = FastAPI()
 scheduler = MovingAvgScheduler()
 
-
-@app.post('/api/karl/predict')
-def karl_predict(card: Flashcard):
-    score = scheduler.predict_one(card.dict())
-    return {
-        'prob': score
-    }
-
 @app.post('/api/karl/schedule')
-def karl_schedule(cards: List[Flashcard]):
-    for i, _ in enumerate(cards):
-        cards[i] = cards[i].dict()
-        if cards[i]['date'] is None:
-            cards[i]['date'] = str(datetime.now())
-    return scheduler.schedule(cards)
+def karl_schedule(requests: List[ScheduleRequest]):
+    # TODO assuming single user single date
+    date = datetime.now()
+    if requests[0].date is not None:
+        date = parse_date(requests[0].date)
+    return scheduler.schedule(requests, date)
 
 @app.post('/api/karl/update')
-def karl_update(cards: List[Flashcard]):
-    # add date to card if missing
-    for i, _ in enumerate(cards):
-        cards[i] = cards[i].dict()
-        if cards[i]['date'] is None:
-            cards[i]['date'] = str(datetime.now())
-    return scheduler.update(cards)
+def karl_update(requests: List[ScheduleRequest]):
 
+    # TODO assuming single user single date
+    date = datetime.now()
+    if requests[0].date is not None:
+        date = parse_date(requests[0].date)
+    return scheduler.update(requests, date)
 
 class UserID(BaseModel):
     user_id: str = None
 
-
 @app.post('/api/karl/reset')
 def karl_reset(user_id: UserID):
-    scheduler.reset(user_id=user_id.dict().get('user_id', None))
+    user_id = user_id.dict().get('user_id', None)
+    scheduler.reset(user_id=user_id)
 
 @app.post('/api/karl/set_params')
 def karl_set_params(params: Params):
-    scheduler.set_params(params.dict())
+    scheduler.set_params(params)
 
 @app.post('/api/karl/status')
 def karl_status():
