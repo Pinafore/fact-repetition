@@ -1,12 +1,16 @@
 # Improve Human Learning with Representation + Spaced Repetition
 
+## 03-07-2020
+- in simulation, the probability of the card being correct should start with
+  estimated from Roger's data then grow with reptition
+
 ## 03-06-2020
 x dist_time is wrong, very large values
-- how come timedelta is negative? timedelta is negative when card.date is
+x how come timedelta is negative? timedelta is negative when card.date is
   earlier than user.last_study_date[card.card_id]
 - check topic assignment, not just topic-word dist
-- maybe card date should be a field but not stored in DB, so is user date
-- flashcard should be renamed to schedule_request
+x maybe card date should be a field but not stored in DB, so is user date
+x flashcard should be renamed to schedule_request
 
 ## 03-25-2020
 - finalze LDA on Quizbowl
