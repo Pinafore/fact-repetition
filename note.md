@@ -1,10 +1,22 @@
 # Improve Human Learning with Representation + Spaced Repetition
 
-## 03-07-2020
+# 03-30-2020
+- precompute next step
+
+## 03-29-2020
+- order cards in leitner box by study time
+- stopping criteria:
+    - no card in leitner scheduled today
+    - number of new cards reached upper bound
+    - min distance (probably won't work)
+
+## 03-27-2020
+- let's write a retention model using just several simple manual features in
+  pytorch. then this will replace the simplistic `get_result`
 - in simulation, the probability of the card being correct should start with
   estimated from Roger's data then grow with reptition
 
-## 03-06-2020
+## 03-26-2020
 x dist_time is wrong, very large values
 x how come timedelta is negative? timedelta is negative when card.date is
   earlier than user.last_study_date[card.card_id]
@@ -13,12 +25,12 @@ x maybe card date should be a field but not stored in DB, so is user date
 x flashcard should be renamed to schedule_request
 
 ## 03-25-2020
-- finalze LDA on Quizbowl
+x finalze LDA on Quizbowl
 - "point" and "10" are still in the vocab
 x improve debug string
 x make sure that commiting only at exit is fine
 x return schedule & update details via web API for debug
-- weird sequences in possibly snapshot
+x weird sequences in possibly snapshot
 
 ## 03-23-2020
 x fix dist_skill

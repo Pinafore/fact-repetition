@@ -93,7 +93,7 @@ class SchedulerDB:
         # NOTE web.py will commit at exit
         # self.conn.commit()
 
-    def get_user(self, user_id: str = None):
+    def get_user(self, user_id=None):
         def row_to_dict(r):
             return User(
                 user_id=r[0],
@@ -152,7 +152,7 @@ class SchedulerDB:
         # NOTE web.py will commit at exit
         # self.conn.commit()
 
-    def delete_user(self, user_id: str = None):
+    def delete_user(self, user_id=None):
         cur = self.conn.cursor()
         if user_id is None:
             logger.info('deleting all users from db')
@@ -203,7 +203,7 @@ class SchedulerDB:
         # NOTE web.py will commit at exit
         # self.conn.commit()
 
-    def get_card(self, card_id: str = None):
+    def get_card(self, card_id=None):
         def row_to_dict(r):
             return Card(
                 card_id=r[0],
@@ -278,7 +278,7 @@ class SchedulerDB:
         # NOTE web.py will commit at exit
         # self.conn.commit()
 
-    def get_history(self, history_id: str = None):
+    def get_history(self, history_id=None):
         def row_to_dict(r):
             return History(
                 history_id=r[0],
@@ -308,33 +308,58 @@ class SchedulerDB:
     def update_history(self, old_history_id: str, h: History):
         '''This is different, `history_id` might get updated'''
         cur = self.conn.cursor()
-        cur.execute("UPDATE history SET \
-                     history_id=?, \
-                     user_id=?, \
-                     card_id=?, \
-                     response=?, \
-                     judgement=?, \
-                     user_snapshot=?, \
-                     scheduler_snapshot=?, \
-                     card_ids=?, \
-                     scheduler_output=?, \
-                     date=? \
-                     WHERE history_id=?", (
-            h.history_id,
-            h.user_id,
-            h.card_id,
-            h.response,
-            h.judgement,
-            h.user_snapshot,
-            h.scheduler_snapshot,
-            json.dumps(h.card_ids),
-            h.scheduler_output,
-            h.date,
-            old_history_id))
+        if h.history_id == old_history_id:
+            # inplace update with same id
+            cur.execute("UPDATE history SET \
+                         user_id=?, \
+                         card_id=?, \
+                         response=?, \
+                         judgement=?, \
+                         user_snapshot=?, \
+                         scheduler_snapshot=?, \
+                         card_ids=?, \
+                         scheduler_output=?, \
+                         date=? \
+                         WHERE history_id=?", (
+                h.user_id,
+                h.card_id,
+                h.response,
+                h.judgement,
+                h.user_snapshot,
+                h.scheduler_snapshot,
+                json.dumps(h.card_ids),
+                h.scheduler_output,
+                h.date,
+                h.history_id))
+        else:
+            # replace update with new id
+            cur.execute("UPDATE history SET \
+                         history_id=?, \
+                         user_id=?, \
+                         card_id=?, \
+                         response=?, \
+                         judgement=?, \
+                         user_snapshot=?, \
+                         scheduler_snapshot=?, \
+                         card_ids=?, \
+                         scheduler_output=?, \
+                         date=? \
+                         WHERE history_id=?", (
+                h.history_id,
+                h.user_id,
+                h.card_id,
+                h.response,
+                h.judgement,
+                h.user_snapshot,
+                h.scheduler_snapshot,
+                json.dumps(h.card_ids),
+                h.scheduler_output,
+                h.date,
+                old_history_id))
         # NOTE web.py will commit at exit
         # self.conn.commit()
 
-    def delete_history(self, history_id: str = None, user_id: str = None):
+    def delete_history(self, history_id=None, user_id=None):
         cur = self.conn.cursor()
         if history_id is not None:
             logger.info('deleting history {} from db'.format(history_id))

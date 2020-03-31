@@ -1,5 +1,6 @@
-checkpoints
 data
+checkpoints
+output
 whoosh_index
 
 # Byte-compiled / optimized / DLL files

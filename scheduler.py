@@ -71,7 +71,8 @@ class MovingAvgScheduler:
         '''
 
         # LDA gensim
-        self.lda = gensim.models.LdaModel.load(os.path.join(params.lda_dir, 'lda'))
+        # self.lda = gensim.models.LdaModel.load(os.path.join(params.lda_dir, 'lda'))
+        self.lda = gensim.models.ldamulticore.LdaMulticore.load(os.path.join(params.lda_dir, 'lda'))
         self.vocab = gensim.corpora.Dictionary.load_from_text(os.path.join(params.lda_dir, 'vocab.txt'))
         with open(os.path.join(params.lda_dir, 'topic_words.txt'), 'r') as f:
             self.topic_words = [l.strip() for l in f.readlines()]
@@ -183,6 +184,7 @@ class MovingAvgScheduler:
         if len(new_cards) == 0:
             return cards
 
+        logger.debug('embed cards ' + str(len(new_cards)))
         self.embed(new_cards)
         probs = self.predict(new_cards)
         for i, card in enumerate(new_cards):
@@ -309,7 +311,8 @@ class MovingAvgScheduler:
         if scheduled_date is None:
             return 0
         else:
-            return max(0, (scheduled_date - date).days)
+            # distance in hours
+            return max(0, (scheduled_date - date).seconds / (60 * 60))
 
     def dist_sm2(self, user: User, card: Card, date: datetime) -> float:
         # days till scheduled date by sm2
@@ -317,7 +320,8 @@ class MovingAvgScheduler:
         if scheduled_date is None:
             return 0
         else:
-            return max(0, (scheduled_date - date).days)
+            # distance in hours
+            return max(0, (scheduled_date - date).seconds / (60 * 60))
 
     def score(self, user: User, cards: List[Card], date: datetime) -> List[float]:
         return [{
@@ -334,6 +338,7 @@ class MovingAvgScheduler:
             # TODO raise exception and return something more meaningful
             return [], [], ''
 
+        t0 = datetime.now()
         user_to_requests = defaultdict(list)
         for i, request in enumerate(requests):
             user_to_requests[request.user_id].append(i)
@@ -392,6 +397,10 @@ class MovingAvgScheduler:
             scheduler_output=json.dumps({'order': order, 'rationale': rationale}),
             date=date)
         self.db.add_history(history)
+
+        t1 = datetime.now()
+        logger.debug('schedule ' + str(t1 - t0))
+
         return {
             'order': order,
             'rationale': rationale,
@@ -399,6 +408,8 @@ class MovingAvgScheduler:
         }
 
     def update(self, requests: List[ScheduleRequest], date: datetime) -> Dict:
+        t0 = datetime.now()
+
         user_to_requests = defaultdict(list)
         for i, request in enumerate(requests):
             user_to_requests[request.user_id].append(i)
@@ -481,6 +492,8 @@ class MovingAvgScheduler:
             return {
                 'detail': detail
             }
+        t1 = datetime.now()
+        logger.debug('update ' + str(t1 - t0))
 
     def leitner_update(self, user: User, card: Card, response: str):
         # leitner boxes 1~10

@@ -2,12 +2,14 @@
 # coding: utf-8
 
 import json
+import copy
 import pickle
 import requests
 import textwrap
 import logging
+import numpy as np
 from datetime import timedelta
-
+from collections import defaultdict
 from util import parse_date
 
 logging.basicConfig(filename='test_web.log', filemode='w', level=logging.INFO)
@@ -30,10 +32,15 @@ with open('data/jeopardy_310326_question_player_pairs_20190612.pkl', 'rb') as f:
 with open('data/diagnostic_questions.pkl', 'rb') as f:
     diagnostic_cards = pickle.load(f)
 
+estimate = {}
+
 def get_result(card):
-    record_id = karl_to_question_id[int(card['question_id'])]
-    prob = (records_df[records_df.question_id == record_id]['correct'] / 2 + 0.5).mean()
-    return 'correct' if prob > 0.5 else 'wrong'
+    if card['question_id'] not in estimate:
+        record_id = karl_to_question_id[int(card['question_id'])]
+        prob = (records_df[records_df.question_id == record_id]['correct'] / 2 + 0.5).mean()
+        estimate[card['question_id']] = prob
+    coin_flip = np.random.binomial(1, prob)
+    return 'correct' if coin_flip == 1 else 'wrong'
 
 def schedule_and_update(cards, date):
     cards[0]['date'] = str(date)
@@ -49,6 +56,7 @@ def schedule_and_update(cards, date):
         card_selected['label'] = get_result(card_selected)
 
     card_selected['date'] = str(date)
+    card_selected['history_id'] = 'dummy_{}_{}'.format(card_id, str(date))
     r = requests.post('http://127.0.0.1:8000/api/karl/update',
                       data=json.dumps([card_selected]))
     update_outputs = json.loads(r.text)
@@ -105,10 +113,55 @@ def regular(cards):
         logging.info(str(days) + ' ----------------------')
         logging.info('\n\n')
 
+def restore_params():
+    params = {
+        'n_topics': 10,
+        'qrep': 1.0,
+        'skill': 0,
+        'time': 1.0,
+        'category': 1.0,
+        'leitner': 1.0,
+        'sm2': 0,
+        'decay_qrep': 0.9,
+    }
+    requests.post('http://127.0.0.1:8000/api/karl/set_params', data=json.dumps(params))
+
 
 if __name__ == '__main__':
-    requests.post('http://127.0.0.1:8000/api/karl/set_params',
-                  data=json.dumps(params))
-    requests.post('http://127.0.0.1:8000/api/karl/reset',
-                  data=json.dumps({'user_id': 'dummy'}))
-    regular(diagnostic_cards)
+    cards = copy.deepcopy(diagnostic_cards[:30])
+    for i, card in enumerate(cards):
+        card['user_id'] = 'dummy'
+
+    params = {
+        'n_topics': 10,
+        'qrep': 1.0,
+        'skill': 0,
+        'time': 0.0,
+        'category': 0,
+        'leitner': 1.0,
+        'sm2': 0,
+        'decay_qrep': 0.9,
+    }
+
+    requests.post('http://127.0.0.1:8000/api/karl/set_params', data=json.dumps(params))
+    requests.post('http://127.0.0.1:8000/api/karl/reset', data=json.dumps({'user_id': 'dummy'}))
+
+    start_date = parse_date('2028-06-1 18:27:08.172341')
+    card_to_column = defaultdict(lambda: len(card_to_column))
+    for days in range(10):
+        print('day', days)
+        for minutes in range(30):
+            current_date = start_date + timedelta(days=days) + timedelta(minutes=minutes * 3)
+            schedule_outputs, update_outputs = schedule_and_update(cards, current_date)
+            order = schedule_outputs['order']
+            response = update_outputs['detail']['response']
+            column_number = card_to_column[cards[order[0]]['question_id']]
+            print('{} {}{}{}'.format(
+                current_date.strftime('%Y-%m-%d %H:%M'),
+                ' ' * column_number,
+                'o' if response == 'correct' else 'x',
+                ' ' * (len(cards) - column_number)
+            ))
+        print()
+
+    restore_params()
