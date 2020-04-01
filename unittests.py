@@ -35,7 +35,10 @@ class TestDB(unittest.TestCase):
             sm2_efactor={'card 1': 0.5},
             sm2_interval={'card 1': 6},
             sm2_repetition={'card 1': 10},
-            sm2_scheduled_date={'card 2': datetime.now()}
+            sm2_scheduled_date={'card 2': datetime.now()},
+            results=[True, False, True],
+            count_correct_before={'card 1': 1},
+            count_wrong_before={'card 1': 3}
         )
         self.assertFalse(self.db.check_user(user.user_id))
         self.assertFalse(self.db.get_user(user.user_id))
@@ -46,6 +49,8 @@ class TestDB(unittest.TestCase):
 
         user.qrep.append(np.array([0.7, 0.8, 0.9]))
         user.skill.append(np.array([0.4, 0.5, 0.6]))
+        user.results.append(False)
+        user.count_correct_before['card 1'] = 2
         user.date = datetime.now()
         self.db.update_user(user)
         returned_user = self.db.get_user(user.user_id)
@@ -63,6 +68,9 @@ class TestDB(unittest.TestCase):
         self.assertEqual(u1.sm2_interval, u2.sm2_interval)
         self.assertEqual(u1.sm2_repetition, u2.sm2_repetition)
         self.assertEqual(u1.sm2_scheduled_date, u2.sm2_scheduled_date)
+        self.assertEqual(u1.results, u2.results)
+        self.assertEqual(u1.count_correct_before, u2.count_correct_before)
+        self.assertEqual(u1.count_wrong_before, u2.count_wrong_before)
 
     def assert_card_equal(self, c1, c2):
         self.assertEqual(c1.card_id, c2.card_id)
@@ -71,6 +79,7 @@ class TestDB(unittest.TestCase):
         self.assertEqual(c1.category, c2.category)
         np.testing.assert_array_equal(c1.qrep, c2.qrep)
         np.testing.assert_array_equal(c1.skill, c2.skill)
+        self.assertEqual(c1.results, c2.results)
 
     def test_card(self):
         card = Card(
@@ -80,6 +89,7 @@ class TestDB(unittest.TestCase):
             category='WORLD',
             qrep=np.array([1, 2, 3, 4]),
             skill=np.array([0.1, 0.2, 0.3, 0.4]),
+            results=[True, False, True, True]
         )
 
         self.assertFalse(self.db.check_card(card.card_id))
@@ -94,6 +104,7 @@ class TestDB(unittest.TestCase):
             'category': 'WORLD',
             'qrep': np.array([1, 2, 3, 4]),
             'skill': np.array([0.1, 0.7, 0.3, 0.8]),
+            'results': [True, False, True, True, False]
         })
         self.db.update_card(card)
         returned_card = self.db.get_card(card.card_id)
@@ -111,7 +122,10 @@ class TestDB(unittest.TestCase):
             sm2_efactor={'card 1': 0.5},
             sm2_interval={'card 1': 6},
             sm2_repetition={'card 1': 10},
-            sm2_scheduled_date={'card 2': datetime.now()}
+            sm2_scheduled_date={'card 2': datetime.now()},
+            results=[True, False, True],
+            count_correct_before={'card 1': 1},
+            count_wrong_before={'card 1': 3}
         )
         card = Card(
             card_id='card 1',
@@ -119,7 +133,8 @@ class TestDB(unittest.TestCase):
             answer='Answer Text III',
             category='WORLD',
             qrep=np.array([1, 2, 3, 4]),
-            skill=np.array([0.1, 0.2, 0.3, 0.4])
+            skill=np.array([0.1, 0.2, 0.3, 0.4]),
+            results=[True, False, True, True]
         )
         params = Params()
         old_history_id = json.dumps({'user_id': user.user_id, 'card_id': card.card_id})
@@ -176,6 +191,9 @@ class TestScheduler(unittest.TestCase):
         self.assertEqual(u1.sm2_interval, u2.sm2_interval)
         self.assertEqual(u1.sm2_repetition, u2.sm2_repetition)
         self.assertEqual(u1.sm2_scheduled_date, u2.sm2_scheduled_date)
+        self.assertEqual(u1.results, u2.results)
+        self.assertEqual(u1.count_correct_before, u2.count_correct_before)
+        self.assertEqual(u1.count_wrong_before, u2.count_wrong_before)
 
     def assert_card_equal(self, c1, c2):
         self.assertEqual(c1.card_id, c2.card_id)
@@ -184,6 +202,7 @@ class TestScheduler(unittest.TestCase):
         self.assertEqual(c1.category, c2.category)
         np.testing.assert_array_equal(c1.qrep, c2.qrep)
         np.testing.assert_array_equal(c1.skill, c2.skill)
+        self.assertEqual(c1.results, c2.results)
 
     def test_scheduler_update(self):
         with open('data/diagnostic_questions.pkl', 'rb') as f:

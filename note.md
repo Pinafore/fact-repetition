@@ -1,7 +1,8 @@
 # Improve Human Learning with Representation + Spaced Repetition
 
-# 03-30-2020
+# 03-31-2020
 - precompute next step
+- add to features: previous result, one before previous result
 
 ## 03-29-2020
 - order cards in leitner box by study time

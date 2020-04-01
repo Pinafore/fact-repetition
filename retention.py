@@ -23,6 +23,7 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import StepLR
 
 from util import parse_date
+from util import User, Card
 
 
 def apply_parallel(f, groupby):
@@ -259,36 +260,36 @@ def featurize(df):
     count_wrong = itertools.chain(*count_wrong_list)
     index_to_count_correct = {i: c for i, c in zip(index, count_correct)}
     index_to_count_wrong = {i: c for i, c in zip(index, count_wrong)}
-    df['correct_count_before'] = df.index.map(index_to_count_correct)
-    df['wrong_count_before'] = df.index.map(index_to_count_wrong)
+    df['count_correct_before'] = df.index.map(index_to_count_correct)
+    df['count_wrong_before'] = df.index.map(index_to_count_wrong)
 
-    x = df[['user_count', 'question_count',
-            'user_accuracy', 'question_accuracy',
-            'correct_count_before', 'wrong_count_before'
-            ]].to_numpy()
+    df['bias'] = 1
+
+    x = df[['user_accuracy', 'question_accuracy',
+            'count_correct_before', 'count_wrong_before',
+            'bias']].to_numpy()
     y = df['result_binary'].to_numpy()
     return x, y
 
 class RetentionDataset(torch.utils.data.Dataset):
 
     def __init__(self, fold='train'):
-        """
-        Args:
-            root_dir (string): Directory with all the images.
-        """
         dirs = {
             'train': ('data/protobowl/x_train.npy', 'data/protobowl/y_train.npy'),
             'test': ('data/protobowl/x_test.npy', 'data/protobowl/y_test.npy')
         }
         x_dir, y_dir = dirs[fold]
         if os.path.exists(x_dir) and os.path.exists(y_dir):
-            self.x = np.load(x_dir).astype(np.float32)
-            self.y = np.load(y_dir).astype(int)
+            x, y = np.load(x_dir), np.load(y_dir)
         else:
-            df = load_protobowl()
-            self.x, self.y = featurize(filter_df_by_time(df)[fold])
+            x, y = featurize(filter_df_by_time(load_protobowl())[fold])
             np.save(x_dir, self.x)
             np.save(y_dir, self.y)
+        self.x = x.astype(np.float32)
+        self.y = y.astype(int)
+        # TODO get statistics from data instead of hard code
+        self.mean = np.array([0.62840253, 0.6284026, 0.07828305, 0.04504214, 0.]).astype(np.float32)
+        self.std = np.array([0.16344075, 0.21432154, 0.15107092, 0.08828004, 1.]).astype(np.float32)
 
     def __len__(self):
         return len(self.y)
@@ -296,13 +297,14 @@ class RetentionDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
-        return torch.from_numpy(self.x[idx]), torch.from_numpy(np.array(self.y[idx]))
-
+        x = (self.x[idx] - self.mean) / self.std
+        y = np.array(self.y[idx])
+        return torch.from_numpy(x), torch.from_numpy(y)
 
 class Net(nn.Module):
-    def __init__(self):
+    def __init__(self, n_input):
         super(Net, self).__init__()
-        self.fc1 = nn.Linear(6, 128)
+        self.fc1 = nn.Linear(n_input, 128)
         self.dropout1 = nn.Dropout(0.25)
         self.fc2 = nn.Linear(128, 2)
 
@@ -349,7 +351,6 @@ def test(args, model, device, test_loader):
         100. * correct / len(test_loader.dataset)))
     return test_loss
 
-
 def main():
     parser = argparse.ArgumentParser(description='Retention model')
     parser.add_argument('--batch-size', type=int, default=1024, metavar='N',
@@ -384,7 +385,7 @@ def main():
         RetentionDataset('test'),
         batch_size=args.test_batch_size, shuffle=False, **kwargs)
 
-    model = Net().to(device)
+    model = Net(n_input=5).to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     best_test_loss = 9999
@@ -401,5 +402,64 @@ def main():
             best_test_loss = test_loss
 
 
+class RetentionModel:
+
+    def __init__(self, use_cuda=True):
+        use_cuda = use_cuda and torch.cuda.is_available()
+        self.device = torch.device("cuda" if use_cuda else "cpu")
+        self.model = Net(n_input=5).to(self.device)
+        self.model.load_state_dict(torch.load('checkpoints/retention_model.pt'))
+        self.model.eval()
+        self.mean = np.array([0.62840253, 0.6284026, 0.07828305, 0.04504214, 0.]).astype(np.float32)
+        self.std = np.array([0.16344075, 0.21432154, 0.15107092, 0.08828004, 1.]).astype(np.float32)
+
+    def predict(self, user: User, card: Card):
+        # 'user_accuracy', 'question_accuracy',
+        # 'count_correct_before', 'count_wrong_before'
+        x = np.array([
+            np.mean(user.results),
+            np.mean(card.results),
+            user.count_correct_before.get(card.card_id, 0),
+            user.count_wrong_before.get(card.card_id, 0),
+            1,  # bias
+        ]).astype(np.float32)
+        x = (x - self.mean) / self.std
+        x = (x[np.newaxis, :]).astype(np.float32)
+        x = torch.from_numpy(x).to(self.device)
+        return self.model.forward(x).argmax().item()
+
+def unit_test():
+    user = User(
+        user_id='user 1',
+        qrep=[np.array([0.1, 0.2, 0.3])],
+        skill=[np.array([0.1, 0.2, 0.3])],
+        category='History',
+        last_study_date={'card 1': datetime.now()},
+        leitner_box={'card 1': 2},
+        leitner_scheduled_date={'card 2': datetime.now()},
+        sm2_efactor={'card 1': 0.5},
+        sm2_interval={'card 1': 6},
+        sm2_repetition={'card 1': 10},
+        sm2_scheduled_date={'card 2': datetime.now()},
+        results=[True, False, True],
+        count_correct_before={'card 1': 1},
+        count_wrong_before={'card 1': 3}
+    )
+
+    card = Card(
+        card_id='card 1',
+        text='This is the question text',
+        answer='Answer Text III',
+        category='WORLD',
+        qrep=np.array([1, 2, 3, 4]),
+        skill=np.array([0.1, 0.2, 0.3, 0.4]),
+        results=[True, False, True, True]
+    )
+
+    model = RetentionModel()
+    print(model.predict(user, card))
+
+
 if __name__ == '__main__':
-    main()
+    # main()
+    unit_test()

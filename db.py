@@ -38,7 +38,10 @@ class SchedulerDB:
                      sm2_efactor TEXT, \
                      sm2_interval TEXT, \
                      sm2_repetition TEXT, \
-                     sm2_scheduled_date TEXT)'
+                     sm2_scheduled_date TEXT, \
+                     results TEXT, \
+                     count_correct_before TEXT, \
+                     count_wrong_before TEXT)'
                     )
 
         # *current* cache of cards
@@ -48,7 +51,8 @@ class SchedulerDB:
                      answer TEXT, \
                      category TEXT, \
                      qrep TEXT, \
-                     skill TEXT)'
+                     skill TEXT, \
+                     results TEXT)'
                     )
 
         # input to and output from the schedule API
@@ -74,7 +78,7 @@ class SchedulerDB:
     def add_user(self, u: User):
         cur = self.conn.cursor()
         try:
-            cur.execute('INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+            cur.execute('INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                         (
                             u.user_id,
                             json.dumps([x.tolist() for x in u.qrep]),
@@ -86,7 +90,10 @@ class SchedulerDB:
                             json.dumps(u.sm2_efactor),
                             json.dumps(u.sm2_interval),
                             json.dumps(u.sm2_repetition),
-                            json.dumps({k: str(v) for k, v in u.sm2_scheduled_date.items()})
+                            json.dumps({k: str(v) for k, v in u.sm2_scheduled_date.items()}),
+                            json.dumps(u.results),
+                            json.dumps(u.count_correct_before),
+                            json.dumps(u.count_wrong_before)
                         ))
         except sqlite3.IntegrityError:
             logger.info("user {} exists".format(u.user_id))
@@ -106,7 +113,10 @@ class SchedulerDB:
                 sm2_efactor=json.loads(r[7]),
                 sm2_interval=json.loads(r[8]),
                 sm2_repetition=json.loads(r[9]),
-                sm2_scheduled_date={k: parse_date(v) for k, v in json.loads(r[10]).items()}
+                sm2_scheduled_date={k: parse_date(v) for k, v in json.loads(r[10]).items()},
+                results=json.loads(r[11]),
+                count_correct_before=json.loads(r[12]),
+                count_wrong_before=json.loads(r[13]),
             )
         cur = self.conn.cursor()
         if user_id is None:
@@ -134,7 +144,10 @@ class SchedulerDB:
                      sm2_efactor=?, \
                      sm2_interval=?, \
                      sm2_repetition=?, \
-                     sm2_scheduled_date=? \
+                     sm2_scheduled_date=?, \
+                     results=?, \
+                     count_correct_before=?, \
+                     count_wrong_before=? \
                      WHERE user_id=?",
                     (
                         json.dumps([x.tolist() for x in u.qrep]),
@@ -147,6 +160,9 @@ class SchedulerDB:
                         json.dumps(u.sm2_interval),
                         json.dumps(u.sm2_repetition),
                         json.dumps({k: str(v) for k, v in u.sm2_scheduled_date.items()}),
+                        json.dumps(u.results),
+                        json.dumps(u.count_correct_before),
+                        json.dumps(u.count_wrong_before),
                         u.user_id
                     ))
         # NOTE web.py will commit at exit
@@ -171,14 +187,15 @@ class SchedulerDB:
     def add_card(self, c: Card):
         cur = self.conn.cursor()
         try:
-            cur.execute('INSERT INTO cards VALUES (?,?,?,?,?,?)',
+            cur.execute('INSERT INTO cards VALUES (?,?,?,?,?,?,?)',
                         (
                             c.card_id,
                             c.text,
                             c.answer,
                             c.category,
                             json.dumps(c.qrep.tolist()),
-                            json.dumps(c.skill.tolist())
+                            json.dumps(c.skill.tolist()),
+                            json.dumps(c.results)
                         ))
         except sqlite3.IntegrityError:
             logger.info("card {} exists".format(c.card_id))
@@ -189,14 +206,15 @@ class SchedulerDB:
         cur = self.conn.cursor()
         for c in cards:
             try:
-                cur.execute('INSERT INTO cards VALUES (?,?,?,?,?,?)',
+                cur.execute('INSERT INTO cards VALUES (?,?,?,?,?,?,?)',
                             (
                                 c.card_id,
                                 c.text,
                                 c.answer,
                                 c.category,
                                 json.dumps(c.qrep.tolist()),
-                                json.dumps(c.skill.tolist())
+                                json.dumps(c.skill.tolist()),
+                                json.dumps(c.results)
                             ))
             except sqlite3.IntegrityError:
                 logger.info("card {} exists".format(c.card_id))
@@ -211,7 +229,8 @@ class SchedulerDB:
                 answer=r[2],
                 category=r[3],
                 qrep=np.array(json.loads(r[4])),
-                skill=np.array(json.loads(r[5]))
+                skill=np.array(json.loads(r[5])),
+                results=json.loads(r[6])
             )
         cur = self.conn.cursor()
         if card_id is None:
@@ -229,14 +248,16 @@ class SchedulerDB:
                      answer=?, \
                      category=?, \
                      qrep=?, \
-                     skill=? \
-                     WHERE card_id=?", 
+                     skill=?, \
+                     results=? \
+                     WHERE card_id=?",
                     (
                         c.text,
                         c.answer,
                         c.category,
                         json.dumps(c.qrep.tolist()),
                         json.dumps(c.skill.tolist()),
+                        json.dumps(c.results),
                         c.card_id
                     ))
         # NOTE web.py will commit at exit
