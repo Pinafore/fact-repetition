@@ -78,23 +78,7 @@ class SchedulerDB:
     def add_user(self, u: User):
         cur = self.conn.cursor()
         try:
-            cur.execute('INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                        (
-                            u.user_id,
-                            json.dumps([x.tolist() for x in u.qrep]),
-                            json.dumps([x.tolist() for x in u.skill]),
-                            u.category,
-                            json.dumps({k: str(v) for k, v in u.last_study_date.items()}),
-                            json.dumps(u.leitner_box),
-                            json.dumps({k: str(v) for k, v in u.leitner_scheduled_date.items()}),
-                            json.dumps(u.sm2_efactor),
-                            json.dumps(u.sm2_interval),
-                            json.dumps(u.sm2_repetition),
-                            json.dumps({k: str(v) for k, v in u.sm2_scheduled_date.items()}),
-                            json.dumps(u.results),
-                            json.dumps(u.count_correct_before),
-                            json.dumps(u.count_wrong_before)
-                        ))
+            cur.execute('INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)', u.pack())
         except sqlite3.IntegrityError:
             logger.info("user {} exists".format(u.user_id))
         # NOTE web.py will commit at exit
@@ -102,22 +86,8 @@ class SchedulerDB:
 
     def get_user(self, user_id=None):
         def row_to_dict(r):
-            return User(
-                user_id=r[0],
-                qrep=[np.array(x) for x in json.loads(r[1])],
-                skill=[np.array(x) for x in json.loads(r[2])],
-                category=r[3],
-                last_study_date={k: parse_date(v) for k, v in json.loads(r[4]).items()},
-                leitner_box=json.loads(r[5]),
-                leitner_scheduled_date={k: parse_date(v) for k, v in json.loads(r[6]).items()},
-                sm2_efactor=json.loads(r[7]),
-                sm2_interval=json.loads(r[8]),
-                sm2_repetition=json.loads(r[9]),
-                sm2_scheduled_date={k: parse_date(v) for k, v in json.loads(r[10]).items()},
-                results=json.loads(r[11]),
-                count_correct_before=json.loads(r[12]),
-                count_wrong_before=json.loads(r[13]),
-            )
+            return User.unpack(r)
+
         cur = self.conn.cursor()
         if user_id is None:
             cur.execute("SELECT * FROM users")
@@ -133,6 +103,7 @@ class SchedulerDB:
         return True if cur.fetchone() else False
 
     def update_user(self, u: User):
+        # TODO use pack
         cur = self.conn.cursor()
         cur.execute("UPDATE users SET\
                      qrep=?, \
@@ -187,16 +158,7 @@ class SchedulerDB:
     def add_card(self, c: Card):
         cur = self.conn.cursor()
         try:
-            cur.execute('INSERT INTO cards VALUES (?,?,?,?,?,?,?)',
-                        (
-                            c.card_id,
-                            c.text,
-                            c.answer,
-                            c.category,
-                            json.dumps(c.qrep.tolist()),
-                            json.dumps(c.skill.tolist()),
-                            json.dumps(c.results)
-                        ))
+            cur.execute('INSERT INTO cards VALUES (?,?,?,?,?,?,?)', c.pack())
         except sqlite3.IntegrityError:
             logger.info("card {} exists".format(c.card_id))
         # NOTE web.py will commit at exit
@@ -206,16 +168,7 @@ class SchedulerDB:
         cur = self.conn.cursor()
         for c in cards:
             try:
-                cur.execute('INSERT INTO cards VALUES (?,?,?,?,?,?,?)',
-                            (
-                                c.card_id,
-                                c.text,
-                                c.answer,
-                                c.category,
-                                json.dumps(c.qrep.tolist()),
-                                json.dumps(c.skill.tolist()),
-                                json.dumps(c.results)
-                            ))
+                cur.execute('INSERT INTO cards VALUES (?,?,?,?,?,?,?)', c.pack())
             except sqlite3.IntegrityError:
                 logger.info("card {} exists".format(c.card_id))
         # NOTE web.py will commit at exit
@@ -223,15 +176,8 @@ class SchedulerDB:
 
     def get_card(self, card_id=None):
         def row_to_dict(r):
-            return Card(
-                card_id=r[0],
-                text=r[1],
-                answer=r[2],
-                category=r[3],
-                qrep=np.array(json.loads(r[4])),
-                skill=np.array(json.loads(r[5])),
-                results=json.loads(r[6])
-            )
+            return Card.unpack(r)
+
         cur = self.conn.cursor()
         if card_id is None:
             cur.execute("SELECT * FROM cards")
@@ -242,6 +188,7 @@ class SchedulerDB:
             return row_to_dict(r) if r else None
 
     def update_card(self, c: Card):
+        # TODO use pack
         cur = self.conn.cursor()
         cur.execute("UPDATE cards SET \
                      text=?, \

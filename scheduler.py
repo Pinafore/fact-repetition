@@ -15,9 +15,8 @@ from typing import List, Dict
 import gensim
 import en_core_web_lg
 
-from whoosh.index import create_in, open_dir
-from whoosh.qparser import QueryParser
-from whoosh.fields import Schema, ID, TEXT
+# from whoosh.qparser import QueryParser
+
 
 from util import ScheduleRequest, Params, Card, User, History
 from db import SchedulerDB
@@ -67,6 +66,7 @@ class MovingAvgScheduler:
         if not os.path.exists(self.params.whoosh_index):
             logger.info('building whoosh...')
             self.build_whoosh()
+        from whoosh.index import open_dir
         self.ix = open_dir(self.params.whoosh_index)
         '''
 
@@ -113,6 +113,9 @@ class MovingAvgScheduler:
         self.db.delete_history(user_id=user_id)
 
     def build_whoosh(self):
+        from whoosh.fields import Schema, ID, TEXT
+        from whoosh.index import create_in
+
         if not os.path.exists(self.params.whoosh_index):
             os.mkdir(self.params.whoosh_index)
         schema = Schema(
@@ -130,6 +133,16 @@ class MovingAvgScheduler:
                 answer=q['answer']
             )
         writer.commit()
+
+    def embed(self, cards: List[Card]):
+        texts = [c.text for c in cards]
+        texts = (self.vocab.doc2bow(x) for x in nlp.pipe(texts))
+        # need to set minimum_probability to a negative value
+        # to prevent gensim output skipping topics
+        doc_topic_dists = self.lda.get_document_topics(texts, minimum_probability=-1)
+        for card, dist in zip(cards, doc_topic_dists):
+            # dist is something like [(d_i, i)]
+            card.qrep = np.asarray([d_i for i, d_i in dist])
 
     def get_card(self, request: ScheduleRequest) -> Card:
         '''get card from db, insert if new'''
@@ -154,16 +167,6 @@ class MovingAvgScheduler:
 
         self.db.add_card(card)
         return card
-
-    def embed(self, cards: List[Card]):
-        texts = [c.text for c in cards]
-        texts = (self.vocab.doc2bow(x) for x in nlp.pipe(texts))
-        # need to set minimum_probability to a negative value
-        # to prevent gensim output skipping topics
-        doc_topic_dists = self.lda.get_document_topics(texts, minimum_probability=-1)
-        for card, dist in zip(cards, doc_topic_dists):
-            # dist is something like [(d_i, i)]
-            card.qrep = np.asarray([d_i for i, d_i in dist])
 
     def get_cards(self, requests: List[ScheduleRequest]) -> List[Card]:
         new_cards, cards = [], []
@@ -391,7 +394,7 @@ class MovingAvgScheduler:
             card_id=card_selected.card_id,
             response='PLACEHOLDER',
             judgement='PLACEHOLDER',
-            user_snapshot=user.to_snapshot(),
+            user_snapshot=json.dumps(user.pack()),
             scheduler_snapshot=json.dumps(self.params.__dict__),
             card_ids=json.dumps([x.card_id for x in cards]),
             scheduler_output=json.dumps({'order': order, 'rationale': rationale}),

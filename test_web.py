@@ -7,10 +7,12 @@ import pickle
 import requests
 import textwrap
 import logging
-import numpy as np
-from datetime import timedelta
+from datetime import datetime, timedelta
 from collections import defaultdict
-from util import parse_date
+
+from scheduler import MovingAvgScheduler
+from util import parse_date, ScheduleRequest
+from retention import RetentionModel
 
 logging.basicConfig(filename='test_web.log', filemode='w', level=logging.INFO)
 
@@ -32,15 +34,42 @@ with open('data/jeopardy_310326_question_player_pairs_20190612.pkl', 'rb') as f:
 with open('data/diagnostic_questions.pkl', 'rb') as f:
     diagnostic_cards = pickle.load(f)
 
-estimate = {}
 
-def get_result(card):
-    if card['question_id'] not in estimate:
-        record_id = karl_to_question_id[int(card['question_id'])]
-        prob = (records_df[records_df.question_id == record_id]['correct'] / 2 + 0.5).mean()
-        estimate[card['question_id']] = prob
-    coin_flip = np.random.binomial(1, prob)
-    return 'correct' if coin_flip == 1 else 'wrong'
+# model = RetentionModel()
+scheduler = MovingAvgScheduler(db_filename='db_test_web.sqlite')
+
+
+def get_result(card: dict, date: datetime):
+    user_id = 'test_web_dummy'
+    request = ScheduleRequest(
+        text=card['text'],
+        date=str(date),
+        answer=card['answer'],
+        category=card['category'],
+        user_id=user_id,
+        question_id=card['question_id'],
+    )
+    user = scheduler.get_user(user_id)
+    r = requests.post('http://127.0.0.1:8000/api/karl/get_card',
+                      data=json.dumps(request))
+    card = json.loads(r.text)
+    card = scheduler.get_card(request)
+    # result = 'correct' if model.predict(user, card) else 'wrong'
+
+    # initial probablity=0.5
+    if card.card_id not in user.last_study_date:
+        prob = 0.5
+
+    # after each study, no matter the result, probability=1
+    prob = 1
+
+    # exponential forgetting curve parameterized by number of repetition
+    alpha = user.sm2_repetition[
+
+    # if repeated within 30 minutes, return true
+    if (date - user.last_study_date).seconds 
+    return result
+
 
 def schedule_and_update(cards, date):
     cards[0]['date'] = str(date)
@@ -53,7 +82,7 @@ def schedule_and_update(cards, date):
     card_selected = cards[order[0]]
     card_id = card_selected['question_id']
     if 'label' not in card_selected:
-        card_selected['label'] = get_result(card_selected)
+        card_selected['label'] = get_result(card_selected, date)
 
     card_selected['date'] = str(date)
     card_selected['history_id'] = 'dummy_{}_{}'.format(card_id, str(date))
@@ -88,6 +117,7 @@ def schedule_and_update(cards, date):
             logging.info('{: <8} : {}'.format(key, value))
     return schedule_outputs, update_outputs
 
+
 def repeat(cards):
     card = cards[0]
     card['user_id'] = 'dummy'
@@ -96,6 +126,7 @@ def repeat(cards):
         current_date = start_date + timedelta(days=1)
         schedule_outputs, update_outputs = schedule_and_update([card], current_date)
         logging.info(str(days) + ' ----------------------')
+
 
 def regular(cards):
     for i, card in enumerate(cards):
@@ -112,6 +143,7 @@ def regular(cards):
         logging.info('\n\n')
         logging.info(str(days) + ' ----------------------')
         logging.info('\n\n')
+
 
 def restore_params():
     params = {

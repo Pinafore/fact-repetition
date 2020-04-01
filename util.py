@@ -32,6 +32,46 @@ class Card:
     # but that can be quickly inferred from History table
     results: List[bool] = field(default_factory=list)
 
+    @classmethod
+    def unpack(cls, r):
+        fields = [
+            'card_id',
+            'text',
+            'answer',
+            'category',
+            'qrep',
+            'skill',
+            'results'
+        ]
+
+        if isinstance(r, str):
+            r = json.loads(r)
+
+        if isinstance(r, dict):
+            r = [r[f] for f in fields]
+
+        return Card(
+            card_id=r[0],
+            text=r[1],
+            answer=r[2],
+            category=r[3],
+            qrep=np.array(json.loads(r[4])),
+            skill=np.array(json.loads(r[5])),
+            results=json.loads(r[6])
+        )
+
+    def pack(self):
+        x = self
+        return (
+            x.card_id,
+            x.text,
+            x.answer,
+            x.category,
+            json.dumps(x.qrep.tolist()),
+            json.dumps(x.skill.tolist()),
+            json.dumps(x.results)
+        )
+
 
 class ScheduleRequest(BaseModel):
     text: str
@@ -96,44 +136,66 @@ class User:
     # qid -> number of times user and qid incorrectly
     count_wrong_before: Dict[str, int] = field(default_factory=dict)
 
-    def to_snapshot(self):
-        x = self.__dict__.copy()
-        # user_id: str
-        x['qrep'] = [q.tolist() for q in x['qrep']]
-        x['skill'] = [q.tolist() for q in x['skill']]
-        # category: str
-        x['last_study_date'] = {k: str(v) for k, v in x['last_study_date'].items()}
-        # leitner_box: Dict[str, int]
-        x['leitner_scheduled_date'] = {k: str(v) for k, v in x['leitner_scheduled_date'].items()}
-        # sm2_efactor: Dict[str, float]
-        # sm2_interval: Dict[str, float]
-        # sm2_repetition: Dict[str, int]
-        x['sm2_scheduled_date'] = {k: str(v) for k, v in x['sm2_scheduled_date'].items()}
-        # results: List[bool]
-        # count_correct_before: Dict[str, int]
-        # count_wrong_before: Dict[str, int]
-        return json.dumps(x)
-
-    @classmethod
-    def from_snapshot(cls, s):
-        x = json.loads(s)
-        return User(
-            user_id=x['user_id'],
-            qrep=[np.array(q) for q in x['qrep']],
-            skill=[np.array(q) for q in x['skill']],
-            category=x['category'],
-            last_study_date={k: parse_date(v) for k, v in x['last_study_date'].items()},
-            leitner_box=x['leitner_box'],
-            leitner_scheduled_date={k: parse_date(v) for k, v in x['leitner_scheduled_date'].items()},
-            sm2_efactor=x['sm2_efactor'],
-            sm2_interval=x['sm2_interval'],
-            sm2_repetition=x['sm2_repetition'],
-            sm2_scheduled_date={k: parse_date(v) for k, v in x['sm2_scheduled_date'].items()},
-            results=x['results'],
-            count_correct_before=x['count_correct_before'],
-            count_wrong_before=x['count_wrong_before']
+    def pack(self):
+        x = self
+        return (
+            x.user_id,
+            json.dumps([q.tolist() for q in x.qrep]),
+            json.dumps([q.tolist() for q in x.skill]),
+            x.category,
+            json.dumps({k: str(v) for k, v in x.last_study_date.items()}),
+            json.dumps(x.leitner_box),
+            json.dumps({k: str(v) for k, v in x.leitner_scheduled_date.items()}),
+            json.dumps(x.sm2_efactor),
+            json.dumps(x.sm2_interval),
+            json.dumps(x.sm2_repetition),
+            json.dumps({k: str(v) for k, v in x.sm2_scheduled_date.items()}),
+            json.dumps(x.results),
+            json.dumps(x.count_correct_before),
+            json.dumps(x.count_wrong_before),
         )
 
+    @classmethod
+    def unpack(cls, r):
+        fields = [
+            'user_id',
+            'qrep',
+            'skill',
+            'category',
+            'last_study_date',
+            'leitner_box',
+            'leitner_scheduled_date',
+            'sm2_efactor',
+            'sm2_interval',
+            'sm2_repetition',
+            'sm2_scheduled_date',
+            'results',
+            'count_correct_before',
+            'count_wrong_before'
+        ]
+
+        if isinstance(r, str):
+            r = json.loads(r)
+
+        if isinstance(r, dict):
+            r = [r[f] for f in fields]
+
+        return User(
+            user_id=r[0],
+            qrep=[np.array(x) for x in json.loads(r[1])],
+            skill=[np.array(x) for x in json.loads(r[2])],
+            category=r[3],
+            last_study_date={k: parse_date(v) for k, v in json.loads(r[4]).items()},
+            leitner_box=json.loads(r[5]),
+            leitner_scheduled_date={k: parse_date(v) for k, v in json.loads(r[6]).items()},
+            sm2_efactor=json.loads(r[7]),
+            sm2_interval=json.loads(r[8]),
+            sm2_repetition=json.loads(r[9]),
+            sm2_scheduled_date={k: parse_date(v) for k, v in json.loads(r[10]).items()},
+            results=json.loads(r[11]),
+            count_correct_before=json.loads(r[12]),
+            count_wrong_before=json.loads(r[13]),
+        )
 
 # class Flashcard(BaseModel):
 #     text: str

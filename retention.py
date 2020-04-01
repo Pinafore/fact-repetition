@@ -8,11 +8,10 @@ import pickle
 import codecs
 import argparse
 import itertools
-import functools
 import numpy as np
 import pandas as pd
 import multiprocessing
-from collections import defaultdict
+from tqdm import tqdm
 from joblib import Parallel, delayed
 from datetime import datetime
 
@@ -27,142 +26,101 @@ from util import User, Card
 
 
 def apply_parallel(f, groupby):
-    return Parallel(n_jobs=multiprocessing.cpu_count())(delayed(f)(group) for name, group in groupby)
+    return Parallel(n_jobs=multiprocessing.cpu_count())(
+        delayed(f)(group) for name, group in tqdm(groupby))
 
 
-def process_log_line(x):
-    '''Process a single line of the log'''
-    obj = x['object']
-    date = datetime.strptime(x['date'][:-6], '%a %b %d %Y %H:%M:%S %Z%z')
-    relative_position = obj['time_elapsed'] / obj['time_remaining']
-    return [date,
-            obj['guess'],
-            obj['qid'],
-            obj['time_elapsed'],
-            obj['time_remaining'],
-            relative_position,
-            obj['ruling'],
-            obj['user']['id']],\
-        obj['qid'],\
-        obj['question_text']
+def load_protobowl():
+    log_dir = '/fs/clip-quiz/shifeng/karl/data/protobowl/protobowl-042818.log'
+    raw_df_dir = '/fs/clip-quiz/shifeng/karl/data/protobowl/protobowl-042818.log.h5'
+    train_df_dir = '/fs/clip-quiz/shifeng/karl/data/protobowl/protobowl-042818.log.train.h5'
+    test_df_dir = '/fs/clip-quiz/shifeng/karl/data/protobowl/protobowl-042818.log.test.h5'
+    questions_dir = '/fs/clip-quiz/shifeng/karl/data/protobowl/protobowl-042818.log.questions.pkl'
+    if os.path.exists(train_df_dir) and os.path.exists(test_df_dir):
+        with pd.HDFStore(train_df_dir) as f:
+            train_df = f['data']
+        with pd.HDFStore(test_df_dir) as f:
+            test_df = f['data']
+        return {'train': train_df, 'test': test_df}
 
-
-# remove duplicate records
-def remove_duplicate(df_grouped, uid):
-    '''For each user, only take the first record for each question'''
-    group = df_grouped.get_group(uid)
-    user_questions = set()
-    index = group.date.sort_values()
-    rows = []
-    for _, row in group.loc[index.index].iterrows():
-        if row.qid in user_questions:
-            continue
-        user_questions.add(row.qid)
-        rows.append(row)
-    for j, row in enumerate(rows):
-        rows[j].user_n_records = len(rows)
-    return rows
-
-
-def load_protobowl(
-        protobowl_dir='data/protobowl/protobowl-042818.log',
-        min_user_questions=20,
-        get_questions=False):
-    '''Parse protobowl log, return buzz data and questions.
-    Filter users that answered less than `min_user_questions` questions.
-    Remove duplicates: for each user, only keep the first record for each
-    question.
-
-    Args
-        protobowl_dir: json log
-        min_user_questions: minimum number of questions answered
-    Return
-        df: dataframe of buzzing records
-        questions: protobowl questions
-    '''
-    df_dir = protobowl_dir + '.h5'
-    question_dir = protobowl_dir + '.questions.pkl'
-
-    if os.path.exists(df_dir) and os.path.exists(df_dir):
-        with pd.HDFStore(df_dir) as store:
-            df = store['data']
-        with open(question_dir, 'rb') as f:
-            questions = pickle.load(f)
-        if get_questions:
-            return df, questions
-        else:
-            return df
-
-    # parse protobowl json log
-    data = []
-    count = 0
-    user_questions = defaultdict(set)
-    questions = dict()
-    with codecs.open(protobowl_dir, 'r', 'utf-8') as f:
-        line = f.readline()
-        while line is not None:
-            line = line.strip()
-            if len(line) < 1:
-                break
-            while not line.endswith('}}'):
-                _line = f.readline()
-                if _line is None:
-                    break
-                line += _line.strip()
-            try:
-                line = json.loads(line)
-            except ValueError:
-                line = f.readline()
-                if line is None:
-                    break
-                continue
-            count += 1
-            if count % 10000 == 0:
-                sys.stderr.write('\rdone: {}/5130000'.format(count))
-            x, qid, question_text = process_log_line(line)
-            if qid not in questions:
-                questions[qid] = question_text
-            user_questions[x[-1]].add(qid)  # x[-1] is uid
-            data.append(x)
-            line = f.readline()
-
-    # filter users without enough questions
-    filtered_data = []
-    for x in data:
-        uid = x[-1]
-        if len(user_questions[uid]) >= min_user_questions:
-            x.append(len(user_questions[uid]))
-            filtered_data.append(x)
-
-    df = pd.DataFrame(
-        filtered_data,
-        columns=['date', 'guess', 'qid', 'time_elapsed', 'time_remaining',
-                 'relative_position', 'result', 'uid', 'user_n_records'])
-
-    df_grouped = df.groupby('uid')
-    uids = list(df_grouped.groups.keys())
-    pool = multiprocessing.Pool(8)
-    _remove_duplicate = functools.partial(remove_duplicate, df_grouped)
-    user_rows = pool.map(_remove_duplicate, uids)
-    df = pd.DataFrame(list(itertools.chain(*user_rows)), columns=df.columns)
-    df_grouped = df.groupby('uid')
-
-    print('{} users'.format(len(df_grouped)))
-    print('{} records'.format(len(df)))
-    print('{} questions'.format(len(set(df.qid))))
-
-    # save
-    with pd.HDFStore(df_dir) as store:
-        store['data'] = df
-    with open(question_dir, 'wb') as f:
-        pickle.dump(questions, f)
-    if get_questions:
-        return df, questions
+    if os.path.exists(raw_df_dir):
+        with pd.HDFStore(raw_df_dir) as f:
+            df = f['data']
     else:
-        return df
+        # parse protobowl json log
+        data = []
+        line_count = 0
+        questions = dict()  # qid -> text
+        pbar = tqdm(total=5137085)
+        with codecs.open(log_dir, 'r', 'utf-8') as f:
+            line = f.readline()
+            pbar.update(1)
+            while line is not None:
+                line = line.strip()
+                if len(line) < 1:
+                    break
+                while not line.endswith('}}'):
+                    _line = f.readline()
+                    pbar.update(1)
+                    if _line is None:
+                        break
+                    line += _line.strip()
+                try:
+                    line = json.loads(line)
+                except ValueError:
+                    line = f.readline()
+                    pbar.update(1)
+                    if line is None:
+                        break
+                    continue
+                line_count += 1
+                if line_count % 10000 == 0:
+                    sys.stderr.write('\rdone: {}/5130000'.format(line_count))
+
+                obj = line['object']
+                date = datetime.strptime(line['date'][:-6], '%a %b %d %Y %H:%M:%S %Z%z')
+                relative_position = obj['time_elapsed'] / obj['time_remaining']
+
+                data.append((
+                    date, obj['qid'], obj['user']['id'],
+                    relative_position, obj['guess'], obj['ruling']))
+
+                if obj['qid'] not in questions:
+                    questions[obj['qid']] = obj['question_text']
+
+                line = f.readline()
+                pbar.update(1)
+        pbar.close()
+
+        df = pd.DataFrame(
+            data, columns=['date', 'qid', 'uid', 'buzzing_position', 'guess', 'result'])
+
+        with pd.HDFStore(raw_df_dir) as f:
+            f['data'] = df
+
+        with open(questions_dir, 'wb') as f:
+            pickle.dump(questions, f)
+
+    print('remove users who answered fewer than 20 questions')
+    df = df.groupby('uid').filter(lambda x: len(x.groupby('qid')) >= 20)
+
+    print('remove duplicate records within 2hr then split')
+    train_df, test_df = filter_by_time_and_split(df)
+
+    # save dataframe
+    with pd.HDFStore(train_df_dir) as f:
+        f['data'] = train_df
+    with pd.HDFStore(test_df_dir) as f:
+        f['data'] = test_df
+
+    print(len(set(df.uid)), 'users')
+    print(len(set(df.qid)), 'questions')
+    print(len(df), 'records')
+
+    return {'train': train_df, 'test': test_df}
 
 
-def filter_group_by_time(group):
+def group_filter_by_time_and_split(group):
     # deduplicate uid + qid group by time
     # for all records with the same uid and qid, only keep the first record
     # every two hours, returns a list of indices to be dropped
@@ -178,19 +136,8 @@ def filter_group_by_time(group):
             current_date = date
     return index_to_drop
 
-def filter_df_by_time(df):
-    '''
-    Data construction
-    - group records by user, for each user:
-        - remove duplicate questions within 2hr
-        - split by time
-        - sort by time and generate features
-    - group records by question, for each question:
-        - group by user, for each user
-            - only keep the first record every 2hr
-        - split users randomly, for each user
-            - sort records by time, generate features
-    '''
+
+def filter_by_time_and_split(df):
     dedup_index_dir = 'data/protobowl/dedup_2hr_index.json'
     if os.path.exists(dedup_index_dir):
         print('loading drop index')
@@ -200,7 +147,8 @@ def filter_df_by_time(df):
         # this will take a while
         print('creating drop index')
         records_by_qid_uid = df.groupby(['qid', 'uid'])
-        index_to_drop_list = apply_parallel(filter_group_by_time, records_by_qid_uid)
+        index_to_drop_list = apply_parallel(group_filter_by_time_and_split,
+                                            records_by_qid_uid)
         index_to_drop = list(itertools.chain(*index_to_drop_list))
         with open(dedup_index_dir, 'w') as f:
             json.dump(index_to_drop, f)
@@ -213,16 +161,20 @@ def filter_df_by_time(df):
     test_index = list(itertools.chain(*[records_by_uid.get_group(uid).index.tolist() for uid in test_uids]))
     train_df = df.loc[train_index]
     test_df = df.loc[test_index]
-    return {'train': train_df, 'test': test_df}
+    return train_df, test_df
+
 
 def count_features(group_of_uid):
     # for each user, order records by date, then create
     # times_seen_correct, times_seen_wrong
     index = []
     count_correct, count_wrong = [], []  # list of feature value
-    count_correct_of_qid = defaultdict(lambda: 0)
-    count_wrong_of_qid = defaultdict(lambda: 0)
+    count_correct_of_qid, count_wrong_of_qid = {}, {}
     for row in group_of_uid.sort_values('date').itertuples():
+        if row.qid not in count_correct_of_qid:
+            count_correct_of_qid[row.qid] = 0
+        if row.qid not in count_wrong_of_qid:
+            count_wrong_of_qid[row.qid] = 0
         index.append(row.Index)
         count_correct.append(count_correct_of_qid[row.qid])
         count_wrong.append(count_wrong_of_qid[row.qid])
@@ -231,6 +183,7 @@ def count_features(group_of_uid):
         else:
             count_wrong_of_qid[row.qid] += 1
     return index, count_correct, count_wrong
+
 
 def featurize(df):
     df['result_binary'] = df['result'].apply(lambda x: 1 if x else 0)
@@ -271,6 +224,7 @@ def featurize(df):
     y = df['result_binary'].to_numpy()
     return x, y
 
+
 class RetentionDataset(torch.utils.data.Dataset):
 
     def __init__(self, fold='train'):
@@ -282,9 +236,9 @@ class RetentionDataset(torch.utils.data.Dataset):
         if os.path.exists(x_dir) and os.path.exists(y_dir):
             x, y = np.load(x_dir), np.load(y_dir)
         else:
-            x, y = featurize(filter_df_by_time(load_protobowl())[fold])
-            np.save(x_dir, self.x)
-            np.save(y_dir, self.y)
+            x, y = featurize(load_protobowl()[fold])
+            np.save(x_dir, x)
+            np.save(y_dir, y)
         self.x = x.astype(np.float32)
         self.y = y.astype(int)
         # TODO get statistics from data instead of hard code
@@ -462,4 +416,5 @@ def unit_test():
 
 if __name__ == '__main__':
     # main()
-    unit_test()
+    # unit_test()
+    df = load_protobowl()

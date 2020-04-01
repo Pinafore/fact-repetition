@@ -144,14 +144,14 @@ class TestDB(unittest.TestCase):
             card_id=card.card_id,
             response='User Guess',
             judgement='wrong',
-            user_snapshot=user.to_snapshot(),
+            user_snapshot=json.dumps(user.pack()),
             scheduler_snapshot=json.dumps(params.__dict__),
             card_ids=json.dumps([1, 2, 3, 4, 5]),
             scheduler_output='(awd, awd, awd)',
             date=datetime.now())
         self.db.add_history(history)
         returned_history = self.db.get_history(old_history_id)
-        returned_user = User.from_snapshot(returned_history.user_snapshot)
+        returned_user = User.unpack(returned_history.user_snapshot)
         self.assert_user_equal(user, returned_user)
         new_history_id = 'real_history_id'
         history.__dict__.update({
@@ -160,7 +160,7 @@ class TestDB(unittest.TestCase):
         })
         self.db.update_history(old_history_id, history)
         returned_history = self.db.get_history(new_history_id)
-        returned_user = User.from_snapshot(returned_history.user_snapshot)
+        returned_user = User.unpack(returned_history.user_snapshot)
         self.assertEqual(returned_history.history_id, new_history_id)
         self.assert_user_equal(user, returned_user)
         self.assertFalse(self.db.check_history(old_history_id))

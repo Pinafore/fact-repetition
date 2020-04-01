@@ -13,8 +13,11 @@ from scheduler import MovingAvgScheduler
 app = FastAPI()
 scheduler = MovingAvgScheduler()
 
+class UserID(BaseModel):
+    user_id: str = None
+
 @app.post('/api/karl/schedule')
-def karl_schedule(requests: List[ScheduleRequest]):
+def schedule(requests: List[ScheduleRequest]):
     # TODO assuming single user single date
     date = datetime.now()
     if requests[0].date is not None:
@@ -22,7 +25,7 @@ def karl_schedule(requests: List[ScheduleRequest]):
     return scheduler.schedule(requests, date)
 
 @app.post('/api/karl/update')
-def karl_update(requests: List[ScheduleRequest]):
+def update(requests: List[ScheduleRequest]):
 
     # TODO assuming single user single date
     date = datetime.now()
@@ -30,21 +33,26 @@ def karl_update(requests: List[ScheduleRequest]):
         date = parse_date(requests[0].date)
     return scheduler.update(requests, date)
 
-class UserID(BaseModel):
-    user_id: str = None
-
 @app.post('/api/karl/reset')
-def karl_reset(user_id: UserID):
+def reset(user_id: UserID):
     user_id = user_id.dict().get('user_id', None)
     scheduler.reset(user_id=user_id)
 
 @app.post('/api/karl/set_params')
-def karl_set_params(params: Params):
+def set_params(params: Params):
     scheduler.set_params(params)
 
 @app.post('/api/karl/status')
-def karl_status():
+def status():
     return True
+
+@app.post('/api/karl/get_user')
+def get_user(user_id: str):
+    return scheduler.get_user(user_id).pack()
+
+@app.post('/api/karl/get_card')
+def get_card(request: ScheduleRequest):
+    return scheduler.get_card(request).pack()
 
 @atexit.register
 def finalize_db():

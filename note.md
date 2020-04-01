@@ -3,6 +3,10 @@
 # 03-31-2020
 - precompute next step
 - add to features: previous result, one before previous result
+- count_correct_before and count_wrong_before are likely wrong. the protobowl
+  loader i wrote for quizbowl already filter repated appearances of (uid, qid),
+  so all count_corret_before and count_wrong_before should be 0
+- update load_protobowl and forward to qb
 
 ## 03-29-2020
 - order cards in leitner box by study time
