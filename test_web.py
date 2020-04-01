@@ -8,10 +8,8 @@ import requests
 import textwrap
 import logging
 from datetime import datetime, timedelta
-from collections import defaultdict
 
-from scheduler import MovingAvgScheduler
-from util import parse_date, ScheduleRequest
+from util import parse_date, ScheduleRequest, Card, User
 from retention import RetentionModel
 
 logging.basicConfig(filename='test_web.log', filemode='w', level=logging.INFO)
@@ -27,122 +25,89 @@ params = {
     'decay_qrep': 0.9,
 }
 
-with open('data/jeopardy_358974_questions_20190612.pkl', 'rb') as f:
-    karl_to_question_id = pickle.load(f).to_dict()['question_id']
-with open('data/jeopardy_310326_question_player_pairs_20190612.pkl', 'rb') as f:
-    records_df = pickle.load(f)
 with open('data/diagnostic_questions.pkl', 'rb') as f:
     diagnostic_cards = pickle.load(f)
 
+USER_ID = 'test_web_dummy'
 
-# model = RetentionModel()
-scheduler = MovingAvgScheduler(db_filename='db_test_web.sqlite')
 
+model = RetentionModel()
 
 def get_result(card: dict, date: datetime):
-    user_id = 'test_web_dummy'
     request = ScheduleRequest(
         text=card['text'],
         date=str(date),
         answer=card['answer'],
         category=card['category'],
-        user_id=user_id,
+        user_id=USER_ID,
         question_id=card['question_id'],
     )
-    user = scheduler.get_user(user_id)
-    r = requests.post('http://127.0.0.1:8000/api/karl/get_card',
-                      data=json.dumps(request))
-    card = json.loads(r.text)
-    card = scheduler.get_card(request)
-    # result = 'correct' if model.predict(user, card) else 'wrong'
+    r = requests.post('http://127.0.0.1:8000/api/karl/get_card', data=json.dumps(request.__dict__))
+    card = Card.unpack(json.loads(r.text))
 
-    # initial probablity=0.5
-    if card.card_id not in user.last_study_date:
-        prob = 0.5
+    r = requests.post('http://127.0.0.1:8000/api/karl/get_user', data=json.dumps({'user_id': USER_ID}))
+    user = User.unpack(json.loads(r.text))
 
-    # after each study, no matter the result, probability=1
-    prob = 1
-
-    # exponential forgetting curve parameterized by number of repetition
-    alpha = user.sm2_repetition[
-
-    # if repeated within 30 minutes, return true
-    if (date - user.last_study_date).seconds 
+    result = 'correct' if model.predict(user, card) else 'wrong'
     return result
+
+    # # initial probablity=0.5
+    # if card.card_id not in user.last_study_date:
+    #     prob = 0.5
+
+    # # after each study, no matter the result, probability=1
+    # prob = 1
+
+    # # exponential forgetting curve parameterized by number of repetition
+    # alpha = user.sm2_repetition[
+
+    # # if repeated within 30 minutes, return true
+    # if (date - user.last_study_date).seconds
+    # return result
 
 
 def schedule_and_update(cards, date):
     cards[0]['date'] = str(date)
-    r = requests.post('http://127.0.0.1:8000/api/karl/schedule',
-                      data=json.dumps(cards))
+    for card in cards:
+        card['date'] = str(date)
+
+    r = requests.post('http://127.0.0.1:8000/api/karl/schedule', data=json.dumps(cards))
     schedule_outputs = json.loads(r.text)
     order = schedule_outputs['order']
-    detail_schedule = schedule_outputs['detail']
+    schedule_outputs['detail']
 
-    card_selected = cards[order[0]]
-    card_id = card_selected['question_id']
-    if 'label' not in card_selected:
-        card_selected['label'] = get_result(card_selected, date)
+    card = cards[order[0]]
+    card['label'] = get_result(card, date)
 
-    card_selected['date'] = str(date)
-    card_selected['history_id'] = 'dummy_{}_{}'.format(card_id, str(date))
-    r = requests.post('http://127.0.0.1:8000/api/karl/update',
-                      data=json.dumps([card_selected]))
+    card['history_id'] = 'dummy_{}_{}'.format(card['question_id'], str(date))
+    r = requests.post('http://127.0.0.1:8000/api/karl/update', data=json.dumps([card]))
     update_outputs = json.loads(r.text)
-    detail_update = update_outputs['detail']
 
-    logging.info('{: <8} : {}'.format('card_id', card_id))
-    logging.info('{: <8} : {}'.format('result', card_selected['label']))
-    logging.info('{: <8} : {}'.format('text', textwrap.fill(
-        card_selected['text'], width=50, subsequent_indent=' ' * 11)))
-    logging.info('{: <8} : {}'.format('answer', card_selected['answer']))
-    logging.info('{: <8} : {}'.format('category', card_selected['category']))
+    print(str(date))
+    print('    {: <16} : {}'.format('card_id', card['question_id']))
+    print('    {: <16} : {}'.format('result', card['label']))
+    print('    {: <16} : {}'.format('text', textwrap.fill(
+        card['text'], width=50, subsequent_indent=' ' * 23)))
+    print('    {: <16} : {}'.format('answer', card['answer']))
+    print('    {: <16} : {}'.format('category', card['category']))
 
-    for key, value in detail_schedule.items():
+    for key, value in schedule_outputs['detail'].items():
         if key in params:
-            logging.info('{: <8} : {:.4f} x {:.2f}'.format(key, value, params[key]))
+            print('    {: <16} : {:.4f} x {:.2f}'.format(key, value, params[key]))
         elif isinstance(value, float):
-            logging.info('{: <8} : {:.4f}'.format(key, value))
-        else:
-            logging.info('{: <8} : {}'.format(key, value))
+            print('    {: <16} : {:.4f}'.format(key, value))
+        elif isinstance(value, int) or isinstance(value, str):
+            print('    {: <16} : {}'.format(key, value))
 
-    logging.info('---')
-
-    for key, value in detail_update.items():
+    for key, value in update_outputs.items():
         if key in params:
-            logging.info('{: <8} : {:.4f} x {:.2f}'.format(key, value, params[key]))
+            print('    {: <16} : {:.4f} x {:.2f}'.format(key, value, params[key]))
         elif isinstance(value, float):
-            logging.info('{: <8} : {:.4f}'.format(key, value))
-        else:
-            logging.info('{: <8} : {}'.format(key, value))
+            print('    {: <16} : {:.4f}'.format(key, value))
+        elif isinstance(value, int) or isinstance(value, str):
+            print('    {: <16} : {}'.format(key, value))
+
     return schedule_outputs, update_outputs
-
-
-def repeat(cards):
-    card = cards[0]
-    card['user_id'] = 'dummy'
-    start_date = parse_date('2028-06-1 18:27:08.172341')
-    for days in range(10):
-        current_date = start_date + timedelta(days=1)
-        schedule_outputs, update_outputs = schedule_and_update([card], current_date)
-        logging.info(str(days) + ' ----------------------')
-
-
-def regular(cards):
-    for i, card in enumerate(cards):
-        cards[i]['user_id'] = 'dummy'
-
-    # studies 30 cards everyday
-    # keep the pool constant
-    start_date = parse_date('2028-06-1 18:27:08.172341')
-    for days in range(30):
-        for minutes in range(30):
-            current_date = start_date + timedelta(days=days) + timedelta(minutes=minutes * 3)
-            schedule_outputs, update_outputs = schedule_and_update(cards, current_date)
-            logging.info('\n\n')
-        logging.info('\n\n')
-        logging.info(str(days) + ' ----------------------')
-        logging.info('\n\n')
 
 
 def restore_params():
@@ -162,7 +127,7 @@ def restore_params():
 if __name__ == '__main__':
     cards = copy.deepcopy(diagnostic_cards[:30])
     for i, card in enumerate(cards):
-        card['user_id'] = 'dummy'
+        card['user_id'] = USER_ID
 
     params = {
         'n_topics': 10,
@@ -176,24 +141,26 @@ if __name__ == '__main__':
     }
 
     requests.post('http://127.0.0.1:8000/api/karl/set_params', data=json.dumps(params))
-    requests.post('http://127.0.0.1:8000/api/karl/reset', data=json.dumps({'user_id': 'dummy'}))
+    requests.post('http://127.0.0.1:8000/api/karl/reset', data=json.dumps({'user_id': USER_ID}))
 
     start_date = parse_date('2028-06-1 18:27:08.172341')
-    card_to_column = defaultdict(lambda: len(card_to_column))
-    for days in range(10):
-        print('day', days)
+    card_to_column = dict()
+    for days in range(4):
+        logging.info('day {}'.format(days))
         for minutes in range(30):
             current_date = start_date + timedelta(days=days) + timedelta(minutes=minutes * 3)
             schedule_outputs, update_outputs = schedule_and_update(cards, current_date)
             order = schedule_outputs['order']
-            response = update_outputs['detail']['response']
-            column_number = card_to_column[cards[order[0]]['question_id']]
-            print('{} {}{}{}'.format(
+            response = update_outputs['response']
+            card_id = cards[order[0]]['question_id']
+            if card_id not in card_to_column:
+                card_to_column[card_id] = len(card_to_column)
+            logging.info('{} {: <6} {}{}'.format(
                 current_date.strftime('%Y-%m-%d %H:%M'),
-                ' ' * column_number,
-                'o' if response == 'correct' else 'x',
-                ' ' * (len(cards) - column_number)
+                card_id,
+                ' ' * card_to_column[card_id],
+                'o' if response == 'correct' else 'x'
             ))
-        print()
+        logging.info('')
 
     restore_params()

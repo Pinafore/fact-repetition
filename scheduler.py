@@ -411,8 +411,6 @@ class MovingAvgScheduler:
         }
 
     def update(self, requests: List[ScheduleRequest], date: datetime) -> Dict:
-        t0 = datetime.now()
-
         user_to_requests = defaultdict(list)
         for i, request in enumerate(requests):
             user_to_requests[request.user_id].append(i)
@@ -428,15 +426,15 @@ class MovingAvgScheduler:
         assert len(indices) == 1
         request = requests[indices[0]]
         card = cards[indices[0]]
+        response = request.label == 'correct'
 
         detail = {
-            'user_id': user.user_id,
-            'card_id': card.card_id,
-            'answer': card.answer,
+            # 'user_id': user.user_id,
+            # 'card_id': card.card_id,
+            # 'answer': card.answer,
             'response': request.label,
-            'last_study_date': user.last_study_date.get(card.card_id, '-'),
-            'current_date': date,
-
+            # 'last_study_date': user.last_study_date.get(card.card_id, '-'),
+            # 'current_date': date,
         }
 
         tmp = {
@@ -454,13 +452,25 @@ class MovingAvgScheduler:
             user.qrep.pop(0)
 
         # update skill
-        if request.label == 'correct':
+        if response:
             user.skill.append(card.skill)
             if len(user.skill) >= MAX_QREPS:
                 user.skill.pop(0)
 
         user.category = card.category
         user.last_study_date[card.card_id] = date
+
+        # update retention features
+        user.results.append(response)
+        card.results.append(response)
+        if card.card_id not in user.count_correct_before:
+            user.count_correct_before[card.card_id] = 0
+        if card.card_id not in user.count_wrong_before:
+            user.count_wrong_before[card.card_id] = 0
+        if response:
+            user.count_correct_before[card.card_id] += 1
+        else:
+            user.count_wrong_before[card.card_id] += 1
 
         self.leitner_update(user, card, request.label)
         self.sm2_update(user, card, request.label)
@@ -491,12 +501,12 @@ class MovingAvgScheduler:
                 'date': date
             })
             self.db.update_history(temp_history_id, history)
-            self.db.update_user(user)
-            return {
-                'detail': detail
-            }
-        t1 = datetime.now()
-        logger.debug('update ' + str(t1 - t0))
+        # TODO else add_history
+
+        self.db.update_user(user)
+        self.db.update_card(card)
+
+        return detail
 
     def leitner_update(self, user: User, card: Card, response: str):
         # leitner boxes 1~10

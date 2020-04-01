@@ -47,7 +47,8 @@ def status():
     return True
 
 @app.post('/api/karl/get_user')
-def get_user(user_id: str):
+def get_user(user_id: UserID):
+    user_id = user_id.dict()['user_id']
     return scheduler.get_user(user_id).pack()
 
 @app.post('/api/karl/get_card')
