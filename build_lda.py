@@ -165,7 +165,7 @@ if __name__ == '__main__':
     parser.add_argument('--min_df', type=float, default=3)
     args = parser.parse_args()
 
-    root_dir = '/fs/clip-scratch/shifeng/karl/checkpoints/'
+    root_dir = '/fs/clip-quiz/shifeng/karl/checkpoints/'
     model_name = '{}_{}_{}_{}'.format(args.model, args.data, args.n_topics, time.time())
     checkpoint_dir = os.path.join(root_dir, model_name)
     os.mkdir(checkpoint_dir)

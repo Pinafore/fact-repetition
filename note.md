@@ -1,5 +1,12 @@
 # Improve Human Learning with Representation + Spaced Repetition
 
+# 04-01-2020
+- "point" and "10" are still in the vocab
+- check topic assignment, not just topic-word dist
+- split user by date of first appearance
+- count_correct_before is likely wrong, very large max values, double check
+x tzinfo, timezone
+
 # 03-31-2020
 - precompute next step
 - add to features: previous result, one before previous result
@@ -16,22 +23,20 @@
     - min distance (probably won't work)
 
 ## 03-27-2020
-- let's write a retention model using just several simple manual features in
+x let's write a retention model using just several simple manual features in
   pytorch. then this will replace the simplistic `get_result`
-- in simulation, the probability of the card being correct should start with
+x in simulation, the probability of the card being correct should start with
   estimated from Roger's data then grow with reptition
 
 ## 03-26-2020
 x dist_time is wrong, very large values
 x how come timedelta is negative? timedelta is negative when card.date is
   earlier than user.last_study_date[card.card_id]
-- check topic assignment, not just topic-word dist
 x maybe card date should be a field but not stored in DB, so is user date
 x flashcard should be renamed to schedule_request
 
 ## 03-25-2020
 x finalze LDA on Quizbowl
-- "point" and "10" are still in the vocab
 x improve debug string
 x make sure that commiting only at exit is fine
 x return schedule & update details via web API for debug
