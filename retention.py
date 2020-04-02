@@ -36,6 +36,7 @@ def load_protobowl():
     train_df_dir = '/fs/clip-quiz/shifeng/karl/data/protobowl/protobowl-042818.log.train.h5'
     test_df_dir = '/fs/clip-quiz/shifeng/karl/data/protobowl/protobowl-042818.log.test.h5'
     questions_dir = '/fs/clip-quiz/shifeng/karl/data/protobowl/protobowl-042818.log.questions.pkl'
+
     if os.path.exists(train_df_dir) and os.path.exists(test_df_dir):
         with pd.HDFStore(train_df_dir) as f:
             train_df = f['data']
@@ -43,10 +44,7 @@ def load_protobowl():
             test_df = f['data']
         return {'train': train_df, 'test': test_df}
 
-    if os.path.exists(raw_df_dir):
-        with pd.HDFStore(raw_df_dir) as f:
-            df = f['data']
-    else:
+    if not os.path.exists(raw_df_dir):
         # parse protobowl json log
         data = []
         line_count = 0
@@ -91,21 +89,25 @@ def load_protobowl():
                 line = f.readline()
                 pbar.update(1)
         pbar.close()
-
         df = pd.DataFrame(
             data, columns=['date', 'qid', 'uid', 'buzzing_position', 'guess', 'result'])
 
         with pd.HDFStore(raw_df_dir) as f:
             f['data'] = df
-
         with open(questions_dir, 'wb') as f:
             pickle.dump(questions, f)
+    else:
+        with pd.HDFStore(raw_df_dir) as f:
+            df = f['data']
 
     print('remove users who answered fewer than 20 questions')
     df = df.groupby('uid').filter(lambda x: len(x.groupby('qid')) >= 20)
 
-    print('remove duplicate records within 2hr then split')
-    train_df, test_df = filter_by_time_and_split(df)
+    print('remove duplicate records within n hrs')
+    df = filter_by_time(df)
+
+    print('split users by date of first appearance')
+    train_df, test_df = split_uids_by_date(df)
 
     # save dataframe
     with pd.HDFStore(train_df_dir) as f:
@@ -124,7 +126,7 @@ def group_filter_by_time_and_split(group):
     # deduplicate uid + qid group by time
     # for all records with the same uid and qid, only keep the first record
     # every two hours, returns a list of indices to be dropped
-    time_window = 60 * 60 * 2  # 2hr
+    time_window = 60 * 60 * 1  # 1hr
     group = group.sort_values('date')
     current_date = parse_date('1910-06-1 18:27:08.172341')
     index_to_drop = []
@@ -137,7 +139,7 @@ def group_filter_by_time_and_split(group):
     return index_to_drop
 
 
-def filter_by_time_and_split(df):
+def filter_by_time(df):
     dedup_index_dir = 'data/protobowl/dedup_2hr_index.json'
     if os.path.exists(dedup_index_dir):
         print('loading drop index')
@@ -153,6 +155,11 @@ def filter_by_time_and_split(df):
         with open(dedup_index_dir, 'w') as f:
             json.dump(index_to_drop, f)
     df = df.drop(index_to_drop, axis='index')
+    return df
+
+
+def split_uids_by_date(df):
+    # order users by their first appearance
     records_by_uid = df.groupby('uid')
     uids = list(records_by_uid.groups.keys())
     train_uids = uids[:int(0.7 * len(uids))]

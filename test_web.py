@@ -16,12 +16,13 @@ logging.basicConfig(filename='test_web.log', filemode='w', level=logging.INFO)
 
 params = {
     'n_topics': 10,
-    'qrep': 1.0,
-    'skill': 1.0,
-    'time': 1.0,
-    'category': 1.0,
-    'leitner': 1.0,
-    'sm2': 1.0,
+    'qrep': 3.,
+    'skill': 0,
+    'time': 1.,
+    'category': 3.,
+    'leitner': 1.,
+    'cool_down_time': 20.,
+    'sm2': 0,
     'decay_qrep': 0.9,
 }
 
@@ -83,7 +84,7 @@ def schedule_and_update(cards, date):
     r = requests.post('http://127.0.0.1:8000/api/karl/update', data=json.dumps([card]))
     update_outputs = json.loads(r.text)
 
-    print(str(date))
+    print(current_date.strftime('%Y-%m-%d-%H-%M'))
     print('    {: <16} : {}'.format('card_id', card['question_id']))
     print('    {: <16} : {}'.format('result', card['label']))
     print('    {: <16} : {}'.format('text', textwrap.fill(
@@ -110,35 +111,10 @@ def schedule_and_update(cards, date):
     return schedule_outputs, update_outputs
 
 
-def restore_params():
-    params = {
-        'n_topics': 10,
-        'qrep': 1.0,
-        'skill': 0,
-        'time': 1.0,
-        'category': 1.0,
-        'leitner': 1.0,
-        'sm2': 0,
-        'decay_qrep': 0.9,
-    }
-    requests.post('http://127.0.0.1:8000/api/karl/set_params', data=json.dumps(params))
-
-
 if __name__ == '__main__':
     cards = copy.deepcopy(diagnostic_cards[:30])
     for i, card in enumerate(cards):
         card['user_id'] = USER_ID
-
-    params = {
-        'n_topics': 10,
-        'qrep': 1.0,
-        'skill': 0,
-        'time': 0.0,
-        'category': 0,
-        'leitner': 1.0,
-        'sm2': 0,
-        'decay_qrep': 0.9,
-    }
 
     requests.post('http://127.0.0.1:8000/api/karl/set_params', data=json.dumps(params))
     requests.post('http://127.0.0.1:8000/api/karl/reset', data=json.dumps({'user_id': USER_ID}))
@@ -156,11 +132,10 @@ if __name__ == '__main__':
             if card_id not in card_to_column:
                 card_to_column[card_id] = len(card_to_column)
             logging.info('{} {: <6} {}{}'.format(
-                current_date.strftime('%Y-%m-%d %H:%M'),
+                current_date.strftime('%Y-%m-%d-%H-%M'),
                 card_id,
                 ' ' * card_to_column[card_id],
                 'o' if response == 'correct' else 'x'
             ))
         logging.info('')
-
-    restore_params()
+    # requests.post('http://127.0.0.1:8000/api/karl/set_params', data=json.dumps(params))

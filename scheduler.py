@@ -293,7 +293,7 @@ class MovingAvgScheduler:
             last_study_date = time.mktime(last_study_date.timetuple())
             delta_minutes = max(float(current_date - last_study_date) / 60, 0)
             # TODO use params instead of hard code
-            return max(10 - delta_minutes, 0)
+            return max(self.params.cool_down_time - delta_minutes, 0)
 
     def dist_qrep(self, user: User, card: Card) -> float:
         # measures topical similarity

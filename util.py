@@ -93,6 +93,7 @@ class Params(BaseModel):
     leitner: float = 1.0
     sm2: float = 1.0
     decay_qrep: float = 0.9
+    cool_down_time: float = 20.
     lda_dir: str = 'checkpoints/gensim_quizbowl_10_1585102364.5221019'
     whoosh_index: str = 'whoosh_index'
 
