@@ -85,7 +85,7 @@ class ScheduleRequest(BaseModel):
 
 
 class Params(BaseModel):
-    n_topics: int = 10
+    n_topics: int = 40
     qrep: float = 1.0
     skill: float = 1.0
     time: float = 1.0
@@ -93,8 +93,9 @@ class Params(BaseModel):
     leitner: float = 1.0
     sm2: float = 1.0
     decay_qrep: float = 0.9
+    max_qreps: int = 10
     cool_down_time: float = 20.
-    lda_dir: str = 'checkpoints/gensim_quizbowl_10_1585102364.5221019'
+    lda_dir: str = 'checkpoints/gensim_all_40_1585820469.362995'
     whoosh_index: str = 'whoosh_index'
 
 

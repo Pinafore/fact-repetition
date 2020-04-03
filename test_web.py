@@ -14,17 +14,6 @@ from retention import RetentionModel
 
 logging.basicConfig(filename='test_web.log', filemode='w', level=logging.INFO)
 
-params = {
-    'n_topics': 10,
-    'qrep': 3.,
-    'skill': 0,
-    'time': 1.,
-    'category': 3.,
-    'leitner': 1.,
-    'cool_down_time': 20.,
-    'sm2': 0,
-    'decay_qrep': 0.9,
-}
 
 with open('data/diagnostic_questions.pkl', 'rb') as f:
     diagnostic_cards = pickle.load(f)
@@ -116,7 +105,7 @@ if __name__ == '__main__':
     for i, card in enumerate(cards):
         card['user_id'] = USER_ID
 
-    requests.post('http://127.0.0.1:8000/api/karl/set_params', data=json.dumps(params))
+    # requests.post('http://127.0.0.1:8000/api/karl/set_params', data=json.dumps(params))
     requests.post('http://127.0.0.1:8000/api/karl/reset', data=json.dumps({'user_id': USER_ID}))
 
     start_date = parse_date('2028-06-1 18:27:08.172341')
@@ -138,4 +127,3 @@ if __name__ == '__main__':
                 'o' if response == 'correct' else 'x'
             ))
         logging.info('')
-    # requests.post('http://127.0.0.1:8000/api/karl/set_params', data=json.dumps(params))

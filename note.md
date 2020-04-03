@@ -5,7 +5,7 @@
 x accumulative question features
 x create both accumulative features and split records by date
 x fix mean and std in RetentionModel
-- featurizer for RetentionModel
+x featurizer for RetentionModel
 - question level -> sentence level
 
 # 04-01-2020

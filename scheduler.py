@@ -27,10 +27,6 @@ nlp.add_pipe(process, name='process', last=True)
 
 logger = logging.getLogger('scheduler')
 
-# current qrep is the discounted average of qreps of the past MAX_QREPS cards
-# TODO make it a param
-MAX_QREPS = 10
-
 
 class MovingAvgScheduler:
 
@@ -80,13 +76,12 @@ class MovingAvgScheduler:
             self.params.n_topics = json.load(f)['n_topics']
         logger.info(self.topic_words)
         # build default estimate for users
-        self.estimate_avg()
+        self.avg_user_skill_estimate = self.estimate_avg()
 
     def estimate_avg(self) -> np.ndarray:
         # estimate the average acccuracy for each component
         # use for initializing user estimate
-        with open('data/diagnostic_questions.pkl', 'rb') as f:
-            cards = pickle.load(f)
+
         estimate_file_dir = os.path.join(
             self.params.lda_dir, 'diagnostic_avg_estimate.txt')
         if os.path.exists(estimate_file_dir):
@@ -94,8 +89,20 @@ class MovingAvgScheduler:
             with open(estimate_file_dir) as f:
                 return np.array([float(x) for x in f.readlines()])
 
+        with open('data/diagnostic_questions.pkl', 'rb') as f:
+            cards = pickle.load(f)
+
         logger.info('estimate average user skill')
-        qreps = self.embed([x['text'] for x in cards])
+        cards = [Card(
+            card_id=c['question_id'],
+            text=c['text'],
+            answer=c['answer'],
+            category=c['category'],
+            qrep=None,
+            skill=None) for c in cards]
+
+        self.embed(cards)
+        qreps = [c.qrep for c in cards]
         estimates = [[] for _ in range(self.params.n_topics)]
         for card, qrep in zip(cards, qreps):
             topic_idx = np.argmax(qrep)
@@ -207,11 +214,15 @@ class MovingAvgScheduler:
         # create new user and insert to db
         k = self.params.n_topics
         qrep = np.array([1 / k for _ in range(k)])
+        print('*************')
+        print(self.params.n_topics)
+        print(k)
+        print('*************')
         new_user = User(
             user_id=user_id,
             category='HISTORY',
             qrep=[qrep],
-            skill=[self.estimate_avg()]
+            skill=[self.avg_user_skill_estimate]
         )
         self.db.add_user(new_user)
         return new_user
@@ -448,13 +459,13 @@ class MovingAvgScheduler:
 
         # update qrep
         user.qrep.append(card.qrep)
-        if len(user.qrep) >= MAX_QREPS:
+        if len(user.qrep) >= self.params.max_qreps:
             user.qrep.pop(0)
 
         # update skill
         if response:
             user.skill.append(card.skill)
-            if len(user.skill) >= MAX_QREPS:
+            if len(user.skill) >= self.params.max_qreps:
                 user.skill.pop(0)
 
         user.category = card.category
