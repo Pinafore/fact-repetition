@@ -1,16 +1,24 @@
 # Improve Human Learning with Representation + Spaced Repetition
 
+# 04-02-2020
+- gensim_all_40_1585820469.362995
+x accumulative question features
+x create both accumulative features and split records by date
+x fix mean and std in RetentionModel
+- featurizer for RetentionModel
+- question level -> sentence level
+
 # 04-01-2020
-- "point" and "10" are still in the vocab
+x "point" and "10" are still in the vocab
 - check topic assignment, not just topic-word dist
-- split user by date of first appearance
-- count_correct_before is likely wrong, very large max values, double check
+x split user by date of first appearance
+x count_correct_before is likely wrong, very large max values, double check
 x tzinfo, timezone
 
 # 03-31-2020
 - precompute next step
-- add to features: previous result, one before previous result
-- count_correct_before and count_wrong_before are likely wrong. the protobowl
+x add to features: previous result, one before previous result
+x count_correct_before and count_wrong_before are likely wrong. the protobowl
   loader i wrote for quizbowl already filter repated appearances of (uid, qid),
   so all count_corret_before and count_wrong_before should be 0
 - update load_protobowl and forward to qb
