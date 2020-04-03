@@ -214,13 +214,9 @@ class MovingAvgScheduler:
         # create new user and insert to db
         k = self.params.n_topics
         qrep = np.array([1 / k for _ in range(k)])
-        print('*************')
-        print(self.params.n_topics)
-        print(k)
-        print('*************')
         new_user = User(
             user_id=user_id,
-            category='HISTORY',
+            category='HISTORY',  # TODO don't hard code
             qrep=[qrep],
             skill=[self.avg_user_skill_estimate]
         )
@@ -284,7 +280,7 @@ class MovingAvgScheduler:
         for q in user.skill:
             skills.append(weight * q)
             weights.append(weight)
-            weight *= 0.9  # TODO use params instead of hard-coded
+            weight *= self.params.decay_skill
         skill = np.sum(skills, axis=0) / np.sum(weights)
         # skill is a (vector of) probability
         skill = np.clip(skill, a_min=0.0, a_max=1.0)
@@ -303,7 +299,6 @@ class MovingAvgScheduler:
             current_date = time.mktime(date.timetuple())
             last_study_date = time.mktime(last_study_date.timetuple())
             delta_minutes = max(float(current_date - last_study_date) / 60, 0)
-            # TODO use params instead of hard code
             return max(self.params.cool_down_time - delta_minutes, 0)
 
     def dist_qrep(self, user: User, card: Card) -> float:

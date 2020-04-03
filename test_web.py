@@ -9,19 +9,16 @@ import textwrap
 import logging
 from datetime import datetime, timedelta
 
-from util import parse_date, ScheduleRequest, Card, User
+from util import parse_date, ScheduleRequest, Card, User, Params
 from retention import RetentionModel
 
 logging.basicConfig(filename='test_web.log', filemode='w', level=logging.INFO)
 
 
-with open('data/diagnostic_questions.pkl', 'rb') as f:
-    diagnostic_cards = pickle.load(f)
-
+params = Params()
 USER_ID = 'test_web_dummy'
-
-
 model = RetentionModel()
+
 
 def get_result(card: dict, date: datetime):
     request = ScheduleRequest(
@@ -34,9 +31,12 @@ def get_result(card: dict, date: datetime):
     )
     r = requests.post('http://127.0.0.1:8000/api/karl/get_card', data=json.dumps(request.__dict__))
     card = Card.unpack(json.loads(r.text))
+    print(card.results)
 
     r = requests.post('http://127.0.0.1:8000/api/karl/get_user', data=json.dumps({'user_id': USER_ID}))
     user = User.unpack(json.loads(r.text))
+    print(user.results)
+    print()
 
     result = 'correct' if model.predict(user, card) else 'wrong'
     return result
@@ -73,11 +73,11 @@ def schedule_and_update(cards, date):
     r = requests.post('http://127.0.0.1:8000/api/karl/update', data=json.dumps([card]))
     update_outputs = json.loads(r.text)
 
+    '''
     print(current_date.strftime('%Y-%m-%d-%H-%M'))
     print('    {: <16} : {}'.format('card_id', card['question_id']))
     print('    {: <16} : {}'.format('result', card['label']))
-    print('    {: <16} : {}'.format('text', textwrap.fill(
-        card['text'], width=50, subsequent_indent=' ' * 23)))
+    print('    {: <16} : {}'.format('text', textwrap.fill(card['text'], width=50, subsequent_indent=' ' * 23)))
     print('    {: <16} : {}'.format('answer', card['answer']))
     print('    {: <16} : {}'.format('category', card['category']))
 
@@ -96,11 +96,14 @@ def schedule_and_update(cards, date):
             print('    {: <16} : {:.4f}'.format(key, value))
         elif isinstance(value, int) or isinstance(value, str):
             print('    {: <16} : {}'.format(key, value))
+    '''
 
     return schedule_outputs, update_outputs
 
 
 if __name__ == '__main__':
+    with open('data/diagnostic_questions.pkl', 'rb') as f:
+        diagnostic_cards = pickle.load(f)
     cards = copy.deepcopy(diagnostic_cards[:30])
     for i, card in enumerate(cards):
         card['user_id'] = USER_ID

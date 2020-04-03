@@ -1,12 +1,17 @@
 # Improve Human Learning with Representation + Spaced Repetition
 
+# 04-03-2020
+- simple majority baselines
+- need a larger pool for simulation
+- question level -> sentence level
+- i have a feeling that the model is always predicting False
+
 # 04-02-2020
-- gensim_all_40_1585820469.362995
+x gensim_all_40_1585820469.362995
 x accumulative question features
 x create both accumulative features and split records by date
 x fix mean and std in RetentionModel
 x featurizer for RetentionModel
-- question level -> sentence level
 
 # 04-01-2020
 x "point" and "10" are still in the vocab

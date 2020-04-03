@@ -93,6 +93,7 @@ class Params(BaseModel):
     leitner: float = 1.0
     sm2: float = 1.0
     decay_qrep: float = 0.9
+    decay_skill: float = 0.9
     max_qreps: int = 10
     cool_down_time: float = 20.
     lda_dir: str = 'checkpoints/gensim_all_40_1585820469.362995'
