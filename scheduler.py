@@ -18,10 +18,11 @@ import en_core_web_lg
 # from whoosh.qparser import QueryParser
 
 
-from util import ScheduleRequest, Params, Card, User, History
 from db import SchedulerDB
-
+from util import ScheduleRequest, Params, Card, User, History
+from retention import RetentionModel
 from build_lda import process
+
 nlp = en_core_web_lg.load()
 nlp.add_pipe(process, name='process', last=True)
 
@@ -36,6 +37,7 @@ class MovingAvgScheduler:
         self.params = params
         self.db_filename = db_filename
         self.db = SchedulerDB(db_filename)
+        self.retention_model = RetentionModel()
 
         '''
         logger.info('loading question and records...')
@@ -253,17 +255,16 @@ class MovingAvgScheduler:
         return [], []
     '''
 
-    def predict_one(self, card: Card) -> float:
+    def predict_one(self, user: User, card: Card) -> float:
         # # 1. find same or similar card in records
         # cards, scores = self.retrieve(card)
         # if len(cards) > 0:
         #     return np.dot([x['prob'] for x in cards], scores)
         # # TODO 2. use model to predict
-        return 0.5
+        return self.retention_model.predict(user, [card])[0]
 
-    def predict(self, cards: List[Card]) -> List[float]:
-        # TODO batch predict here?
-        return [self.predict_one(card) for card in cards]
+    def predict(self, user: User, cards: List[Card]) -> List[float]:
+        return self.retention_model.predict(user, cards)
 
     def set_params(self, params: Params):
         self.params.__dict__.update(params)

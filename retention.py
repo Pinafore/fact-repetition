@@ -13,9 +13,10 @@ import numpy as np
 import pandas as pd
 import multiprocessing
 from tqdm import tqdm
+from typing import List
+from datetime import datetime
 from collections import defaultdict
 from joblib import Parallel, delayed
-from datetime import datetime
 
 import torch
 import torch.nn as nn
@@ -512,7 +513,7 @@ class RetentionModel:
         self.model.load_state_dict(torch.load('checkpoints/retention_model.pt'))
         self.model.eval()
 
-    def predict(self, user: User, card: Card, date=None):
+    def predict(self, user: User, cards: List[Card], date=None):
         # TODO batch version
         if date is None:
             date = datetime.now()
@@ -528,28 +529,31 @@ class RetentionModel:
         # question_count_correct
         # question_count_wrong
         # bias
-        uq_correct = user.count_correct_before.get(card.card_id, 0)
-        uq_wrong = user.count_wrong_before.get(card.card_id, 0)
-        uq_total = uq_correct + uq_wrong
-        x = np.array([
-            uq_correct,  # user_count_correct
-            uq_wrong,  # user_count_wrong
-            uq_total,  # user_count_total
-            0 if len(user.results) == 0 else np.mean(user.results),  # user_average_overall_accuracy
-            0 if uq_total == 0 else uq_correct / uq_total,  # user_average_question_accuracy
-            0 if len(user.results) == 0 else user.results[-1],  # user_previous_result
-            (date - user.last_study_date.get(card.card_id, date)).seconds / (60 * 60),  # user_gap_from_previous
-            0 if len(card.results) == 0 else np.mean(card.results),  # question_average_overall_accuracy
-            len(card.results),  # question_count_total
-            sum(card.results),  # question_count_correct
-            len(card.results) - sum(card.results),  # question_count_wrong
-            1  # bias
-        ]).astype(np.float32)
-        x = (x - self.dataset.mean) / self.dataset.std
-        x = x[np.newaxis, :]
-        x = torch.from_numpy(x).to(self.device)
-        logits = self.model.forward(x)
-        return F.softmax(logits, dim=1).detach().cpu().numpy()[0]
+        xs = []
+        for card in cards:
+            uq_correct = user.count_correct_before.get(card.card_id, 0)
+            uq_wrong = user.count_wrong_before.get(card.card_id, 0)
+            uq_total = uq_correct + uq_wrong
+            xs.append([
+                uq_correct,  # user_count_correct
+                uq_wrong,  # user_count_wrong
+                uq_total,  # user_count_total
+                0 if len(user.results) == 0 else np.mean(user.results),  # user_average_overall_accuracy
+                0 if uq_total == 0 else uq_correct / uq_total,  # user_average_question_accuracy
+                0 if len(user.results) == 0 else user.results[-1],  # user_previous_result
+                (date - user.last_study_date.get(card.card_id, date)).seconds / (60 * 60),  # user_gap_from_previous
+                0 if len(card.results) == 0 else np.mean(card.results),  # question_average_overall_accuracy
+                len(card.results),  # question_count_total
+                sum(card.results),  # question_count_correct
+                len(card.results) - sum(card.results),  # question_count_wrong
+                1  # bias
+            ])
+        xs = np.array(xs).astype(np.float32)
+        xs = (xs - self.dataset.mean) / self.dataset.std
+        xs = torch.from_numpy(xs).to(self.device)
+        logits = self.model.forward(xs)
+        # return the probability of positive
+        return F.softmax(logits, dim=1).detach().cpu().numpy()[:, 1]
 
 
 def test_wrapper():
@@ -581,7 +585,7 @@ def test_wrapper():
     )
 
     model = RetentionModel()
-    print(model.predict(user, card))
+    print(model.predict(user, [card]))
 
 
 def test_majority():
@@ -620,5 +624,5 @@ def test_majority():
 
 if __name__ == '__main__':
     # main()
-    # test_wrapper()
-    test_majority()
+    test_wrapper()
+    # test_majority()

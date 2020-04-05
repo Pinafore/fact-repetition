@@ -1,10 +1,16 @@
 # Improve Human Learning with Representation + Spaced Repetition
 
-# 04-03-2020
-- inspect weights
-- simple majority baselines
+# 04-05-2020
+x add retention model to scheduler
+- implement exponential forgetting curve
 - need a larger pool for simulation
+- use HF to embed all questions and save into numpy array
+- calibration
+- inspect weights
 - question level -> sentence level
+
+# 04-03-2020
+x simple majority baselines
 x i have a feeling that the model is always predicting False - not it's not
 
 # 04-02-2020

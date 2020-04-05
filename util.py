@@ -87,7 +87,7 @@ class ScheduleRequest(BaseModel):
 class Params(BaseModel):
     n_topics: int = 40
     qrep: float = 1.0
-    skill: float = 1.0
+    skill: float = 0.0
     time: float = 1.0
     category: float = 1.0
     leitner: float = 1.0
