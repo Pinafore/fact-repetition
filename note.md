@@ -1,10 +1,11 @@
 # Improve Human Learning with Representation + Spaced Repetition
 
 # 04-03-2020
+- inspect weights
 - simple majority baselines
 - need a larger pool for simulation
 - question level -> sentence level
-- i have a feeling that the model is always predicting False
+x i have a feeling that the model is always predicting False - not it's not
 
 # 04-02-2020
 x gensim_all_40_1585820469.362995

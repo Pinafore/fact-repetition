@@ -6,6 +6,7 @@ import sys
 import json
 import pickle
 import codecs
+import random
 import argparse
 import itertools
 import numpy as np
@@ -27,177 +28,115 @@ from util import User, Card
 
 
 def apply_parallel(f, groupby):
+    print('    apply parallel {}'.format(f.__name__))
     return Parallel(n_jobs=multiprocessing.cpu_count())(
         delayed(f)(group) for name, group in tqdm(groupby))
 
 
-def load_protobowl():
-    root_dir = '/fs/clip-quiz/shifeng/karl/data/protobowl/'
-    log_dir = root_dir + 'protobowl-042818.log'
-    raw_df_dir = root_dir + 'protobowl-042818.log.h5'
-    filtered_df_dir = root_dir + 'protobowl-042818.log.filtered.h5'
-    questions_dir = root_dir + 'protobowl-042818.log.questions.pkl'
+def get_raw_df():
+    log_dir = 'data/protobowl/protobowl-042818.log'
+    raw_df_dir = 'data/protobowl/protobowl-042818.log.h5'
+    questions_dir = 'data/protobowl/protobowl-042818.log.questions.pkl'
 
-    if os.path.exists(filtered_df_dir):
-        with pd.HDFStore(filtered_df_dir) as store:
-            df = store['data']
-        return df
+    if os.path.exists(raw_df_dir):
+        print('loading raw_df')
+        return pd.read_hdf(raw_df_dir)
 
-    if not os.path.exists(raw_df_dir):
-        # parse protobowl json log
-        data = []
-        line_count = 0
-        questions = dict()  # qid -> text
-        pbar = tqdm(total=5137085)
-        with codecs.open(log_dir, 'r', 'utf-8') as f:
-            line = f.readline()
-            pbar.update(1)
-            while line is not None:
-                line = line.strip()
-                if len(line) < 1:
+    print('generating raw_df')
+    # parse protobowl json log
+    data = []
+    line_count = 0
+    questions = dict()  # qid -> text
+    pbar = tqdm(total=5137085)
+    with codecs.open(log_dir, 'r', 'utf-8') as f:
+        line = f.readline()
+        pbar.update(1)
+        while line is not None:
+            line = line.strip()
+            if len(line) < 1:
+                break
+            while not line.endswith('}}'):
+                _line = f.readline()
+                pbar.update(1)
+                if _line is None:
                     break
-                while not line.endswith('}}'):
-                    _line = f.readline()
-                    pbar.update(1)
-                    if _line is None:
-                        break
-                    line += _line.strip()
-                try:
-                    line = json.loads(line)
-                except ValueError:
-                    line = f.readline()
-                    pbar.update(1)
-                    if line is None:
-                        break
-                    continue
-                line_count += 1
-                if line_count % 10000 == 0:
-                    sys.stderr.write('\rdone: {}/5130000'.format(line_count))
-
-                obj = line['object']
-                date = datetime.strptime(line['date'][:-6],
-                                         '%a %b %d %Y %H:%M:%S %Z%z')
-                relative_position = obj['time_elapsed'] / obj['time_remaining']
-
-                data.append((
-                    date, obj['qid'], obj['user']['id'],
-                    relative_position, obj['guess'], obj['ruling']))
-
-                if obj['qid'] not in questions:
-                    questions[obj['qid']] = obj['question_text']
-
+                line += _line.strip()
+            try:
+                line = json.loads(line)
+            except ValueError:
                 line = f.readline()
                 pbar.update(1)
-        pbar.close()
-        df = pd.DataFrame(
-            data,
-            columns=['date', 'qid', 'uid', 'buzzing_position', 'guess', 'result'])
+                if line is None:
+                    break
+                continue
+            line_count += 1
+            if line_count % 10000 == 0:
+                sys.stderr.write('\rdone: {}/5130000'.format(line_count))
 
-        with pd.HDFStore(raw_df_dir) as store:
-            store['data'] = df
-        with open(questions_dir, 'wb') as f:
-            pickle.dump(questions, f)
-    else:
-        with pd.HDFStore(raw_df_dir) as store:
-            df = store['data']
+            obj = line['object']
+            date = datetime.strptime(line['date'][:-6],
+                                     '%a %b %d %Y %H:%M:%S %Z%z')
+            relative_position = obj['time_elapsed'] / obj['time_remaining']
 
-    print('remove users who answered fewer than 10 questions')
+            data.append((
+                date, obj['qid'], obj['user']['id'],
+                relative_position, obj['guess'], obj['ruling']))
+
+            if obj['qid'] not in questions:
+                questions[obj['qid']] = obj['question_text']
+
+            line = f.readline()
+            pbar.update(1)
+    pbar.close()
+    df = pd.DataFrame(
+        data,
+        columns=['date', 'qid', 'uid', 'buzzing_position', 'guess', 'result'])
+
+    df.to_hdf(raw_df_dir, 'data')
+    with open(questions_dir, 'wb') as f:
+        pickle.dump(questions, f)
+
+    return df
+
+
+def get_filtered_df():
+    filtered_df_dir = 'data/protobowl/protobowl-042818.log.filtered.h5'
+
+    if os.path.exists(filtered_df_dir):
+        print('loading filtered_df')
+        return pd.read_hdf(filtered_df_dir)
+
+    df = get_raw_df()
+
+    print('generating filtered_df')
+    print('    remove users who answered fewer than 10 questions')
     df = df.groupby('uid').filter(lambda x: len(x.groupby('qid')) >= 10)
 
-    print('remove duplicate records within n hrs')
-    df = filter_by_time(df)
+    def _filter_by_time(group):
+        # for uid records, only keep the first qid within time frame
+        time_window = 5 * 60  # 5min
+        group = group.sort_values('date')
+        current_date = parse_date('1910-06-1 18:27:08.172341')
+        index_to_drop = []
+        for row in group.itertuples(index=True):
+            date = row.date.replace(tzinfo=None)
+            if (date - current_date).seconds <= time_window:
+                index_to_drop.append(row.Index)
+            else:
+                current_date = date
+        return index_to_drop
 
-    print(len(set(df.uid)), 'users')
-    print(len(set(df.qid)), 'questions')
-    print(len(df), 'records')
-
-    with pd.HDFStore(filtered_df_dir) as store:
-        store['data'] = df
-
-    return df
-
-
-def split_train_test(df):
-    root_dir = '/fs/clip-quiz/shifeng/karl/data/protobowl/'
-    train_df_dir = root_dir + 'protobowl-042818.log.train.h5'
-    test_df_dir = root_dir + 'protobowl-042818.log.test.h5'
-
-    if os.path.exists(train_df_dir) and os.path.exists(test_df_dir):
-        with pd.HDFStore(train_df_dir) as store:
-            train_df = store['data']
-        with pd.HDFStore(test_df_dir) as store:
-            test_df = store['data']
-        return {'train': train_df, 'test': test_df}
-
-    print('split users by date of first appearance')
-    train_df, test_df = split_uids_by_date(df)
-
-    # save dataframe
-    with pd.HDFStore(train_df_dir) as store:
-        store['data'] = train_df
-    with pd.HDFStore(test_df_dir) as store:
-        store['data'] = test_df
-
-    return train_df, test_df
-
-
-def group_filter_by_time(group):
-    # for uid records, only keep the first qid within time frame
-    time_window = 60 * 60 * 1  # 1hr
-    group = group.sort_values('date')
-    current_date = parse_date('1910-06-1 18:27:08.172341')
-    index_to_drop = []
-    for row in group.itertuples(index=True):
-        date = row.date.replace(tzinfo=None)
-        if (date - current_date).seconds <= time_window:
-            index_to_drop.append(row.Index)
-        else:
-            current_date = date
-    return index_to_drop
-
-
-def filter_by_time(df):
-    # only keep the first appearance of (uid, qid) within time frame
-    dedup_index_dir = 'data/protobowl/dedup_2hr_index.json'
-    if os.path.exists(dedup_index_dir):
-        print('loading drop index')
-        with open(dedup_index_dir) as f:
-            index_to_drop = json.load(f)
-    else:
-        # this will take a while
-        print('creating drop index')
-        index_to_drop_list = apply_parallel(group_filter_by_time,
-                                            df.groupby(['qid', 'uid']))
-        index_to_drop = list(itertools.chain(*index_to_drop_list))
-        with open(dedup_index_dir, 'w') as f:
-            json.dump(index_to_drop, f)
+    print('    remove duplicate appearances of (uid, qid) within time frame')
+    index_to_drop_list = apply_parallel(_filter_by_time, df.groupby(['qid', 'uid']))
+    index_to_drop = list(itertools.chain(*index_to_drop_list))
     df = df.drop(index_to_drop, axis='index')
+
+    df.to_hdf(filtered_df_dir, 'data')
+
     return df
 
 
-def get_first_appearance_date(group):
-    group = group.sort_values('date')
-    return group.iloc[0]['uid'], group.iloc[0]['date']
-
-
-def split_uids_by_date(df):
-    # order and split users by first appearance dates
-    df_by_uid = df.groupby('uid')
-    returns = apply_parallel(get_first_appearance_date, df_by_uid)
-    returns = sorted(returns, key=lambda x: x[1])
-    uids, first_appearance_dates = list(zip(*returns))
-    train_uids = uids[:int(len(uids) * 0.7)]
-    test_uids = uids[int(len(uids) * 0.7):]
-    train_index = list(itertools.chain(*[
-        df_by_uid.get_group(uid).index.tolist() for uid in train_uids]))
-    test_index = list(itertools.chain(*[
-        df_by_uid.get_group(uid).index.tolist() for uid in test_uids]))
-    train_df = df.loc[train_index]
-    test_df = df.loc[test_index]
-    return train_df, test_df
-
-
-def accumulative_user_features(group):
+def _user_features(group):
     # for each user, order records by date for accumulative features
     previous_date = {}
     overall_results = []  # keep track of average accuracy
@@ -259,7 +198,7 @@ def accumulative_user_features(group):
     )
 
 
-def accumulative_question_features(group):
+def _question_features(group):
     overall_results = []
     index = []
     average_overall_accuracy = []
@@ -285,47 +224,21 @@ def accumulative_question_features(group):
     )
 
 
-def featurize(df):
-    x_train_dir = 'data/protobowl/x_train.npy'
-    y_train_dir = 'data/protobowl/y_train.npy'
-    x_test_dir = 'data/protobowl/x_test.npy'
-    y_test_dir = 'data/protobowl/y_test.npy'
-    dirs = [x_train_dir, y_train_dir, x_test_dir, y_test_dir]
+def get_featurized_df():
+    featurized_df_dir = 'data/protobowl/protobowl-042818.log.features.h5'
 
-    if all(os.path.exists(d) for d in dirs):
-        x_train = np.load(x_train_dir)
-        y_train = np.load(y_train_dir)
-        x_test = np.load(x_test_dir)
-        y_test = np.load(y_test_dir)
-        return x_train, y_train, x_test, y_test
+    if os.path.exists(featurized_df_dir):
+        print('loading featurized_df')
+        return pd.read_hdf(featurized_df_dir)
 
+    df = get_filtered_df()
+
+    print('generating featurized_df')
     # result = True, False, or prompt
     df['result_binary'] = df['result'].map(lambda x: 1 if x is True else 0)
 
-    '''
-    number_of_records_by_uid = df.groupby('uid').size()
-    # df['user_count'] = df.uid.map(number_of_records_by_uid.to_dict())
-    print('average number of questions answered by each user',
-          number_of_records_by_uid.mean())
-
-    number_of_records_by_qid = df.groupby('qid').size()
-    # df['question_count'] = df.qid.map(number_of_records_by_qid.to_dict())
-    print('average number of users that answered each question',
-          number_of_records_by_qid.mean())
-
-    number_of_records_by_uid_qid = df.groupby(['uid', 'qid']).size()
-    print('average repetition of qid + uid',
-          number_of_records_by_uid_qid.mean())
-
-    accuracy_by_uid = df[['uid', 'result_binary']].groupby('uid').agg('mean').result_binary
-    # df['user_accuracy'] = df.uid.map(accuracy_by_uid.to_dict())
-    print('average user accuracy', accuracy_by_uid.mean())
-    accuracy_by_qid = df[['qid', 'result_binary']].groupby('qid').agg('mean').result_binary
-    # df['question_accuracy'] = df.qid.map(accuracy_by_qid.to_dict())
-    print('average question accuracy', accuracy_by_qid.mean())
-    '''
-
-    user_features = apply_parallel(accumulative_user_features, df.groupby('uid'))
+    print('    creating user accumulative features')
+    user_features = apply_parallel(_user_features, df.groupby('uid'))
     user_features = list(zip(*user_features))
     user_features = [itertools.chain(*x) for x in user_features]
     # convert generator to list here since it's used multiple times
@@ -333,18 +246,19 @@ def featurize(df):
     user_features = user_features[1:]  # skip index
     user_features = [{i: v for i, v in zip(user_index, f)} for f in user_features]
     user_feature_names = [
-        'user_count_correct',
-        'user_count_wrong',
-        'user_count_total',
-        'user_average_overall_accuracy',
-        'user_average_question_accuracy',
-        'user_previous_result',
-        'user_gap_from_previous',
+        'f_user_count_correct',
+        'f_user_count_wrong',
+        'f_user_count_total',
+        'f_user_average_overall_accuracy',
+        'f_user_average_question_accuracy',
+        'f_user_previous_result',
+        'f_user_gap_from_previous',
     ]
     for name, feature in zip(user_feature_names, user_features):
         df[name] = df.index.map(feature)
 
-    question_features = apply_parallel(accumulative_question_features, df.groupby('qid'))
+    print('    creating question accumulative features')
+    question_features = apply_parallel(_question_features, df.groupby('qid'))
     question_features = list(zip(*question_features))
     question_features = [itertools.chain(*x) for x in question_features]
     # convert generator to list here since it's used multiple times
@@ -352,28 +266,102 @@ def featurize(df):
     question_features = question_features[1:]  # skip index
     question_features = [{i: v for i, v in zip(question_index, f)} for f in question_features]
     question_feature_names = [
-        'question_average_overall_accuracy',
-        'question_count_total',
-        'question_count_correct',
-        'question_count_wrong',
+        'f_question_average_overall_accuracy',
+        'f_question_count_total',
+        'f_question_count_correct',
+        'f_question_count_wrong',
     ]
     for name, feature in zip(question_feature_names, question_features):
         df[name] = df.index.map(feature)
 
     df['bias'] = 1
 
-    train_df, test_df = split_train_test(df)
+    df.to_hdf(featurized_df_dir, 'data')
 
-    feature_names = user_feature_names + question_feature_names + ['bias']
+    return df
+
+
+def get_split_dfs():
+    train_df_dir = 'data/protobowl/protobowl-042818.log.train.h5'
+    test_df_dir = 'data/protobowl/protobowl-042818.log.test.h5'
+
+    if os.path.exists(train_df_dir) and os.path.exists(test_df_dir):
+        print('loading train test df')
+        return pd.read_hdf(train_df_dir), pd.read_hdf(test_df_dir)
+
+    df = get_featurized_df()
+
+    '''
+    def get_first_appearance_date(group):
+        group = group.sort_values('date')
+        return group.iloc[0]['uid'], group.iloc[0]['date']
+
+    print('generating train test df')
+    df_by_uid = df.groupby('uid')
+    print('    order and split users by first appearance dates')
+    returns = apply_parallel(get_first_appearance_date, df_by_uid)
+    returns = sorted(returns, key=lambda x: x[1])
+    uids, first_appearance_dates = list(zip(*returns))
+    train_uids = uids[:int(len(uids) * 0.7)]
+    test_uids = uids[int(len(uids) * 0.7):]
+    train_index = list(itertools.chain(*[
+        df_by_uid.get_group(uid).index.tolist() for uid in train_uids]))
+    test_index = list(itertools.chain(*[
+        df_by_uid.get_group(uid).index.tolist() for uid in test_uids]))
+    train_df = df.loc[train_index]
+    test_df = df.loc[test_index]
+    '''
+
+    '''
+    # split records by date
+    df = df.sort_values('date')
+    train_df = df.head(int(len(df) * 0.7))
+    test_df = df.tail(int(len(df) * 0.3))
+    '''
+
+    # randomly split users
+    uids = list(set(df['uid']))
+    random.shuffle(uids)
+    df_by_uid = df.groupby('uid')
+    train_uids = uids[:int(len(uids) * 0.7)]
+    test_uids = uids[int(len(uids) * 0.7):]
+    train_index = list(itertools.chain(*[
+        df_by_uid.get_group(uid).index.tolist() for uid in train_uids]))
+    test_index = list(itertools.chain(*[
+        df_by_uid.get_group(uid).index.tolist() for uid in test_uids]))
+    train_df = df.loc[train_index]
+    test_df = df.loc[test_index]
+
+    train_df.to_hdf(train_df_dir, 'data')
+    test_df.to_hdf(test_df_dir, 'data')
+
+    return train_df, test_df
+
+
+def get_split_numpy():
+    dirs = [
+        'data/protobowl/x_train.npy',
+        'data/protobowl/y_train.npy',
+        'data/protobowl/x_test.npy',
+        'data/protobowl/y_test.npy'
+    ]
+    if all(os.path.exists(d) for d in dirs):
+        print('loading train test numpy')
+        return (np.load(d) for d in dirs)
+
+    train_df, test_df = get_split_dfs()
+
+    print('generating train test numpy')
+    feature_names = [c for c in train_df.columns if c.startswith('f_')] + ['bias']
     x_train = train_df[feature_names].to_numpy().astype(np.float32)
     y_train = train_df['result_binary'].to_numpy().astype(int)
     x_test = test_df[feature_names].to_numpy().astype(np.float32)
     y_test = test_df['result_binary'].to_numpy().astype(int)
 
-    np.save(x_train_dir, x_train)
-    np.save(y_train_dir, y_train)
-    np.save(x_test_dir, x_test)
-    np.save(y_test_dir, y_test)
+    np.save(dirs[0], x_train)
+    np.save(dirs[1], y_train)
+    np.save(dirs[2], x_test)
+    np.save(dirs[3], y_test)
 
     return x_train, y_train, x_test, y_test
 
@@ -381,19 +369,16 @@ def featurize(df):
 class RetentionDataset(torch.utils.data.Dataset):
 
     def __init__(self, fold='train'):
-        x_train, y_train, x_test, y_test = featurize(load_protobowl())
-
-        data = {
-            'train': (x_train, y_train),
-            'test': (x_test, y_test)
-        }
-
+        x_train, y_train, x_test, y_test = get_split_numpy()
         self.mean = np.mean(x_train, axis=0)
         self.std = np.std(x_train, axis=0)
         self.mean[-1] = 0
         self.std[-1] = 1
 
-        self.x, self.y = data[fold]
+        if fold == 'train':
+            self.x, self.y = x_train, y_train
+        elif fold == 'test':
+            self.x, self.y = x_test, y_test
 
     def __len__(self):
         return len(self.y)
@@ -407,18 +392,21 @@ class RetentionDataset(torch.utils.data.Dataset):
 
 
 class Net(nn.Module):
+
     def __init__(self, n_input):
         super(Net, self).__init__()
-        self.fc1 = nn.Linear(n_input, 128)
-        self.dropout1 = nn.Dropout(0.25)
-        self.fc2 = nn.Linear(128, 2)
+        # self.fc1 = nn.Linear(n_input, 128)
+        # self.dropout1 = nn.Dropout(0.25)
+        # self.fc2 = nn.Linear(128, 2)
+        self.fc1 = nn.Linear(n_input, 2)
 
     def forward(self, x):
-        x = self.fc1(x)
-        x = F.relu(x)
-        x = self.dropout1(x)
-        x = self.fc2(x)
-        return x
+        # x = self.fc1(x)
+        # x = F.relu(x)
+        # x = self.dropout1(x)
+        # x = self.fc2(x)
+        # return x
+        return self.fc1(x)
 
 
 def train(args, model, device, train_loader, optimizer, epoch):
@@ -480,8 +468,6 @@ def main():
                         help='random seed (default: 1)')
     parser.add_argument('--log-interval', type=int, default=1000, metavar='N',
                         help='how many batches to wait before logging status')
-    parser.add_argument('--save-model', action='store_true', default=True,
-                        help='For Saving the current Model')
     args = parser.parse_args()
     use_cuda = not args.no_cuda and torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
@@ -509,10 +495,9 @@ def main():
         test_loss, predictions = test(args, model, device, test_loader)
         scheduler.step()
         if test_loss < best_test_loss:
-            if args.save_model:
-                checkpoint_dir = "checkpoints/retention_model.pt"
-                torch.save(model.state_dict(), checkpoint_dir)
-                print('save model checkpoint to', checkpoint_dir)
+            checkpoint_dir = "checkpoints/retention_model.pt"
+            torch.save(model.state_dict(), checkpoint_dir)
+            print('save model checkpoint to', checkpoint_dir)
             best_test_loss = test_loss
 
 
@@ -567,7 +552,7 @@ class RetentionModel:
         return F.softmax(logits, dim=1).detach().cpu().numpy()[0]
 
 
-def unit_test():
+def test_wrapper():
     user = User(
         user_id='user 1',
         qrep=[np.array([0.1, 0.2, 0.3])],
@@ -599,49 +584,41 @@ def unit_test():
     print(model.predict(user, card))
 
 
-def test_model():
-    parser = argparse.ArgumentParser(description='Retention model')
-    parser.add_argument('--batch-size', type=int, default=1024, metavar='N',
-                        help='input batch size for training (default: 64)')
-    parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
-                        help='input batch size for testing (default: 1000)')
-    parser.add_argument('--epochs', type=int, default=6, metavar='N',
-                        help='number of epochs to train (default: 14)')
-    parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
-                        help='learning rate (default: 0.001)')
-    parser.add_argument('--gamma', type=float, default=0.7, metavar='M',
-                        help='Learning rate step gamma (default: 0.7)')
-    parser.add_argument('--no-cuda', action='store_true', default=False,
-                        help='disables CUDA training')
-    parser.add_argument('--seed', type=int, default=1, metavar='S',
-                        help='random seed (default: 1)')
-    parser.add_argument('--log-interval', type=int, default=1000, metavar='N',
-                        help='how many batches to wait before logging status')
-    parser.add_argument('--save-model', action='store_true', default=True,
-                        help='For Saving the current Model')
-    args = parser.parse_args()
-    use_cuda = not args.no_cuda and torch.cuda.is_available()
-    device = torch.device("cuda" if use_cuda else "cpu")
+def test_majority():
+    train_df, test_df = get_split_dfs()
 
-    torch.manual_seed(args.seed)
+    def get_user_majority(group):
+        return group.iloc[0]['uid'], int(group['result_binary'].mean() > 0.5)
 
-    kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
-    train_dataset = RetentionDataset('train')
-    test_dataset = RetentionDataset('test')
-    test_loader = torch.utils.data.DataLoader(
-        test_dataset,
-        batch_size=args.test_batch_size, shuffle=False, **kwargs)
+    returns = apply_parallel(get_user_majority, train_df.groupby('uid'))
+    uids, labels = list(zip(*returns))
+    test_df['user_majority'] = test_df['uid'].map({x: y for x, y in zip(uids, labels)})
+    print('user majority acc train -> test',
+          (test_df['user_majority'] == test_df['result_binary']).mean())
 
-    n_input = train_dataset.x.shape[1]
-    model = Net(n_input=n_input).to(device)
-    model.load_state_dict(torch.load('checkpoints/retention_model.pt'))
-    model.eval()
+    returns = apply_parallel(get_user_majority, test_df.groupby('uid'))
+    uids, labels = list(zip(*returns))
+    test_df['user_majority'] = test_df['uid'].map({x: y for x, y in zip(uids, labels)})
+    print('user majority acc test -> test',
+          (test_df['user_majority'] == test_df['result_binary']).mean())
 
-    test_loss, predictions = test(args, model, device, test_loader)
-    print(predictions)
+    def get_question_majority(group):
+        return group.iloc[0]['qid'], int(group['result_binary'].mean() > 0.5)
+
+    returns = apply_parallel(get_question_majority, train_df.groupby('qid'))
+    qids, labels = list(zip(*returns))
+    test_df['question_majority'] = test_df['qid'].map({x: y for x, y in zip(qids, labels)})
+    print('question majority acc train -> test',
+          (test_df['question_majority'] == test_df['result_binary']).mean())
+
+    returns = apply_parallel(get_question_majority, test_df.groupby('qid'))
+    qids, labels = list(zip(*returns))
+    test_df['question_majority'] = test_df['qid'].map({x: y for x, y in zip(qids, labels)})
+    print('question majority acc test -> test',
+          (test_df['question_majority'] == test_df['result_binary']).mean())
 
 
 if __name__ == '__main__':
     # main()
-    # unit_test()
-    test_model()
+    # test_wrapper()
+    test_majority()
