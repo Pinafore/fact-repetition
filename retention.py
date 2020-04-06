@@ -513,7 +513,7 @@ class RetentionModel:
         self.model.load_state_dict(torch.load('checkpoints/retention_model.pt'))
         self.model.eval()
 
-    def predict(self, user: User, cards: List[Card], date=None):
+    def predict(self, user: User, cards: List[Card], date=None) -> List[float]:
         # TODO batch version
         if date is None:
             date = datetime.now()
@@ -555,6 +555,9 @@ class RetentionModel:
         # return the probability of positive
         return F.softmax(logits, dim=1).detach().cpu().numpy()[:, 1]
 
+    def predict_one(self, user: User, card: Card) -> float:
+        return self.predict(user, [card])[0]
+
 
 def test_wrapper():
     user = User(
@@ -586,6 +589,7 @@ def test_wrapper():
 
     model = RetentionModel()
     print(model.predict(user, [card]))
+    print(model.predict_one(user, card))
 
 
 def test_majority():

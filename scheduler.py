@@ -4,6 +4,7 @@
 import os
 import json
 import time
+import copy
 import pickle
 import numpy as np
 import logging
@@ -37,7 +38,7 @@ class MovingAvgScheduler:
         self.params = params
         self.db_filename = db_filename
         self.db = SchedulerDB(db_filename)
-        self.retention_model = RetentionModel()
+        # self.retention_model = RetentionModel()
 
         '''
         logger.info('loading question and records...')
@@ -255,16 +256,18 @@ class MovingAvgScheduler:
         return [], []
     '''
 
-    def predict_one(self, user: User, card: Card) -> float:
+    def predict_one(self, card: Card) -> float:
         # # 1. find same or similar card in records
         # cards, scores = self.retrieve(card)
         # if len(cards) > 0:
         #     return np.dot([x['prob'] for x in cards], scores)
-        # # TODO 2. use model to predict
-        return self.retention_model.predict(user, [card])[0]
+        # # 2. use model to predict
+        # return self.retention_model.predict_one(user, card)
+        return 0.5
 
-    def predict(self, user: User, cards: List[Card]) -> List[float]:
-        return self.retention_model.predict(user, cards)
+    def predict(self, cards: List[Card]) -> List[float]:
+        # return self.retention_model.predict(user, cards)
+        return [self.predict_one(card) for card in cards]
 
     def set_params(self, params: Params):
         self.params.__dict__.update(params)
@@ -356,45 +359,45 @@ class MovingAvgScheduler:
         cards = self.get_cards(requests)
 
         # for u, indices in user_to_requests.items():
+        # cards = [cards[i] for i in user_to_requests[user.user_id]]
         assert len(user_to_requests) == 1
         user, indices = list(user_to_requests.items())[0]
         user = self.get_user(user)
-
-        # cards = [cards[i] for i in user_to_requests[user.user_id]]
-
         scores = self.score(user, cards, date)
         scores_summed = [
             sum([self.params.__dict__[key] * value for key, value in ss.items()])
             for ss in scores
         ]
+        for i, ss in enumerate(scores):
+            ss['sum'] = scores_summed[i]
         order = np.argsort(scores_summed).tolist()
+        card_selected = cards[order[0]]
 
         # create rationale
-        index_selected = order[0]
-        card_selected = cards[index_selected]
-        topic_idx = np.argmax(card_selected.qrep)
-        detail = scores[index_selected]
-        detail.update({
-            'sum': scores_summed[index_selected],
-            'topic': self.topic_words[topic_idx],
-            'current date': date,
-            'last study date': user.last_study_date.get(card_selected.card_id, '-')
-        })
+        cards_info = [copy.deepcopy(card.__dict__) for card in cards]
+        for i, card_info in enumerate(cards_info):
+            card_info['scores'] = scores[i]
+            card_info['scores']['sum'] = scores_summed[i]
+            card_info.update({
+                'topic': self.topic_words[np.argmax(card_info['qrep'])],
+                'current date': date,
+                'last_study_date': user.last_study_date.get(card_info['card_id'], '-'),
+            })
+            card_info.pop('qrep')
+            card_info.pop('skill')
+            card_info.pop('results')
+        cards_info = [cards_info[i] for i in order[:3]]
 
         rationale = ''
-        for key, value in detail.items():
+        for key, value in cards_info[0].items():
             if isinstance(value, float):
                 rationale += '{}: {:.4f}\n'.format(key, value)
             else:
                 rationale += '{}: {}\n'.format(key, value)
 
-        logger.debug(card_selected.answer)
-
         # add temporary history
         # ID and response will be completed by a call to `update`
-        temp_history_id = json.dumps({'user_id': user.user_id,
-                                      'card_id': card_selected.card_id})
-
+        temp_history_id = json.dumps({'user_id': user.user_id, 'card_id': card_selected.card_id})
         history = History(
             history_id=temp_history_id,
             user_id=user.user_id,
@@ -409,12 +412,13 @@ class MovingAvgScheduler:
         self.db.add_history(history)
 
         t1 = datetime.now()
+        logger.debug(card_selected.answer)
         logger.debug('schedule ' + str(t1 - t0))
 
         return {
             'order': order,
             'rationale': rationale,
-            'detail': detail
+            'cards_info': cards_info
         }
 
     def update(self, requests: List[ScheduleRequest], date: datetime) -> Dict:

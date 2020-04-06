@@ -2,8 +2,16 @@
 
 # 04-05-2020
 x add retention model to scheduler
-- implement exponential forgetting curve
+x implement simple exponential forgetting curve
+- stopping criteria:
+    - no card in leitner scheduled today
+    - number of new cards reached upper bound
+    - min distance (probably won't work)
+- change db to use pack everywhere
+- how to set the rate of new cards
 - need a larger pool for simulation
+    - define a better way to get a diagnostic set of certain size
+- include lower ranked cards in the debug string
 - use HF to embed all questions and save into numpy array
 - calibration
 - inspect weights
@@ -37,10 +45,7 @@ x count_correct_before and count_wrong_before are likely wrong. the protobowl
 
 ## 03-29-2020
 - order cards in leitner box by study time
-- stopping criteria:
-    - no card in leitner scheduled today
-    - number of new cards reached upper bound
-    - min distance (probably won't work)
+
 
 ## 03-27-2020
 x let's write a retention model using just several simple manual features in
