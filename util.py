@@ -18,6 +18,22 @@ def parse_date(date: str):
         raise TypeError("unrecognized type for parse_date")
 
 
+class Params(BaseModel):
+    n_topics: int = 40
+    qrep: float = 1.0
+    skill: float = 0.0
+    time: float = 1.0
+    category: float = 1.0
+    leitner: float = 1.0
+    sm2: float = 1.0
+    decay_qrep: float = 0.9
+    decay_skill: float = 0.9
+    max_qreps: int = 10
+    cool_down_time: float = 20.
+    lda_dir: str = 'checkpoints/gensim_all_40_1585820469.362995'
+    whoosh_index: str = 'whoosh_index'
+
+
 @dataclass
 class Card:
     card_id: str
@@ -82,22 +98,6 @@ class ScheduleRequest(BaseModel):
     question_id: Optional[str]
     label: Optional[str]
     history_id: Optional[str]
-
-
-class Params(BaseModel):
-    n_topics: int = 40
-    qrep: float = 1.0
-    skill: float = 0.0
-    time: float = 1.0
-    category: float = 1.0
-    leitner: float = 1.0
-    sm2: float = 1.0
-    decay_qrep: float = 0.9
-    decay_skill: float = 0.9
-    max_qreps: int = 10
-    cool_down_time: float = 20.
-    lda_dir: str = 'checkpoints/gensim_all_40_1585820469.362995'
-    whoosh_index: str = 'whoosh_index'
 
 
 @dataclass

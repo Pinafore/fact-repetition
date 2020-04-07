@@ -319,22 +319,22 @@ class MovingAvgScheduler:
         return cosine_distance(qrep, card.qrep)
 
     def dist_leitner(self, user: User, card: Card, date: datetime) -> float:
-        # days till scheduled date by Leitner
+        # hours till scheduled date by Leitner
         scheduled_date = user.leitner_scheduled_date.get(card.card_id, None)
         if scheduled_date is None:
             return 0
         else:
-            # distance in hours
-            return max(0, (scheduled_date - date).seconds / (60 * 60))
+            # NOTE distance in hours, can be negative
+            return (scheduled_date - date).total_seconds() / (60 * 60)
 
     def dist_sm2(self, user: User, card: Card, date: datetime) -> float:
-        # days till scheduled date by sm2
+        # hours till scheduled date by sm2
         scheduled_date = user.sm2_scheduled_date.get(card.card_id, None)
         if scheduled_date is None:
             return 0
         else:
-            # distance in hours
-            return max(0, (scheduled_date - date).seconds / (60 * 60))
+            # NOTE distance in hours, can be negative
+            return (scheduled_date - date).total_seconds() / (60 * 60)
 
     def score(self, user: User, cards: List[Card], date: datetime) -> List[float]:
         return [{
@@ -450,11 +450,11 @@ class MovingAvgScheduler:
 
         tmp = {
             'old ltn box': user.leitner_box.get(card.card_id, '-'),
-            'old ltn dat': user.leitner_scheduled_date.get(card.card_id, '-'),
+            'old ltn dat': str(user.leitner_scheduled_date.get(card.card_id, '-')),
             'old sm2 rep': user.sm2_repetition.get(card.card_id, '-'),
             'old sm2 inv': user.sm2_interval.get(card.card_id, '-'),
             'old sm2 e_f': user.sm2_efactor.get(card.card_id, '-'),
-            'old sm2 dat': user.sm2_scheduled_date.get(card.card_id, '-')
+            'old sm2 dat': str(user.sm2_scheduled_date.get(card.card_id, '-'))
         }
 
         # update qrep
@@ -490,7 +490,7 @@ class MovingAvgScheduler:
             'old ltn box': tmp['old ltn box'],
             'new ltn box': user.leitner_box.get(card.card_id, '-'),
             'old ltn dat': tmp['old ltn dat'],
-            'new ltn dat': user.leitner_scheduled_date.get(card.card_id, '-'),
+            'new ltn dat': str(user.leitner_scheduled_date.get(card.card_id, '-')),
             'old sm2 rep': tmp['old sm2 rep'],
             'new sm2 rep': user.sm2_repetition.get(card.card_id, '-'),
             'old sm2 inv': tmp['old sm2 inv'],
@@ -498,7 +498,7 @@ class MovingAvgScheduler:
             'old sm2 e_f': tmp['old sm2 e_f'],
             'new sm2 e_f': user.sm2_efactor.get(card.card_id, '-'),
             'old sm2 dat': tmp['old sm2 dat'],
-            'new sm2 dat': user.sm2_scheduled_date.get(card.card_id, '-')
+            'new sm2 dat': str(user.sm2_scheduled_date.get(card.card_id, '-'))
         })
 
         # find that temporary history entry and update

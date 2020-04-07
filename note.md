@@ -1,17 +1,21 @@
 # Improve Human Learning with Representation + Spaced Repetition
 
+# 04-06-2020
+- track old cards
+- the scheduler needs to decide when to schedule new cards vs review old cards
+- decay representation to neutral instead of nothing
+- annotate topic words
+
 # 04-05-2020
 x add retention model to scheduler
 x implement simple exponential forgetting curve
-- stopping criteria:
+- stop when all True:
     - no card in leitner scheduled today
     - number of new cards reached upper bound
-    - min distance (probably won't work)
 - change db to use pack everywhere
-- how to set the rate of new cards
-- need a larger pool for simulation
-    - define a better way to get a diagnostic set of certain size
-- include lower ranked cards in the debug string
+x need a larger pool for simulation
+x define a better way to get a diagnostic set of certain size
+x include lower ranked cards in the debug string
 - use HF to embed all questions and save into numpy array
 - calibration
 - inspect weights

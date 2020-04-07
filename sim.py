@@ -17,8 +17,8 @@ USER_ID = 'test_web_dummy'
 # from retention import RetentionModel
 # model = RetentionModel()
 
-# fret_file = open('sim_fret.txt', 'w')
-fret_file = sys.stdout
+fret_file = open('sim_fret.txt', 'w')
+# fret_file = sys.stdout
 detail_file = open('sim_detail.txt', 'w')
 
 
@@ -71,6 +71,7 @@ def schedule_and_update(cards, date):
     print('    {: <16} : {}'.format('text', card['text']), file=detail_file)
     print('    {: <16} : {}'.format('answer', card['answer']), file=detail_file)
     print('    {: <16} : {}'.format('category', card['category']), file=detail_file)
+    print('    {: <16} : {}'.format('current date', str(date)), file=detail_file)
 
     print('', file=detail_file)
     print(' ' * 3, 'update details', file=detail_file)
@@ -99,52 +100,60 @@ def schedule_and_update(cards, date):
 
 
 if __name__ == '__main__':
+    N_DAYS = 4
+    N_TOTAL_CARDS = 100
+    MAX_CARDS = 100
+    TURN_AROUND = 0.5 * 60  # seconds
+    MAX_REVIEW_WINDOW = 2 * 60 * 60  # seconds
+
     with open('data/diagnostic_questions.pkl', 'rb') as f:
         diagnostic_cards = pickle.load(f)
-    cards = copy.deepcopy(diagnostic_cards[:100])
+    cards = copy.deepcopy(diagnostic_cards[:N_TOTAL_CARDS])
     for i, card in enumerate(cards):
         card['user_id'] = USER_ID
 
     # requests.post('http://127.0.0.1:8000/api/karl/set_params', data=json.dumps(params))
     requests.post('http://127.0.0.1:8000/api/karl/reset', data=json.dumps({'user_id': USER_ID}))
 
-    MAX_NEW_CARDS = 20
-    MAX_REVIEW_WINDOW = 2 * 60 * 60
-    TURN_AROUND = 0.5 * 60
-
     card_to_column = dict()
-    start_date = parse_date('2028-06-1 18:27:08.172341')
-    for days in range(3):
+    start_date = parse_date('2028-06-1 08:00:00.000001')
+    for days in range(N_DAYS):
         print('day {}'.format(days), file=fret_file)
         time_offset = 0
-        new_card_count = 0
+        n_cards = 0
         while True:
             current_date = start_date + timedelta(days=days) + timedelta(seconds=time_offset)
+
+            # # stop if both True
+            # #   1) no reivew scheduled within MAX_REVIEW_WINDOW by Leitner
+            # #   2) already studied 10 new cards
+            # r = requests.post('http://127.0.0.1:8000/api/karl/get_user', data=json.dumps({'user_id': USER_ID}))
+            # user = User.unpack(json.loads(r.text))
+            # leitner_scheduled_dates = list(user.leitner_scheduled_date.values())
+            # if len(leitner_scheduled_dates) == 0:
+            #     delta = 0
+            # else:
+            #     next_review_date = min(leitner_scheduled_dates)
+            #     delta = (next_review_date - current_date).total_seconds()
+            # if delta >= MAX_REVIEW_WINDOW:
+            #     break
+            if n_cards > MAX_CARDS:
+                break
+
             schedule_outputs, update_outputs = schedule_and_update(cards, current_date)
             card_id = cards[schedule_outputs['order'][0]]['question_id']
 
             if card_id not in card_to_column:
                 card_to_column[card_id] = len(card_to_column)
-                new_card_count += 1
 
-            print('{} {: <6} {}{}'.format(
+            print('{} {: <6} {: <3} {}{}'.format(
                 current_date.strftime('%Y-%m-%d-%H-%M'),
                 card_id,
+                n_cards,
                 ' ' * card_to_column[card_id],
                 'o' if update_outputs['response'] == 'correct' else 'x'
             ), file=fret_file)
 
-            # stop if both True
-            #   1) no reivew scheduled within two hours by Leitner
-            #   2) already studied 10 new cards
-
-            r = requests.post('http://127.0.0.1:8000/api/karl/get_user', data=json.dumps({'user_id': USER_ID}))
-            user = User.unpack(json.loads(r.text))
-            next_review_date = min(user.leitner_scheduled_date.values())
-            if (next_review_date - current_date).seconds > MAX_REVIEW_WINDOW \
-                    and new_card_count > MAX_NEW_CARDS:
-                break
-
             time_offset += TURN_AROUND
-
+            n_cards += 1
         print('', file=fret_file)
