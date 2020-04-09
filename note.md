@@ -1,10 +1,15 @@
 # Improve Human Learning with Representation + Spaced Repetition
 
+# 04-07-2020
+x send prettier debug string
+- track three previously studied cards
+
 # 04-06-2020
 - track old cards
 - the scheduler needs to decide when to schedule new cards vs review old cards
 - decay representation to neutral instead of nothing
 - annotate topic words
+- save necessary files onto AWS
 
 # 04-05-2020
 x add retention model to scheduler

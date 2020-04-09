@@ -237,7 +237,7 @@ class MovingAvgScheduler:
                 cards = [card.to_dict() for idx, card in hits.iterrows()]
                 return cards, [1 / len(hits) for _ in range(len(hits))]
         else:
-            # TODO return better default value without text search
+            # return better default value without text search
             return 0.5
 
         # 2. do text search
@@ -348,7 +348,6 @@ class MovingAvgScheduler:
 
     def schedule(self, requests: List[ScheduleRequest], date: datetime) -> Dict:
         if len(requests) == 0:
-            # TODO raise exception and return something more meaningful
             return [], [], ''
 
         t0 = datetime.now()
@@ -371,16 +370,16 @@ class MovingAvgScheduler:
         for i, ss in enumerate(scores):
             ss['sum'] = scores_summed[i]
         order = np.argsort(scores_summed).tolist()
-        card_selected = cards[order[0]]
+        card = cards[order[0]]
 
         # create rationale
-        cards_info = [copy.deepcopy(card.__dict__) for card in cards]
+        cards_info = [copy.deepcopy(c.__dict__) for c in cards]
         for i, card_info in enumerate(cards_info):
             card_info['scores'] = scores[i]
             card_info['scores']['sum'] = scores_summed[i]
             card_info.update({
-                'topic': self.topic_words[np.argmax(card_info['qrep'])],
                 'current date': date,
+                'topic': self.topic_words[np.argmax(card_info['qrep'])],
                 'last_study_date': user.last_study_date.get(card_info['card_id'], '-'),
             })
             card_info.pop('qrep')
@@ -388,36 +387,72 @@ class MovingAvgScheduler:
             card_info.pop('results')
         cards_info = [cards_info[i] for i in order[:3]]
 
-        rationale = ''
-        for key, value in cards_info[0].items():
-            if isinstance(value, float):
-                rationale += '{}: {:.4f}\n'.format(key, value)
-            else:
-                rationale += '{}: {}\n'.format(key, value)
+        rr = '''
+             <style>
+             table {
+               border-collapse: collapse;
+             }
+             
+             td, th {
+               padding: 0.5rem;
+               text-align: left;
+             }
+
+             tr:nth-child(even) {background-color: #f2f2f2;}
+             </style>
+             '''
+        # print('', file=detail_file)
+        # print(' ' * 3, 'update details', file=detail_file)
+        # for key, value in update_outputs.items():
+        #     if isinstance(value, float):
+        #         print(' ' * 7, '{: <16} : {:.4f}'.format(key, value), file=detail_file)
+        #     elif isinstance(value, int) or isinstance(value, str):
+        #         print(' ' * 7, '{: <16} : {}'.format(key, value), file=detail_file)
+
+        rr += '<h2>Top ranked cards</h2>'
+        for i, card_info in enumerate(cards_info):
+            rr += '<table style="float: left;">'
+            for key, value in card_info.items():
+                if key in ['scores', 'text']:
+                    continue
+                if isinstance(value, float):
+                    rr += '<tr><td><b>{}</b></td> <td>{:.3f}</td></tr>'.format(key, value)
+                elif isinstance(value, int) or isinstance(value, str):
+                    rr += '<tr><td><b>{}</b></td> <td>{}</td></tr>'.format(key, value)
+            for k, v in card_info['scores'].items():
+                rr += '<tr><td><b>{}</b></td> <td>{:.4f} x {:.2f}</td></tr>'.format(k, v, self.params.__dict__.get(k, 0))
+
+            rr += '<tr><td><b>ltn box</b></td> <td>{}</td></tr>'.format(user.leitner_box.get(card.card_id, '-'))
+            rr += '<tr><td><b>ltn dat</b></td> <td>{}</td></tr>'.format(user.leitner_scheduled_date.get(card.card_id, '-'))
+            rr += '<tr><td><b>sm2 rep</b></td> <td>{}</td></tr>'.format(user.sm2_repetition.get(card.card_id, '-'))
+            rr += '<tr><td><b>sm2 inv</b></td> <td>{}</td></tr>'.format(user.sm2_interval.get(card.card_id, '-'))
+            rr += '<tr><td><b>sm2 e_f</b></td> <td>{}</td></tr>'.format(user.sm2_efactor.get(card.card_id, '-'))
+            rr += '<tr><td><b>sm2 dat</b></td> <td>{}</td></tr>'.format(user.sm2_scheduled_date.get(card.card_id, '-'))
+            rr += '</table>'
 
         # add temporary history
         # ID and response will be completed by a call to `update`
-        temp_history_id = json.dumps({'user_id': user.user_id, 'card_id': card_selected.card_id})
+        temp_history_id = json.dumps({'user_id': user.user_id, 'card_id': card.card_id})
         history = History(
             history_id=temp_history_id,
             user_id=user.user_id,
-            card_id=card_selected.card_id,
+            card_id=card.card_id,
             response='PLACEHOLDER',
             judgement='PLACEHOLDER',
             user_snapshot=json.dumps(user.pack()),
             scheduler_snapshot=json.dumps(self.params.__dict__),
             card_ids=json.dumps([x.card_id for x in cards]),
-            scheduler_output=json.dumps({'order': order, 'rationale': rationale}),
+            scheduler_output=json.dumps({'order': order, 'rationale': rr}),
             date=date)
         self.db.add_history(history)
 
         t1 = datetime.now()
-        logger.debug(card_selected.answer)
+        logger.debug(card.answer)
         logger.debug('schedule ' + str(t1 - t0))
 
         return {
             'order': order,
-            'rationale': rationale,
+            'rationale': rr,
             'cards_info': cards_info
         }
 
@@ -512,10 +547,29 @@ class MovingAvgScheduler:
                 'date': date
             })
             self.db.update_history(temp_history_id, history)
-        # TODO else add_history
+        else:
+            # this really shouldn't happen, if DB is working properly
+            history = History(
+                history_id=request.history_id,
+                user_id=request.user_id,
+                card_id=request.card_id,
+                response=request.label,
+                judgement=request.label,
+                user_snapshot=json.dumps(user.pack()),
+                scheduler_snapshot=json.dumps(self.params.__dict__),
+                card_ids=json.dumps([x.card_id for x in cards]),
+                scheduler_output='',
+                date=date)
+            self.db.add_history(history)
 
         self.db.update_user(user)
         self.db.update_card(card)
+
+        for key, value in detail.items():
+            if isinstance(value, float):
+                print(' ' * 3, '{: <16} : {:.4f}'.format(key, value))
+            elif isinstance(value, int) or isinstance(value, str):
+                print(' ' * 3, '{: <16} : {}'.format(key, value))
 
         return detail
 
