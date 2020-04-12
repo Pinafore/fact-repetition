@@ -1,94 +1,72 @@
 # Improve Human Learning with Representation + Spaced Repetition
 
-# 04-07-2020
-x send prettier debug string
+# 04-11-2020
+- visualize user in embedding space
 - track three previously studied cards
-
-# 04-06-2020
-- track old cards
-- the scheduler needs to decide when to schedule new cards vs review old cards
-- decay representation to neutral instead of nothing
-- annotate topic words
-- save necessary files onto AWS
-
-# 04-05-2020
-x add retention model to scheduler
-x implement simple exponential forgetting curve
-- stop when all True:
-    - no card in leitner scheduled today
-    - number of new cards reached upper bound
-- change db to use pack everywhere
-x need a larger pool for simulation
-x define a better way to get a diagnostic set of certain size
-x include lower ranked cards in the debug string
-- use HF to embed all questions and save into numpy array
+- use huggingface to embed all questions and save into numpy array
 - calibration
 - inspect weights
 - question level -> sentence level
+- the scheduler needs to decide when to schedule new cards vs review old cards
+- decay representation to neutral instead of nothing
+- annotate topic words
+- change db to use pack everywhere
+- check topic assignment, not just topic-word dist
+- precompute next step
+- update load_protobowl and forward to qb
+- use answers as features
 
-# 04-03-2020
+x upload stuff to aws
+x send prettier debug string
+x save necessary files onto AWS
+x add retention model to scheduler
+x implement simple exponential forgetting curve
+x stop when all True:
+    - no card in leitner scheduled today
+    - number of new cards reached upper bound
+x need a larger pool for simulation
+x define a better way to get a diagnostic set of certain size
+x include lower ranked cards in the debug string
 x simple majority baselines
 x i have a feeling that the model is always predicting False - not it's not
-
-# 04-02-2020
 x gensim_all_40_1585820469.362995
 x accumulative question features
 x create both accumulative features and split records by date
 x fix mean and std in RetentionModel
 x featurizer for RetentionModel
-
-# 04-01-2020
 x "point" and "10" are still in the vocab
-- check topic assignment, not just topic-word dist
 x split user by date of first appearance
 x count_correct_before is likely wrong, very large max values, double check
 x tzinfo, timezone
-
-# 03-31-2020
-- precompute next step
 x add to features: previous result, one before previous result
 x count_correct_before and count_wrong_before are likely wrong. the protobowl
   loader i wrote for quizbowl already filter repated appearances of (uid, qid),
   so all count_corret_before and count_wrong_before should be 0
-- update load_protobowl and forward to qb
-
-## 03-29-2020
-- order cards in leitner box by study time
-
-
-## 03-27-2020
+x order cards in leitner box by study time
 x let's write a retention model using just several simple manual features in
   pytorch. then this will replace the simplistic `get_result`
 x in simulation, the probability of the card being correct should start with
   estimated from Roger's data then grow with reptition
-
-## 03-26-2020
 x dist_time is wrong, very large values
 x how come timedelta is negative? timedelta is negative when card.date is
   earlier than user.last_study_date[card.card_id]
 x maybe card date should be a field but not stored in DB, so is user date
 x flashcard should be renamed to schedule_request
-
-## 03-25-2020
 x finalze LDA on Quizbowl
 x improve debug string
 x make sure that commiting only at exit is fine
 x return schedule & update details via web API for debug
 x weird sequences in possibly snapshot
-
-## 03-23-2020
 x fix dist_skill
 x bypass scheduler.retrieve
-
-## 03-20-2020
 x query speed optimization
 x plots & probing & retention next steps
 x discount
 x LDA improvement
-- define labels for Quizbowl sentences
+x define labels for Quizbowl sentences
 x simulation
 
-### Query speed optimization
+## Query speed optimization
 Currently the speed of the schedule API is bad. The bottleneck is doing
 retrieval on hundreds of cards for each schedule API call. For each given card,
 we search for similar / identical cards in Roger’s dataset. The underlying
@@ -133,13 +111,12 @@ x gensim coherence score
 ## 03-18-2020
 x profile fastapi / flask
 x gensim mallet LDA
-- firebase
-- long term simulation: use fake datetime, on the scale of days
+x firebase
+x long term simulation: use fake datetime, on the scale of days
 x document term frequency instead of global term frequency
-- category classification from topic embedding to evaluate topic model outputs
-- use answers as features
+x category classification from topic embedding to evaluate topic model outputs
 - think about the bayesian non-parametric interpretation Jordan mentioned
-- long-term simulation to check repetition
+x long-term simulation to check repetition
 x transform pretrained / fine-tuned BERT to predict category directly and see
   if there is a difference between accuracy
 - myleott/JGibbLabeledLDA: Labeled LDA in Java (based on JGibbLDA)
@@ -156,10 +133,10 @@ x front-end needs to call schedule every step otherwise you don’t get the most
   up-to-date explanations / user status
 
 ### LDA
-- LDA sometime disagrees with Category of the question. need to look at LDA
+x LDA sometime disagrees with Category of the question. need to look at LDA
   experiments and see if we can rely on LDA to do difficulty / skill level
   updates.
-- we can also do soft updates: update to probability of topic i is multiplied
+x we can also do soft updates: update to probability of topic i is multiplied
   by assignment to topic i
 
 ### DB for scheduler
@@ -173,10 +150,10 @@ several things:
 2. number of topics
 3. size of vocabulary
 
-- lack of repetition: need discount factor or have band of difficulty estimate
+x lack of repetition: need discount factor or have band of difficulty estimate
   to select cards
-- we are discouraging repetition of wrong cards
-- simulate days between studies
+x we are discouraging repetition of wrong cards
+x simulate days between studies
 
 ## 03-04-2020
 - scheduling latency: front-end, internet, or backend?

@@ -447,7 +447,7 @@ class MovingAvgScheduler:
         self.db.add_history(history)
 
         t1 = datetime.now()
-        logger.debug(card.answer)
+        logger.debug(card.card_id, card.answer)
         logger.debug('schedule ' + str(t1 - t0))
 
         return {
