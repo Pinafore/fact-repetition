@@ -8,6 +8,9 @@ from pydantic import BaseModel
 from typing import Optional, Dict, List
 from dataclasses import dataclass, field
 
+from plotnine import theme, theme_light, \
+    element_text, element_blank, element_rect, element_line
+
 
 def parse_date(date: str):
     if isinstance(date, datetime):
@@ -19,7 +22,7 @@ def parse_date(date: str):
 
 
 class Params(BaseModel):
-    n_topics: int = 40                  # LDA
+    n_topics: int = 10                  # LDA
     qrep: float = 1                     # cosine distance between qreps
     skill: float = 0                    # card difficulty vs user skill level
     recall: float = 1                   # recall probability
@@ -32,7 +35,7 @@ class Params(BaseModel):
     cool_down_time_correct: float = 20  # minutes to cool down
     cool_down_time_wrong: float = 2     # minutes to cool down
     max_qreps: int = 10                 # num of qreps to average over
-    lda_dir: str = 'checkpoints/gensim_all_40_1585820469.362995'
+    lda_dir: str = 'checkpoints/gensim_quizbowl_10_1585102364.5221019'
     whoosh_index: str = 'whoosh_index'
 
 
@@ -218,3 +221,29 @@ class User:
 #     label: Optional[str]
 #     answer: Optional[str]
 #     category: Optional[str]
+
+class theme_fs(theme_light):
+    """
+    A theme similar to :class:`theme_linedraw` but with light grey
+    lines and axes to direct more attention towards the data.
+    Parameters
+    ----------
+    base_size : int, optional
+        Base font size. All text sizes are a scaled versions of
+        the base font size. Default is 11.
+    base_family : str, optional
+        Base font family.
+    """
+
+    def __init__(self, base_size=11, base_family='DejaVu Sans'):
+        theme_light.__init__(self, base_size, base_family)
+        self.add_theme(theme(
+            axis_ticks=element_line(color='#DDDDDD', size=0.5),
+            panel_border=element_rect(fill='None', color='#838383',
+                                      size=1),
+            strip_background=element_rect(
+                fill='#DDDDDD', color='#838383', size=1),
+            strip_text_x=element_text(color='black'),
+            strip_text_y=element_text(color='black', angle=-90),
+            legend_key=element_blank(),
+        ), inplace=True)

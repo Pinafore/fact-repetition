@@ -9,6 +9,7 @@ import pickle
 import gensim
 import logging
 import numpy as np
+import pandas as pd
 import en_core_web_lg
 from tqdm import tqdm
 from collections import defaultdict
@@ -16,8 +17,11 @@ from datetime import datetime, timedelta
 from typing import List, Dict
 # from whoosh.qparser import QueryParser
 
+from plotnine import ggplot, aes, geom_bar, coord_flip
+from pandas.api.types import CategoricalDtype
+
 from db import SchedulerDB
-from util import ScheduleRequest, Params, Card, User, History
+from util import ScheduleRequest, Params, Card, User, History, theme_fs
 from retention import RetentionModel
 from build_lda import process
 
@@ -26,7 +30,8 @@ nlp.add_pipe(process, name='process', last=True)
 
 logger = logging.getLogger('scheduler')
 
-# def polar_plot(qrep, filename=None, alpha=0.2, fill='blue'):
+# def plot_polar(qrep, filename=None, alpha=0.2, fill='blue'):
+#     qrep = qrep.tolist()
 #     n_topics = len(qrep)
 #
 #     plt.figure(figsize=(3, 3))
@@ -408,17 +413,21 @@ class MovingAvgScheduler:
         order = np.argsort(scores_summed).tolist()
         card = cards[order[0]]
 
-        # user_qrep = self.get_average_qrep(user.qrep).tolist()
-        # card_qrep = card.qrep.tolist()
-        # plot(user_qrep, '/fs/www-users/shifeng/temp/user.jpg', fill='green')
-        # plot(card_qrep, '/fs/www-users/shifeng/temp/card.jpg', fill='yellow')
+        user_qrep = self.get_average_qrep(user.qrep)
+        # plot_polar(user_qrep, '/fs/www-users/shifeng/temp/user.jpg', fill='green')
+        # plot_polar(card.qrep, '/fs/www-users/shifeng/temp/card.jpg', fill='yellow')
+
+        figname = '{}_{}_{}.jpg'.format(user.user_id, card.card_id, date.strftime('%Y-%m-%d-%H-%M'))
+        local_filename = '/fs/www-users/shifeng/temp/' + figname
+        remote_filename = 'http://users.umiacs.umd.edu/~shifeng/temp/' + figname
+        self.plot_histogram(card.qrep, user_qrep, local_filename)
 
         # create rationale
         cards_info = [copy.deepcopy(c.__dict__) for c in cards]
         for i, card_info in enumerate(cards_info):
-            prev_date, prev_response = user.previous_study.get(card_info['card_id'], ('-', '-'))
             card_info['scores'] = scores[i]
             card_info['scores']['sum'] = scores_summed[i]
+            prev_date, prev_response = user.previous_study.get(card_info['card_id'], ('-', '-'))
             card_info.update({
                 'current date': date,
                 'topic': self.topic_words[np.argmax(card_info['qrep'])],
@@ -453,28 +462,32 @@ class MovingAvgScheduler:
         #         print(' ' * 7, '{: <16} : {}'.format(key, value), file=detail_file)
 
         rr += '<h2>Top ranked cards</h2>'
-        for i, card_info in enumerate(cards_info):
+        row_template = '<tr><td><b>{}</b></td> <td>{}</td></tr>'
+        row_template_3 = '<tr><td><b>{}</b></td> <td>{:.4f} x {:.2f}</td></tr>'
+        for i in order[:3]:
+            c = cards[i]
+            prev_date, prev_response = user.previous_study.get(c.card_id, ('-', '-'))
             rr += '<table style="float: left;">'
-            for key, value in card_info.items():
-                if key in ['scores', 'text']:
-                    continue
-                if isinstance(value, float):
-                    rr += '<tr><td><b>{}</b></td> <td>{:.3f}</td></tr>'.format(key, value)
-                elif isinstance(value, int) or isinstance(value, str):
-                    rr += '<tr><td><b>{}</b></td> <td>{}</td></tr>'.format(key, value)
-            for k, v in card_info['scores'].items():
-                rr += '<tr><td><b>{}</b></td> <td>{:.4f} x {:.2f}</td></tr>'.format(k, v, self.params.__dict__.get(k, 0))
-
-            rr += '<tr><td><b>ltn box</b></td> <td>{}</td></tr>'.format(user.leitner_box.get(card.card_id, '-'))
-            rr += '<tr><td><b>ltn dat</b></td> <td>{}</td></tr>'.format(user.leitner_scheduled_date.get(card.card_id, '-'))
-            rr += '<tr><td><b>sm2 rep</b></td> <td>{}</td></tr>'.format(user.sm2_repetition.get(card.card_id, '-'))
-            rr += '<tr><td><b>sm2 inv</b></td> <td>{}</td></tr>'.format(user.sm2_interval.get(card.card_id, '-'))
-            rr += '<tr><td><b>sm2 e_f</b></td> <td>{}</td></tr>'.format(user.sm2_efactor.get(card.card_id, '-'))
-            rr += '<tr><td><b>sm2 dat</b></td> <td>{}</td></tr>'.format(user.sm2_scheduled_date.get(card.card_id, '-'))
+            rr += row_template.format('card_id', c.card_id)
+            rr += row_template.format('answer', c.answer)
+            rr += row_template.format('category', c.category)
+            rr += row_template.format('topic', self.topic_words[np.argmax(c.qrep)])
+            rr += row_template.format('prev_date', prev_date)
+            rr += row_template.format('prev_response', prev_response)
+            for k, v in scores[i].items():
+                rr += row_template_3.format(k, v, self.params.__dict__.get(k, 0))
+            rr += '<tr><td><b>{}</b></td> <td>{:.4f}</td></tr>'.format('sum', scores_summed[i])
+            rr += row_template.format('ltn box', user.leitner_box.get(c.card_id, '-'))
+            rr += row_template.format('ltn dat', user.leitner_scheduled_date.get(c.card_id, '-'))
+            rr += row_template.format('sm2 rep', user.sm2_repetition.get(c.card_id, '-'))
+            rr += row_template.format('sm2 inv', user.sm2_interval.get(c.card_id, '-'))
+            rr += row_template.format('sm2 e_f', user.sm2_efactor.get(c.card_id, '-'))
+            rr += row_template.format('sm2 dat', user.sm2_scheduled_date.get(c.card_id, '-'))
             rr += '</table>'
 
-        # rr += "</br>"
-        # rr += "</br>"
+        rr += "</br>"
+        rr += "</br>"
+        rr += "<img src={}>".format(remote_filename)
         # rr += "<img src='http://users.umiacs.umd.edu/~shifeng/temp/card.jpg'>"
         # rr += "<img src='http://users.umiacs.umd.edu/~shifeng/temp/user.jpg'>"
 
@@ -496,6 +509,7 @@ class MovingAvgScheduler:
 
         logger.debug('{} {}'.format(card.card_id, card.answer))
         logger.debug('schedule ' + str(datetime.now() - t0))
+        logger.debug(remote_filename)
 
         return {
             'order': order,
@@ -659,3 +673,31 @@ class MovingAvgScheduler:
         user.sm2_interval[card.card_id] = inv
         prev_date, prev_response = user.previous_study[card.card_id]
         user.sm2_scheduled_date[card.card_id] = prev_date + timedelta(days=inv)
+
+    def plot_histogram(self, card_qrep, user_qrep, filename):
+        max_qrep = np.max((card_qrep, user_qrep), axis=0)
+        top_topics = np.argsort(-max_qrep)[:10]
+        card_qrep = np.array(card_qrep)[top_topics].tolist()
+        user_qrep = np.array(user_qrep)[top_topics].tolist()
+        top_topic_words = [self.topic_words[i] for i in top_topics]
+        topic_type = CategoricalDtype(categories=top_topic_words, ordered=True)
+        df = pd.DataFrame({
+            'topics': top_topic_words * 2,
+            'weight': card_qrep + user_qrep,
+            'label': ['card' for _ in top_topics] + ['user' for _ in top_topics]
+        })
+        df['topics'] = df['topics'].astype(str).astype(topic_type)
+
+        p = (
+            ggplot(df)
+            + geom_bar(
+                aes(x='topics', y='weight', fill='label'),
+                stat='identity',
+                position='identity',
+                alpha=0.3,
+            )
+            + coord_flip()
+            + theme_fs()
+            # + theme(axis_text_x=(element_text(rotation=90)))
+        )
+        p.save(filename)
