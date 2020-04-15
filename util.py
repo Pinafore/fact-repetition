@@ -78,7 +78,7 @@ class Card:
 
     def pack(self):
         x = self
-        return (
+        return [
             x.card_id,
             x.text,
             x.answer,
@@ -86,7 +86,7 @@ class Card:
             json.dumps(x.qrep.tolist()),
             json.dumps(x.skill.tolist()),
             json.dumps(x.results)
-        )
+        ]
 
 
 class ScheduleRequest(BaseModel):
@@ -141,7 +141,7 @@ class User:
 
     def pack(self):
         x = self
-        return (
+        return [
             x.user_id,
             json.dumps([q.tolist() for q in x.qrep]),
             json.dumps([q.tolist() for q in x.skill]),
@@ -156,7 +156,7 @@ class User:
             json.dumps(x.results),
             json.dumps(x.count_correct_before),
             json.dumps(x.count_wrong_before),
-        )
+        ]
 
     @classmethod
     def unpack(cls, r):

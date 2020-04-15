@@ -6,18 +6,15 @@ import json
 import time
 import copy
 import pickle
-import numpy as np
+import gensim
 import logging
+import numpy as np
+import en_core_web_lg
 from tqdm import tqdm
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import List, Dict
-
-import gensim
-import en_core_web_lg
-
 # from whoosh.qparser import QueryParser
-
 
 from db import SchedulerDB
 from util import ScheduleRequest, Params, Card, User, History
@@ -28,6 +25,31 @@ nlp = en_core_web_lg.load()
 nlp.add_pipe(process, name='process', last=True)
 
 logger = logging.getLogger('scheduler')
+
+# def polar_plot(qrep, filename=None, alpha=0.2, fill='blue'):
+#     n_topics = len(qrep)
+#
+#     plt.figure(figsize=(3, 3))
+#     ax = plt.subplot(111, projection='polar')
+#
+#     theta = np.linspace(0, 2 * np.pi, n_topics)
+#     # topics = ['topic_%d' % i for i in range(n_topics)]
+#     # lines, labels = plt.thetagrids(range(0, 360, int(360 / n_topics)), (topics))
+#
+#     ax.plot(theta, qrep)
+#     ax.fill(theta, qrep, fill=fill, alpha=alpha / 2)
+#
+#     # remove ticks
+#     ax.set_rticks([])
+#
+#     # Add legend and title for the plot
+#     # ax.legend(labels=('Card', 'User', 'Next'), loc=1)
+#     # ax.set_title("Question representation")
+#
+#     # Dsiplay the plot on the screen
+#     # plt.show()
+#     plt.savefig(filename, bbox_inches='tight', pad_inches=0)
+#     plt.close()
 
 
 class MovingAvgScheduler:
@@ -305,17 +327,21 @@ class MovingAvgScheduler:
             delta_minutes = max(float(current_date - last_study_date) / 60, 0)
             return max(self.params.cool_down_time - delta_minutes, 0)
 
+    def get_average_qrep(self, qreps):
+        weight = 1
+        qrep, weights = [], []
+        for q in qreps:
+            qrep.append(weight * q)
+            weights.append(weight)
+            weight *= self.params.decay_qrep
+        qrep = np.sum(qrep, axis=0) / np.sum(weights)
+        return qrep
+
     def dist_qrep(self, user: User, card: Card) -> float:
         # measures topical similarity
         def cosine_distance(a, b):
             return 1 - (a @ b.T) / (np.linalg.norm(a) * np.linalg.norm(b))
-        weight = 1
-        qreps, weights = [], []
-        for q in user.qrep:
-            qreps.append(weight * q)
-            weights.append(weight)
-            weight *= self.params.decay_qrep
-        qrep = np.sum(qreps, axis=0) / np.sum(weights)
+        qrep = self.get_average_qrep(user.qrep)
         return cosine_distance(qrep, card.qrep)
 
     def dist_leitner(self, user: User, card: Card, date: datetime) -> float:
@@ -372,6 +398,11 @@ class MovingAvgScheduler:
         order = np.argsort(scores_summed).tolist()
         card = cards[order[0]]
 
+        # user_qrep = self.get_average_qrep(user.qrep).tolist()
+        # card_qrep = card.qrep.tolist()
+        # plot(user_qrep, '/fs/www-users/shifeng/temp/user.jpg', fill='green')
+        # plot(card_qrep, '/fs/www-users/shifeng/temp/card.jpg', fill='yellow')
+
         # create rationale
         cards_info = [copy.deepcopy(c.__dict__) for c in cards]
         for i, card_info in enumerate(cards_info):
@@ -392,7 +423,7 @@ class MovingAvgScheduler:
              table {
                border-collapse: collapse;
              }
-             
+
              td, th {
                padding: 0.5rem;
                text-align: left;
@@ -430,6 +461,11 @@ class MovingAvgScheduler:
             rr += '<tr><td><b>sm2 dat</b></td> <td>{}</td></tr>'.format(user.sm2_scheduled_date.get(card.card_id, '-'))
             rr += '</table>'
 
+        # rr += "</br>"
+        # rr += "</br>"
+        # rr += "<img src='http://users.umiacs.umd.edu/~shifeng/temp/card.jpg'>"
+        # rr += "<img src='http://users.umiacs.umd.edu/~shifeng/temp/user.jpg'>"
+
         # add temporary history
         # ID and response will be completed by a call to `update`
         temp_history_id = json.dumps({'user_id': user.user_id, 'card_id': card.card_id})
@@ -446,9 +482,8 @@ class MovingAvgScheduler:
             date=date)
         self.db.add_history(history)
 
-        t1 = datetime.now()
-        logger.debug(card.card_id, card.answer)
-        logger.debug('schedule ' + str(t1 - t0))
+        logger.debug('{} {}'.format(card.card_id, card.answer))
+        logger.debug('schedule ' + str(datetime.now() - t0))
 
         return {
             'order': order,
@@ -548,7 +583,7 @@ class MovingAvgScheduler:
             })
             self.db.update_history(temp_history_id, history)
         else:
-            # this really shouldn't happen, if DB is working properly
+            # this really shouldn't happen if DB is working properly
             history = History(
                 history_id=request.history_id,
                 user_id=request.user_id,
@@ -565,6 +600,8 @@ class MovingAvgScheduler:
         self.db.update_user(user)
         self.db.update_card(card)
 
+        print(' ' * 3, '{: <16} : {}'.format('card_id', card.card_id))
+        print(' ' * 3, '{: <16} : {}'.format('answer', card.answer))
         for key, value in detail.items():
             if isinstance(value, float):
                 print(' ' * 3, '{: <16} : {:.4f}'.format(key, value))

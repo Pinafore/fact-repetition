@@ -103,8 +103,9 @@ class SchedulerDB:
         return True if cur.fetchone() else False
 
     def update_user(self, u: User):
-        # TODO use pack
         cur = self.conn.cursor()
+        u = u.pack()
+        u = u[1:] + u[:1]  # move user_id to the end
         cur.execute("UPDATE users SET\
                      qrep=?, \
                      skill=?, \
@@ -120,22 +121,7 @@ class SchedulerDB:
                      count_correct_before=?, \
                      count_wrong_before=? \
                      WHERE user_id=?",
-                    (
-                        json.dumps([x.tolist() for x in u.qrep]),
-                        json.dumps([x.tolist() for x in u.skill]),
-                        u.category,
-                        json.dumps({k: str(v) for k, v in u.last_study_date.items()}),
-                        json.dumps(u.leitner_box),
-                        json.dumps({k: str(v) for k, v in u.leitner_scheduled_date.items()}),
-                        json.dumps(u.sm2_efactor),
-                        json.dumps(u.sm2_interval),
-                        json.dumps(u.sm2_repetition),
-                        json.dumps({k: str(v) for k, v in u.sm2_scheduled_date.items()}),
-                        json.dumps(u.results),
-                        json.dumps(u.count_correct_before),
-                        json.dumps(u.count_wrong_before),
-                        u.user_id
-                    ))
+                    u)
         # NOTE web.py will commit at exit
         # self.conn.commit()
 
@@ -188,8 +174,9 @@ class SchedulerDB:
             return row_to_dict(r) if r else None
 
     def update_card(self, c: Card):
-        # TODO use pack
         cur = self.conn.cursor()
+        c = c.pack()
+        c = c[1:] + c[:1]  # move card_id to the end
         cur.execute("UPDATE cards SET \
                      text=?, \
                      answer=?, \
@@ -198,15 +185,7 @@ class SchedulerDB:
                      skill=?, \
                      results=? \
                      WHERE card_id=?",
-                    (
-                        c.text,
-                        c.answer,
-                        c.category,
-                        json.dumps(c.qrep.tolist()),
-                        json.dumps(c.skill.tolist()),
-                        json.dumps(c.results),
-                        c.card_id
-                    ))
+                    c)
         # NOTE web.py will commit at exit
         # self.conn.commit()
 
