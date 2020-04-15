@@ -300,32 +300,41 @@ class MovingAvgScheduler:
         return float(card.category.lower() != user.category.lower())
 
     def dist_skill(self, user: User, card: Card) -> float:
-        # measures difficulty difference
-        weight = 1
-        skills, weights = [], []
-        for q in user.skill:
-            skills.append(weight * q)
-            weights.append(weight)
-            weight *= self.params.decay_skill
-        skill = np.sum(skills, axis=0) / np.sum(weights)
-        # skill is a (vector of) probability
-        skill = np.clip(skill, a_min=0.0, a_max=1.0)
-        topic_idx = np.argmax(card.qrep)
-        d = card.skill[topic_idx] - skill[topic_idx]
-        # penalize easier questions by ten
-        d *= 1 if d <= 0 else 10
-        return abs(d)
+        return 0
+        return 1 - self.retention_model.predict_one(user, card)
+        # # measures difficulty difference
+        # weight = 1
+        # skills, weights = [], []
+        # for q in user.skill:
+        #     skills.append(weight * q)
+        #     weights.append(weight)
+        #     weight *= self.params.decay_skill
+        # skill = np.sum(skills, axis=0) / np.sum(weights)
+        # # skill is a (vector of) probability
+        # skill = np.clip(skill, a_min=0.0, a_max=1.0)
+        # topic_idx = np.argmax(card.qrep)
+        # d = card.skill[topic_idx] - skill[topic_idx]
+        # # penalize easier questions by ten
+        # d *= 1 if d <= 0 else 10  # TODO add to param
+        # return abs(d)
 
-    def dist_time(self, user: User, card: Card, date: datetime) -> float:
-        # cool down question for 10 minutes
-        last_study_date = user.last_study_date.get(card.card_id, None)
-        if last_study_date is None:
+    def dist_recall_batch(self, user: User, cards: List[Card]) -> float:
+        return [0 for _ in cards]
+        return 1 - self.retention_model.predict(user, cards)
+
+    def dist_cool_down(self, user: User, card: Card, date: datetime) -> float:
+        prev_date, prev_response = user.previous_study.get(card.card_id, (None, None))
+        if prev_date is None:
             return 0
         else:
             current_date = time.mktime(date.timetuple())
-            last_study_date = time.mktime(last_study_date.timetuple())
-            delta_minutes = max(float(current_date - last_study_date) / 60, 0)
-            return max(self.params.cool_down_time - delta_minutes, 0)
+            prev_date = time.mktime(prev_date.timetuple())
+            delta_minutes = max(float(current_date - prev_date) / 60, 0)
+            # cool down is never negative
+            if prev_response == 'correct':
+                return max(self.params.cool_down_time_correct - delta_minutes, 0)
+            else:
+                return max(self.params.cool_down_time_wrong - delta_minutes, 0)
 
     def get_average_qrep(self, qreps):
         weight = 1
@@ -363,14 +372,16 @@ class MovingAvgScheduler:
             return (scheduled_date - date).total_seconds() / (60 * 60)
 
     def score(self, user: User, cards: List[Card], date: datetime) -> List[float]:
+        recall_scores = self.dist_recall_batch(user, cards)
         return [{
             'qrep': self.dist_qrep(user, card),
-            'skill': self.dist_skill(user, card),
+            # 'skill': self.dist_skill(user, card),
+            'recall': recall_scores[i],
             'category': self.dist_category(user, card),
-            'time': self.dist_time(user, card, date),
+            'cool_down': self.dist_cool_down(user, card, date),
             'leitner': self.dist_leitner(user, card, date),
             'sm2': self.dist_sm2(user, card, date),
-        } for card in cards]
+        } for i, card in enumerate(cards)]
 
     def schedule(self, requests: List[ScheduleRequest], date: datetime) -> Dict:
         if len(requests) == 0:
@@ -406,12 +417,13 @@ class MovingAvgScheduler:
         # create rationale
         cards_info = [copy.deepcopy(c.__dict__) for c in cards]
         for i, card_info in enumerate(cards_info):
+            prev_date, prev_response = user.previous_study.get(card_info['card_id'], ('-', '-'))
             card_info['scores'] = scores[i]
             card_info['scores']['sum'] = scores_summed[i]
             card_info.update({
                 'current date': date,
                 'topic': self.topic_words[np.argmax(card_info['qrep'])],
-                'last_study_date': user.last_study_date.get(card_info['card_id'], '-'),
+                'prev_date': prev_date
             })
             card_info.pop('qrep')
             card_info.pop('skill')
@@ -509,15 +521,6 @@ class MovingAvgScheduler:
         card = cards[indices[0]]
         response = request.label == 'correct'
 
-        detail = {
-            # 'user_id': user.user_id,
-            # 'card_id': card.card_id,
-            # 'answer': card.answer,
-            'response': request.label,
-            # 'last_study_date': user.last_study_date.get(card.card_id, '-'),
-            # 'current_date': date,
-        }
-
         tmp = {
             'old ltn box': user.leitner_box.get(card.card_id, '-'),
             'old ltn dat': str(user.leitner_scheduled_date.get(card.card_id, '-')),
@@ -539,7 +542,7 @@ class MovingAvgScheduler:
                 user.skill.pop(0)
 
         user.category = card.category
-        user.last_study_date[card.card_id] = date
+        user.previous_study[card.card_id] = (date, request.label)
 
         # update retention features
         user.results.append(response)
@@ -556,7 +559,8 @@ class MovingAvgScheduler:
         self.leitner_update(user, card, request.label)
         self.sm2_update(user, card, request.label)
 
-        detail.update({
+        detail = {
+            'response': request.label,
             'old ltn box': tmp['old ltn box'],
             'new ltn box': user.leitner_box.get(card.card_id, '-'),
             'old ltn dat': tmp['old ltn dat'],
@@ -569,7 +573,7 @@ class MovingAvgScheduler:
             'new sm2 e_f': user.sm2_efactor.get(card.card_id, '-'),
             'old sm2 dat': tmp['old sm2 dat'],
             'new sm2 dat': str(user.sm2_scheduled_date.get(card.card_id, '-'))
-        })
+        }
 
         # find that temporary history entry and update
         temp_history_id = json.dumps({'user_id': user.user_id, 'card_id': card.card_id})
@@ -625,8 +629,8 @@ class MovingAvgScheduler:
         new_box = max(min(new_box, 10), 1)
         user.leitner_box[card.card_id] = new_box
         interval = timedelta(days=increment_days[new_box])
-        date_studied = user.last_study_date[card.card_id]
-        user.leitner_scheduled_date[card.card_id] = date_studied + interval
+        prev_date, prev_response = user.previous_study[card.card_id]
+        user.leitner_scheduled_date[card.card_id] = prev_date + interval
 
     def get_quality_from_response(self, response: str) -> int:
         return 4 if response == 'correct' else 1
@@ -653,5 +657,5 @@ class MovingAvgScheduler:
         user.sm2_repetition[card.card_id] = rep
         user.sm2_efactor[card.card_id] = e_f
         user.sm2_interval[card.card_id] = inv
-        date_studied = user.last_study_date[card.card_id]
-        user.sm2_scheduled_date[card.card_id] = date_studied + timedelta(days=inv)
+        prev_date, prev_response = user.previous_study[card.card_id]
+        user.sm2_scheduled_date[card.card_id] = prev_date + timedelta(days=inv)

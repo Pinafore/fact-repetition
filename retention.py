@@ -534,6 +534,10 @@ class RetentionModel:
             uq_correct = user.count_correct_before.get(card.card_id, 0)
             uq_wrong = user.count_wrong_before.get(card.card_id, 0)
             uq_total = uq_correct + uq_wrong
+            if card.card_id in user.previous_study:
+                prev_date, prev_response = user.previous_study[card.card_id]
+            else:
+                prev_date = date
             xs.append([
                 uq_correct,  # user_count_correct
                 uq_wrong,  # user_count_wrong
@@ -541,7 +545,7 @@ class RetentionModel:
                 0 if len(user.results) == 0 else np.mean(user.results),  # user_average_overall_accuracy
                 0 if uq_total == 0 else uq_correct / uq_total,  # user_average_question_accuracy
                 0 if len(user.results) == 0 else user.results[-1],  # user_previous_result
-                (date - user.last_study_date.get(card.card_id, date)).seconds / (60 * 60),  # user_gap_from_previous
+                (date - prev_date).seconds / (60 * 60),  # user_gap_from_previous
                 0 if len(card.results) == 0 else np.mean(card.results),  # question_average_overall_accuracy
                 len(card.results),  # question_count_total
                 sum(card.results),  # question_count_correct
@@ -565,7 +569,7 @@ def test_wrapper():
         qrep=[np.array([0.1, 0.2, 0.3])],
         skill=[np.array([0.1, 0.2, 0.3])],
         category='History',
-        last_study_date={'card 1': datetime.now()},
+        previous_study={'card 1': (datetime.now(), 'correct')},
         leitner_box={'card 1': 2},
         leitner_scheduled_date={'card 2': datetime.now()},
         sm2_efactor={'card 1': 0.5},
@@ -588,7 +592,7 @@ def test_wrapper():
     )
 
     model = RetentionModel()
-    print(model.predict(user, [card]))
+    print(1 - model.predict(user, [card, card, card]))
     print(model.predict_one(user, card))
 
 

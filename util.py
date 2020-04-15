@@ -19,17 +19,19 @@ def parse_date(date: str):
 
 
 class Params(BaseModel):
-    n_topics: int = 40
-    qrep: float = 1.0
-    skill: float = 0.0
-    time: float = 1.0
-    category: float = 1.0
-    leitner: float = 1.0
-    sm2: float = 1.0
-    decay_qrep: float = 0.9
-    decay_skill: float = 0.9
-    max_qreps: int = 10
-    cool_down_time: float = 20.
+    n_topics: int = 40                  # LDA
+    qrep: float = 1                     # cosine distance between qreps
+    skill: float = 0                    # card difficulty vs user skill level
+    recall: float = 1                   # recall probability
+    category: float = 1                 # change in category from prev
+    leitner: float = 1                  # hours till leitner scheduled date
+    sm2: float = 1                      # hours till sm2 scheduled date
+    decay_qrep: float = 0.9             # discount factor
+    decay_skill: float = 0.9            # discount factor
+    cool_down: float = 1                # weight for cool down
+    cool_down_time_correct: float = 20  # minutes to cool down
+    cool_down_time_wrong: float = 2     # minutes to cool down
+    max_qreps: int = 10                 # num of qreps to average over
     lda_dir: str = 'checkpoints/gensim_all_40_1585820469.362995'
     whoosh_index: str = 'whoosh_index'
 
@@ -122,7 +124,7 @@ class User:
     # skill of recently studied cards
     skill: List[np.ndarray]
     category: str
-    last_study_date: Dict[str, datetime] = field(default_factory=dict)
+    previous_study: dict = field(default_factory=dict)
 
     leitner_box: Dict[str, int] = field(default_factory=dict)
     leitner_scheduled_date: Dict[str, datetime] = field(default_factory=dict)
@@ -146,7 +148,7 @@ class User:
             json.dumps([q.tolist() for q in x.qrep]),
             json.dumps([q.tolist() for q in x.skill]),
             x.category,
-            json.dumps({k: str(v) for k, v in x.last_study_date.items()}),
+            json.dumps({k: (str(v), r) for k, (v, r) in x.previous_study.items()}),
             json.dumps(x.leitner_box),
             json.dumps({k: str(v) for k, v in x.leitner_scheduled_date.items()}),
             json.dumps(x.sm2_efactor),
@@ -165,7 +167,7 @@ class User:
             'qrep',
             'skill',
             'category',
-            'last_study_date',
+            'previous_study',
             'leitner_box',
             'leitner_scheduled_date',
             'sm2_efactor',
@@ -188,7 +190,7 @@ class User:
             qrep=[np.array(x) for x in json.loads(r[1])],
             skill=[np.array(x) for x in json.loads(r[2])],
             category=r[3],
-            last_study_date={k: parse_date(v) for k, v in json.loads(r[4]).items()},
+            previous_study={k: (parse_date(v), r) for k, (v, r) in json.loads(r[4]).items()},
             leitner_box=json.loads(r[5]),
             leitner_scheduled_date={k: parse_date(v) for k, v in json.loads(r[6]).items()},
             sm2_efactor=json.loads(r[7]),

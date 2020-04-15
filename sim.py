@@ -43,9 +43,10 @@ def get_result(card: dict, date: datetime):
     '''
 
     prob = 0.5  # default
-    if card.card_id in user.last_study_date:
+    if card.card_id in user.previous_study:
+        prev_date, prev_response = user.previous_study[card.card_id]
         h = user.count_correct_before.get(card.card_id, 0) + user.count_wrong_before.get(card.card_id, 0)
-        delta = (date - user.last_study_date[card.card_id]).days
+        delta = (date - prev_date).days
         prob = np.exp2(- delta / h)
 
     result = np.random.binomial(1, prob)

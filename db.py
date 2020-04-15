@@ -32,7 +32,7 @@ class SchedulerDB:
                      qrep TEXT, \
                      skill TEXT, \
                      category TEXT, \
-                     last_study_date TEXT, \
+                     previous_study TEXT, \
                      leitner_box TEXT, \
                      leitner_scheduled_date TEXT, \
                      sm2_efactor TEXT, \
@@ -110,7 +110,7 @@ class SchedulerDB:
                      qrep=?, \
                      skill=?, \
                      category=?, \
-                     last_study_date=?, \
+                     previous_study=?, \
                      leitner_box=?, \
                      leitner_scheduled_date=?, \
                      sm2_efactor=?, \
