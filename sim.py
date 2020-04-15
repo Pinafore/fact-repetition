@@ -56,8 +56,10 @@ def schedule_and_update(cards, date):
     for card in cards:
         card['date'] = str(date)
 
+    t0 = datetime.now()
     r = requests.post('http://127.0.0.1:8000/api/karl/schedule', data=json.dumps(cards))
     schedule_outputs = json.loads(r.text)
+    t1 = datetime.now()
 
     card = cards[schedule_outputs['order'][0]]
     card['label'] = get_result(card, date)
@@ -65,6 +67,7 @@ def schedule_and_update(cards, date):
     card['history_id'] = 'dummy_{}_{}'.format(card['question_id'], str(date))
     r = requests.post('http://127.0.0.1:8000/api/karl/update', data=json.dumps([card]))
     update_outputs = json.loads(r.text)
+    t2 = datetime.now()
 
     print(current_date.strftime('%Y-%m-%d-%H-%M'), file=detail_file)
     print('    {: <16} : {}'.format('card_id', card['question_id']), file=detail_file)
@@ -97,7 +100,10 @@ def schedule_and_update(cards, date):
                   file=detail_file)
         print('', file=detail_file)
 
-    return schedule_outputs, update_outputs
+    schedule_time = t1 - t0
+    update_time = t2 - t1
+
+    return schedule_outputs, update_outputs, schedule_time, update_time
 
 
 if __name__ == '__main__':
@@ -118,6 +124,7 @@ if __name__ == '__main__':
 
     card_to_column = dict()
     start_date = parse_date('2028-06-1 08:00:00.000001')
+    schedule_times, update_times = [], []
     for days in range(N_DAYS):
         print('day {}'.format(days), file=fret_file)
         time_offset = 0
@@ -141,7 +148,9 @@ if __name__ == '__main__':
             if n_cards > MAX_CARDS:
                 break
 
-            schedule_outputs, update_outputs = schedule_and_update(cards, current_date)
+            schedule_outputs, update_outputs, t_s, t_u = schedule_and_update(cards, current_date)
+            schedule_times.append(t_s)
+            update_times.append(t_u)
             card_id = cards[schedule_outputs['order'][0]]['question_id']
 
             if card_id not in card_to_column:
@@ -158,3 +167,5 @@ if __name__ == '__main__':
             time_offset += TURN_AROUND
             n_cards += 1
         print('', file=fret_file)
+    print('average schedule delay:', np.mean(schedule_times))
+    print('average update delay:', np.mean(schedule_times))

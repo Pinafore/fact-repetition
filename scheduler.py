@@ -60,7 +60,7 @@ class MovingAvgScheduler:
         self.params = params
         self.db_filename = db_filename
         self.db = SchedulerDB(db_filename)
-        # self.retention_model = RetentionModel()
+        self.retention_model = RetentionModel()
 
         '''
         logger.info('loading question and records...')
@@ -301,7 +301,6 @@ class MovingAvgScheduler:
 
     def dist_skill(self, user: User, card: Card) -> float:
         return 0
-        return 1 - self.retention_model.predict_one(user, card)
         # # measures difficulty difference
         # weight = 1
         # skills, weights = [], []
@@ -319,8 +318,8 @@ class MovingAvgScheduler:
         # return abs(d)
 
     def dist_recall_batch(self, user: User, cards: List[Card]) -> float:
-        return [0 for _ in cards]
-        return 1 - self.retention_model.predict(user, cards)
+        # return [0 for _ in cards]
+        return (1 - self.retention_model.predict(user, cards)).tolist()
 
     def dist_cool_down(self, user: User, card: Card, date: datetime) -> float:
         prev_date, prev_response = user.previous_study.get(card.card_id, (None, None))
@@ -423,6 +422,7 @@ class MovingAvgScheduler:
             card_info.update({
                 'current date': date,
                 'topic': self.topic_words[np.argmax(card_info['qrep'])],
+                'prev_response': prev_response,
                 'prev_date': prev_date
             })
             card_info.pop('qrep')

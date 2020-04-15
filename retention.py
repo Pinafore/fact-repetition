@@ -513,7 +513,7 @@ class RetentionModel:
         self.model.load_state_dict(torch.load('checkpoints/retention_model.pt'))
         self.model.eval()
 
-    def predict(self, user: User, cards: List[Card], date=None) -> List[float]:
+    def predict(self, user: User, cards: List[Card], date=None) -> np.ndarray:
         # TODO batch version
         if date is None:
             date = datetime.now()
