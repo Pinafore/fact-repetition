@@ -34,6 +34,18 @@ def apply_parallel(f, groupby):
         delayed(f)(group) for name, group in tqdm(groupby))
 
 
+def get_questions():
+    questions_dir = 'data/protobowl/protobowl-042818.log.questions.pkl'
+
+    if os.path.exists(questions_dir):
+        with open(questions_dir, 'rb') as f:
+            return pickle.load(f)
+
+    get_raw_df()
+    with open(questions_dir, 'rb') as f:
+        return pickle.load(f)
+
+
 def get_raw_df():
     log_dir = 'data/protobowl/protobowl-042818.log'
     raw_df_dir = 'data/protobowl/protobowl-042818.log.h5'
@@ -376,6 +388,9 @@ class RetentionDataset(torch.utils.data.Dataset):
         self.mean[-1] = 0
         self.std[-1] = 1
 
+        self.x_train, self.y_train = x_train, y_train
+        self.x_test, self.y_test = x_test, y_test
+
         if fold == 'train':
             self.x, self.y = x_train, y_train
         elif fold == 'test':
@@ -514,7 +529,6 @@ class RetentionModel:
         self.model.eval()
 
     def predict(self, user: User, cards: List[Card], date=None) -> np.ndarray:
-        # TODO batch version
         if date is None:
             date = datetime.now()
         # user_count_correct

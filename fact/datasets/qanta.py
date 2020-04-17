@@ -180,8 +180,8 @@ class QantaReader(DatasetReader):
 
     @overrides
     def text_to_instance(self,
-                         text: str, 
-                        # answer: str,
+                         text: str,
+                         # answer: str,
                          user_id: str,
                          question_id: str,
                          user_accuracy: Optional[float] = None,

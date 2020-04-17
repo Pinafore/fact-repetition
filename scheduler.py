@@ -22,7 +22,7 @@ from pandas.api.types import CategoricalDtype
 
 from db import SchedulerDB
 from util import ScheduleRequest, Params, Card, User, History, theme_fs
-from retention import RetentionModel
+from retention_pytorch import RetentionModel
 from build_lda import process
 
 nlp = en_core_web_lg.load()
