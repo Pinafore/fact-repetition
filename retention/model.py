@@ -80,7 +80,7 @@ class BERTRetentionModel(RetentionModel):
             model_name_or_path: str = "bert-base-uncased",
             return_embedding: bool = False,
     ) -> None:
-        bert = PretrainedTransformerEmbedder(model_name_or_path, requires_grad=bert_finetune)
+        bert = PretrainedTransformerEmbedder(model_name_or_path)
         if not bert_finetune:
             for param in bert.parameters():
                 param.requires_grad = False
@@ -110,13 +110,13 @@ class BERTRetentionModel(RetentionModel):
             features: torch.Tensor,
             label: Optional[torch.Tensor] = None
     ) -> Dict[str, torch.Tensor]:
-        input_ids = tokens["text"]
+        token_ids = tokens['text']['token_ids']
+        mask = tokens['text']['mask']
+        bert_seq_emb = self.bert(token_ids, mask)
         if self.bert_pooling == "cls":
             # CLS token is always the first
-            bert_emb = self.bert(input_ids)[:, 0, :]
+            bert_emb = bert_seq_emb[:, 0, :]
         elif self.bert_pooling == "mean":
-            mask = (input_ids != 0).long()[:, :, None]
-            bert_seq_emb = self.bert(input_ids)
             bert_emb = util.masked_mean(bert_seq_emb, mask, dim=1)
         else:
             raise ValueError("Invalid pooling option")
