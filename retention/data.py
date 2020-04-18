@@ -425,7 +425,7 @@ class RetentionReader(DatasetReader):
         if fold == 'train':
             xs, ys = x_train, y_train
             df = df_train
-            n_examples = int(len(ys) * 0.1) if self.debug else len(ys)
+            n_examples = int(len(ys) * 0.01) if self.debug else len(ys)
             xs = xs[:n_examples]
             ys = ys[:n_examples]
         else:

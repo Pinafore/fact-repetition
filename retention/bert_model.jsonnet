@@ -1,32 +1,32 @@
 function(lr=0.001,
+         batch_size=32,
          dropout=0.25,
          extra_hidden_dim=12,
          bert_pooling='cls',
          debug=true,
+         lazy=true,
          bert_finetune=false,
          pytorch_seed=0,
          numpy_seed=0,
          random_seed=0,
          model_name='bert-base-uncased',
-         model_name_or_path='bert-base-uncased') {
+         model_name_or_path='bert-base-uncased',
+         return_embedding=true) {
   pytorch_seed: pytorch_seed,
   numpy_seed: numpy_seed,
   random_seed: random_seed,
   dataset_reader: {
-    lazy: false,
+    lazy: lazy,
     debug: debug,
     type: 'retention',
     tokenizer: {
       type: 'pretrained_transformer',
       model_name: model_name,
-      do_lowercase: true,
-      start_tokens: [],
-      end_tokens: [],
     },
     token_indexers: {
       text: {
-        type: 'bert-pretrained',
-        pretrained_model: model_name_or_path,
+        type: 'pretrained_transformer',
+        model_name: model_name_or_path,
       },
     },
   },
@@ -39,6 +39,7 @@ function(lr=0.001,
     bert_pooling: bert_pooling,
     bert_finetune: bert_finetune,
     model_name_or_path: model_name_or_path,
+    return_embedding: return_embedding,
     uid_embedder: {
       token_embedders: {
         uid_tokens: {
@@ -58,10 +59,12 @@ function(lr=0.001,
       }
     },
   },
-  iterator: {
-    type: 'bucket',
-    sorting_keys: [['tokens', 'num_tokens']],
-    batch_size: 32,
+  data_loader: {
+    batch_sampler: {
+      type: 'bucket',
+      sorting_keys: [['tokens', 'num_tokens']],
+      batch_size: batch_size
+    },
   },
   trainer: {
     type: 'callback',

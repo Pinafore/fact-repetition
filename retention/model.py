@@ -8,7 +8,7 @@ from allennlp.data import Vocabulary
 from allennlp.models import Model
 from allennlp.modules import TextFieldEmbedder
 from allennlp.training.metrics import CategoricalAccuracy
-from allennlp.modules.token_embedders import PretrainedBertEmbedder
+from allennlp.modules.token_embedders import PretrainedTransformerEmbedder
 
 
 class RetentionModel(Model):
@@ -78,8 +78,12 @@ class BERTRetentionModel(RetentionModel):
             bert_pooling: str = 'cls',
             bert_finetune: bool = False,
             model_name_or_path: str = "bert-base-uncased",
+            return_embedding: bool = False,
     ) -> None:
-        bert = PretrainedBertEmbedder(model_name_or_path, requires_grad=bert_finetune)
+        bert = PretrainedTransformerEmbedder(model_name_or_path, requires_grad=bert_finetune)
+        if not bert_finetune:
+            for param in bert.parameters():
+                param.requires_grad = False
         hidden_dim = (
             bert.get_output_dim()
             + uid_embedder.get_output_dim()
@@ -91,11 +95,12 @@ class BERTRetentionModel(RetentionModel):
             dropout=dropout,
             hidden_dim=hidden_dim,
         )
+        self.bert = bert
         self.uid_embedder = uid_embedder
         self.qid_embedder = qid_embedder
         self.model_name_or_path = model_name_or_path
-        self.bert = bert
         self.bert_pooling = bert_pooling
+        self.return_embedding = return_embedding
 
     def forward(
             self,
