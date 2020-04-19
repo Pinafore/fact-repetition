@@ -484,6 +484,8 @@ def main():
                         help='random seed (default: 1)')
     parser.add_argument('--log-interval', type=int, default=1000, metavar='N',
                         help='how many batches to wait before logging status')
+    parser.add_argument('--evaluate', action='store_true', default=False,
+                        help='skip training')
     args = parser.parse_args()
     use_cuda = not args.no_cuda and torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
@@ -504,6 +506,15 @@ def main():
     model = Net(n_input=n_input).to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
+    checkpoint_dir = "checkpoints/retention_model.pt"
+
+    if args.evaluate:
+        checkpoint_dir = "checkpoints/retention_model.pt"
+        model.load_state_dict(torch.load('checkpoints/retention_model.pt'))
+        model.eval()
+        test_loss, predictions = test(args, model, device, test_loader)
+        return
+
     best_test_loss = 9999
     scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
     for epoch in range(1, args.epochs + 1):
@@ -511,7 +522,6 @@ def main():
         test_loss, predictions = test(args, model, device, test_loader)
         scheduler.step()
         if test_loss < best_test_loss:
-            checkpoint_dir = "checkpoints/retention_model.pt"
             torch.save(model.state_dict(), checkpoint_dir)
             print('save model checkpoint to', checkpoint_dir)
             best_test_loss = test_loss
@@ -645,6 +655,6 @@ def test_majority():
 
 
 if __name__ == '__main__':
-    # main()
-    test_wrapper()
+    main()
+    # test_wrapper()
     # test_majority()
