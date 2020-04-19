@@ -1,7 +1,7 @@
 local lazy = true;
 local debug = false;
 local bert_finetune = false;
-local batch_size = 20;
+local batch_size = 12;
 local num_epochs = 1;
 {
     "pytorch_seed": 0,
@@ -52,11 +52,7 @@ local num_epochs = 1;
         },
     },
     "data_loader": {
-        "batch_sampler": {
-            "type": 'bucket',
-            "batch_size": batch_size,
-            "sorting_keys": ['tokens']
-        },
+        "batch_size": 32
     },
     "trainer": {
         "num_epochs": num_epochs,
