@@ -1,8 +1,8 @@
 local lazy = true;
-local debug = false;
+local debug = true;
 local bert_finetune = false;
 local batch_size = 12;
-local num_epochs = 1;
+local num_epochs = 4;
 {
     "pytorch_seed": 0,
     "numpy_seed": 0,
@@ -61,6 +61,6 @@ local num_epochs = 1;
         "optimizer": {
           "type": "adam",
           "lr": 0.001,
-        }
+        },
     }
 }
