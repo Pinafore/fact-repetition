@@ -7,8 +7,8 @@ from typing import List
 from datetime import datetime
 from pydantic import BaseModel
 
-from util import ScheduleRequest, Params, parse_date
-from scheduler import MovingAvgScheduler
+from karl.util import ScheduleRequest, Params, parse_date
+from karl.scheduler import MovingAvgScheduler
 
 app = FastAPI()
 scheduler = MovingAvgScheduler()

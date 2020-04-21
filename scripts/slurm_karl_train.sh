@@ -14,6 +14,6 @@ set -e
 hostname
 nvidia-smi
 allennlp train \
-    --include-package retention \
+    --include-package karl.retention \
     -s checkpoints/karl_bert \
     -f configs/karl_bert.config

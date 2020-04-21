@@ -13,7 +13,7 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import StepLR
 
 from karl.util import User, Card
-from retention.data import RetentionDataset, apply_parallel, get_split_dfs
+from karl.retention.data import RetentionDataset, apply_parallel, get_split_dfs
 
 
 class Net(nn.Module):
