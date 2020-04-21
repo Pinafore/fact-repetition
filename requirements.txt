@@ -17,3 +17,4 @@ whoosh
 uvicorn
 spacy
 plotnine
+wget
