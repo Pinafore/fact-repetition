@@ -1,5 +1,5 @@
 local lazy = true;
-local debug = true;
+local debug = false;
 local bert_finetune = false;
 local batch_size = 20;
 local num_epochs = 4;

@@ -15,6 +15,7 @@ from collections import defaultdict
 from joblib import Parallel, delayed
 from typing import Iterator, Dict, Optional
 
+import torch
 from allennlp.data import Instance
 from allennlp.data.fields import Field, TextField, ArrayField, LabelField
 from allennlp.data.tokenizers import Tokenizer, Token
@@ -468,3 +469,31 @@ class RetentionReader(DatasetReader):
             fields['label'] = LabelField(label, skip_indexing=True)
 
         return Instance(fields)
+
+
+class RetentionDataset(torch.utils.data.Dataset):
+
+    def __init__(self, fold='train'):
+        x_train, y_train, x_test, y_test = get_split_numpy()
+        self.mean = np.mean(x_train, axis=0)
+        self.std = np.std(x_train, axis=0)
+        self.mean[-1] = 0
+        self.std[-1] = 1
+
+        self.x_train, self.y_train = x_train, y_train
+        self.x_test, self.y_test = x_test, y_test
+
+        if fold == 'train':
+            self.x, self.y = x_train, y_train
+        elif fold == 'test':
+            self.x, self.y = x_test, y_test
+
+    def __len__(self):
+        return len(self.y)
+
+    def __getitem__(self, idx):
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+        x = (self.x[idx] - self.mean) / self.std
+        y = np.array(self.y[idx])
+        return torch.from_numpy(x), torch.from_numpy(y)
