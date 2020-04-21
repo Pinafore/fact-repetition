@@ -24,8 +24,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim.lr_scheduler import StepLR
 
-from util import parse_date
-from util import User, Card
+from karl.util import User, Card, parse_date
 
 
 def apply_parallel(f, groupby):

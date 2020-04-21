@@ -6,9 +6,9 @@ import unittest
 import numpy as np
 from datetime import datetime
 
-from db import SchedulerDB
-from util import User, Card, History, Params, ScheduleRequest
-from scheduler import MovingAvgScheduler
+from karl.db import SchedulerDB
+from karl.util import User, Card, History, Params, ScheduleRequest
+from karl.scheduler import MovingAvgScheduler
 
 
 class TestDB(unittest.TestCase):

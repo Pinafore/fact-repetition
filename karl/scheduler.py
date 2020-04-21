@@ -20,13 +20,13 @@ from typing import List, Dict
 from plotnine import ggplot, aes, geom_bar, coord_flip
 from pandas.api.types import CategoricalDtype
 
-from db import SchedulerDB
-from util import ScheduleRequest, Params, Card, User, History, theme_fs
-from retention_pytorch import RetentionModel
-from build_lda import process
+from karl.db import SchedulerDB
+from karl.lda import process_question
+from karl.util import ScheduleRequest, Params, Card, User, History, theme_fs
+from karl.retention_pytorch import RetentionModel
 
 nlp = en_core_web_lg.load()
-nlp.add_pipe(process, name='process', last=True)
+nlp.add_pipe(process_question, name='process', last=True)
 
 logger = logging.getLogger('scheduler')
 
@@ -97,8 +97,8 @@ class MovingAvgScheduler:
         '''
 
         # LDA gensim
-        # self.lda = gensim.models.LdaModel.load(os.path.join(params.lda_dir, 'lda'))
-        self.lda = gensim.models.ldamulticore.LdaMulticore.load(os.path.join(params.lda_dir, 'lda'))
+        # self.lda_model = gensim.models.LdaModel.load(os.path.join(params.lda_dir, 'lda'))
+        self.lda_model = gensim.models.ldamulticore.LdaMulticore.load(os.path.join(params.lda_dir, 'lda'))
         self.vocab = gensim.corpora.Dictionary.load_from_text(os.path.join(params.lda_dir, 'vocab.txt'))
         with open(os.path.join(params.lda_dir, 'topic_words.txt'), 'r') as f:
             self.topic_words = [l.strip() for l in f.readlines()]
@@ -176,7 +176,7 @@ class MovingAvgScheduler:
         texts = (self.vocab.doc2bow(x) for x in nlp.pipe(texts))
         # need to set minimum_probability to a negative value
         # to prevent gensim output skipping topics
-        doc_topic_dists = self.lda.get_document_topics(texts, minimum_probability=-1)
+        doc_topic_dists = self.lda_model.get_document_topics(texts, minimum_probability=-1)
         for card, dist in zip(cards, doc_topic_dists):
             # dist is something like [(d_i, i)]
             card.qrep = np.asarray([d_i for i, d_i in dist])

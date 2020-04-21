@@ -1,8 +1,9 @@
 local lazy = true;
-local debug = true;
+local debug = false;
 local bert_finetune = false;
-local batch_size = 12;
+local batch_size = 20;
 local num_epochs = 4;
+local model_name = '/fs/clip-quiz/entilzha/qanta_lm';
 {
     "pytorch_seed": 0,
     "numpy_seed": 0,
@@ -15,18 +16,18 @@ local num_epochs = 4;
         "debug": debug,
         "tokenizer": {
             "type": 'pretrained_transformer',
-            "model_name": 'bert-base-uncased',
+            "model_name": model_name,
         },
         "token_indexers": {
             "text": {
                 "type": 'pretrained_transformer',
-                "model_name": 'bert-base-uncased',
+                "model_name": model_name,
             },
         },
     },
     "model": {
         "type": 'bert_retention_model',
-        "model_name_or_path": 'bert-base-uncased',
+        "model_name_or_path": model_name,
         "dropout": 0.25,
         "extra_hidden_dim": 12,
         "bert_pooling": 'cls',

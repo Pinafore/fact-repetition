@@ -35,7 +35,7 @@ def get_texts(data_type: str) -> List[str]:
         texts += [card['text'] for card in cards]
     return texts
 
-def process(doc):
+def process_question(doc):
     tokens = []
     entity = ''
     proper_noun = ''
@@ -84,7 +84,7 @@ def build_gensim(texts, args, checkpoint_dir):
             processed_docs = pickle.load(f)
     else:
         nlp = en_core_web_lg.load()
-        nlp.add_pipe(process, name='process', last=True)
+        nlp.add_pipe(process_question, name='process', last=True)
         processed_docs = list(nlp.pipe(texts, batch_size=2500, n_threads=16))
         with open(processed_docs_dir, 'wb') as f:
             pickle.dump(processed_docs, f)

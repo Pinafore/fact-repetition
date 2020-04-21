@@ -5,9 +5,9 @@ import os
 import json
 import sqlite3
 import logging
-import numpy as np
 from typing import List
-from util import User, Card, History, parse_date
+
+from karl.util import User, Card, History
 
 logger = logging.getLogger('scheduler')
 
