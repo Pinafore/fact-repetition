@@ -435,10 +435,11 @@ class MovingAvgScheduler:
         user = self.get_user(user)
         cards = [cards[i] for i in indices]
 
-        if user.user_id not in self.precomputed_results:
-            results = self.schedule(user, cards, date, add_history=True, plot=plot)
-        elif not self.precomputed_results[user.user_id].get('response', None):
-            # previous study did not get an update, throw away precomputed results
+        if not all((
+                self.params.precompute,
+                user.user_id in self.precomputed_results,
+                'response' in self.precomputed_results.get(user.user_id, {}),
+        )):
             results = self.schedule(user, cards, date, add_history=True, plot=plot)
         else:
             # precomputed_results[user.user_id]
@@ -502,6 +503,9 @@ class MovingAvgScheduler:
                     'scores': scores,
                 }
 
+        if not self.params.precompute:
+            return results
+
         card = cards[results['order'][0]]
         user_correct = copy.deepcopy(user)
         user_wrong = copy.deepcopy(user)
@@ -530,7 +534,7 @@ class MovingAvgScheduler:
                 'rationale': results_wrong['rationale'],
                 'cards_info': results_wrong['cards_info'],
             },
-            'response': None,
+            # 'response': None,
         }
 
         return results
@@ -697,23 +701,26 @@ class MovingAvgScheduler:
 
         cards = self.get_cards(requests)
 
-        # for u, indices in user_to_requests.items():
-        assert len(user_to_requests) == 1
+        if len(user_to_requests) != 1:
+            raise ValueError('Update only accpets 1 user. Received {}'.format(len(user_to_requests)))
         user, indices = list(user_to_requests.items())[0]
         user = self.get_user(user)
 
-        # for i in indices:
-        assert len(indices) == 1
+        if len(indices) != 1:
+            raise ValueError('Update only accpets 1 card. Received {}'.format(len(indices)))
         request = requests[indices[0]]
         card = cards[indices[0]]
 
         old_user = copy.deepcopy(user)
-        results = self.precomputed_results.get(user.user_id, None)
-        if results is None:
+
+        results = self.precomputed_results.get(user.user_id, {})
+        if not all((
+                self.params.precompute,
+                len(results),
+                results.get('card_id', None) == card.card_id,
+        )):
+            # do normal update
             self.update_with_response(user, card, date, request.label)
-        elif results['card_id'] != card.card_id:
-            self.update_with_response(user, card, date, request.label)
-            self.precomputed_results.pop(user.user_id)
         else:
             results['response'] = request.label
             user = results[request.label]['user']
@@ -750,7 +757,7 @@ class MovingAvgScheduler:
             history = History(
                 history_id=request.history_id,
                 user_id=request.user_id,
-                card_id=request.question_id,
+                card_id=card.card_id,  # or, request.question_id
                 response=request.label,
                 judgement=request.label,
                 user_snapshot=json.dumps(user.pack()),
