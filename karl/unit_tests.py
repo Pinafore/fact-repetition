@@ -165,6 +165,13 @@ class TestDB(unittest.TestCase):
         self.assert_user_equal(user, returned_user)
         self.assertFalse(self.db.check_history(old_history_id))
 
+        t0 = datetime.now()
+        new_user = copy.deepcopy(user)
+        new_user.user_id = 'new user 1'
+        new_user.sm2_efactor = {'card 1': 0.05},
+        self.assert_user_equal(user, returned_user)
+        print('deep copy user takes', datetime.now() - t0)
+
 
 class TestScheduler(unittest.TestCase):
 
@@ -208,6 +215,7 @@ class TestScheduler(unittest.TestCase):
         with open('data/diagnostic_questions.pkl', 'rb') as f:
             cards = pickle.load(f)
         cards = cards[:5]
+
         for i, c in enumerate(cards):
             cards[i] = ScheduleRequest(
                 text=c['text'],
@@ -222,7 +230,7 @@ class TestScheduler(unittest.TestCase):
         # using deepcopy here because DB lookup converts dict cards into Card
         # cards. not a problem in actual use because objects go through web API
         # and not reused
-        result = self.scheduler.schedule(copy.deepcopy(cards), datetime.now())
+        result = self.scheduler.schedule_and_predict(copy.deepcopy(cards), datetime.now())
         order = result['order']
 
         print()

@@ -22,7 +22,12 @@ def schedule(requests: List[ScheduleRequest]):
     date = datetime.now()
     if requests[0].date is not None:
         date = parse_date(requests[0].date)
-    return scheduler.schedule(requests, date)
+    results = scheduler.schedule_and_predict(requests, date)
+    return {
+        'order': results['order'],
+        'rationale': results['rationale'],
+        'cards_info': results['cards_info'],
+    }
 
 @app.post('/api/karl/update')
 def update(requests: List[ScheduleRequest]):

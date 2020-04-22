@@ -67,34 +67,32 @@ class MovingAvgScheduler:
         self.db = SchedulerDB(db_filename)
         self.retention_model = RetentionModel()
 
-        '''
-        logger.info('loading question and records...')
-        with open('data/jeopardy_310326_question_player_pairs_20190612.pkl', 'rb') as f:
-            records_df = pickle.load(f)
-        with open('data/jeopardy_358974_questions_20190612.pkl', 'rb') as f:
-            questions_df = pickle.load(f)
-        self.karl_to_question_id = questions_df.to_dict()['question_id']
+        # logger.info('loading question and records...')
+        # with open('data/jeopardy_310326_question_player_pairs_20190612.pkl', 'rb') as f:
+        #     records_df = pickle.load(f)
+        # with open('data/jeopardy_358974_questions_20190612.pkl', 'rb') as f:
+        #     questions_df = pickle.load(f)
+        # self.karl_to_question_id = questions_df.to_dict()['question_id']
 
-        # augment question_df with record stats
-        logger.info('merging dfs...')
-        df = questions_df.set_index('question_id').join(records_df.set_index('question_id'))
-        df = df[df['correct'].notna()]
-        df['correct'] = df['correct'].apply(lambda x: 1 if x == 1 else 0)
-        df_grouped = df.reset_index()[['question_id', 'correct']].groupby('question_id')
-        dict_correct_mean = df_grouped.mean().to_dict()['correct']
-        dict_records_cnt = df_grouped.count().to_dict()['correct']
-        questions_df['prob'] = questions_df['question_id'].apply(lambda x: dict_correct_mean.get(x, None))
-        questions_df['count'] = questions_df['question_id'].apply(lambda x: dict_records_cnt.get(x, None))
-        self.questions_df = questions_df
-        self.question_id_set = set(self.questions_df['question_id'])
+        # # augment question_df with record stats
+        # logger.info('merging dfs...')
+        # df = questions_df.set_index('question_id').join(records_df.set_index('question_id'))
+        # df = df[df['correct'].notna()]
+        # df['correct'] = df['correct'].apply(lambda x: 1 if x == 1 else 0)
+        # df_grouped = df.reset_index()[['question_id', 'correct']].groupby('question_id')
+        # dict_correct_mean = df_grouped.mean().to_dict()['correct']
+        # dict_records_cnt = df_grouped.count().to_dict()['correct']
+        # questions_df['prob'] = questions_df['question_id'].apply(lambda x: dict_correct_mean.get(x, None))
+        # questions_df['count'] = questions_df['question_id'].apply(lambda x: dict_records_cnt.get(x, None))
+        # self.questions_df = questions_df
+        # self.question_id_set = set(self.questions_df['question_id'])
 
-        # setup whoosh for text search
-        if not os.path.exists(self.params.whoosh_index):
-            logger.info('building whoosh...')
-            self.build_whoosh()
-        from whoosh.index import open_dir
-        self.ix = open_dir(self.params.whoosh_index)
-        '''
+        # # setup whoosh for text search
+        # if not os.path.exists(self.params.whoosh_index):
+        #     logger.info('building whoosh...')
+        #     self.build_whoosh()
+        # from whoosh.index import open_dir
+        # self.ix = open_dir(self.params.whoosh_index)
 
         # LDA gensim
         # self.lda_model = gensim.models.LdaModel.load(os.path.join(params.lda_dir, 'lda'))
@@ -107,6 +105,29 @@ class MovingAvgScheduler:
         logger.info(self.topic_words)
         # build default estimate for users
         self.avg_user_skill_estimate = self.estimate_avg()
+
+        # cache of precomputed results
+        # user.user_id
+        # | user
+        # | cards
+        # | card
+        # | date
+        # | 'correct'
+        # | | user
+        # | | order
+        # | | scores
+        # | | rationale
+        # | | cards_info
+        # | | (plot)
+        # | 'wrong'
+        # | | user
+        # | | order
+        # | | scores
+        # | | rationale
+        # | | cards_info
+        # | | (plot)
+        # | response: actual response, filled in by update
+        self.precomputed_results = dict()
 
     def estimate_avg(self) -> np.ndarray:
         # estimate the average acccuracy for each component
@@ -253,35 +274,33 @@ class MovingAvgScheduler:
         self.db.add_user(new_user)
         return new_user
 
-    '''
-    def retrieve(self, card: dict) -> Tuple[List[dict], List[float]]:
-        record_id = self.karl_to_question_id[int(card['question_id'])]
+    # def retrieve(self, card: dict) -> Tuple[List[dict], List[float]]:
+    #     record_id = self.karl_to_question_id[int(card['question_id'])]
 
-        # 1. try to find in records with gameid-catnum-level
-        if record_id in self.question_id_set:
-            hits = self.questions_df[self.questions_df.question_id == record_id]
-            if len(hits) > 0:
-                cards = [card.to_dict() for idx, card in hits.iterrows()]
-                return cards, [1 / len(hits) for _ in range(len(hits))]
-        else:
-            # return better default value without text search
-            return 0.5
+    #     # 1. try to find in records with gameid-catnum-level
+    #     if record_id in self.question_id_set:
+    #         hits = self.questions_df[self.questions_df.question_id == record_id]
+    #         if len(hits) > 0:
+    #             cards = [card.to_dict() for idx, card in hits.iterrows()]
+    #             return cards, [1 / len(hits) for _ in range(len(hits))]
+    #     else:
+    #         # return better default value without text search
+    #         return 0.5
 
-        # 2. do text search
-        with self.ix.searcher() as searcher:
-            query = QueryParser("text", self.ix.schema).parse(card['text'])
-            hits = searcher.search(query)
-            hits = [x for x in hits if x['answer'] == card['answer']]
-            if len(hits) > 0:
-                scores = [x.score for x in hits]
-                ssum = np.sum(scores)
-                scores = [x / ssum for x in scores]
-                cards = [self.questions_df[self.questions_df['question_id'] == x['question_id']].iloc[0] for x in hits]
-                return cards, scores
+    #     # 2. do text search
+    #     with self.ix.searcher() as searcher:
+    #         query = QueryParser("text", self.ix.schema).parse(card['text'])
+    #         hits = searcher.search(query)
+    #         hits = [x for x in hits if x['answer'] == card['answer']]
+    #         if len(hits) > 0:
+    #             scores = [x.score for x in hits]
+    #             ssum = np.sum(scores)
+    #             scores = [x / ssum for x in scores]
+    #             cards = [self.questions_df[self.questions_df['question_id'] == x['question_id']].iloc[0] for x in hits]
+    #             return cards, scores
 
-        # 3. not found
-        return [], []
-    '''
+    #     # 3. not found
+    #     return [], []
 
     def predict_one(self, card: Card) -> float:
         # # 1. find same or similar card in records
@@ -386,23 +405,138 @@ class MovingAvgScheduler:
             'leitner': self.dist_leitner(user, card, date),
             'sm2': self.dist_sm2(user, card, date),
         } for i, card in enumerate(cards)]
+    
+    def schedule_and_predict(self,
+                             requests: List[ScheduleRequest],
+                             date: datetime,
+                             plot: bool = True) -> Dict:
+        # 0. (update) merge with reality
+        # 1. schedule
+        #    1.1 check if new cards got added
+        #    1.2 if new cards, get scores for new cards, rank, return
+        #    1.3 if not new cards, return cached results
+        # 2. copy user, update with response=True, schedule again, cache results
+        # 3. copy user, update with response=False, schedule again, cache results
+        # cached results: User -> (cards, scores)
 
-    def schedule(self, requests: List[ScheduleRequest], date: datetime) -> Dict:
         if len(requests) == 0:
             return [], [], ''
 
-        t0 = datetime.now()
+        # mapping from user to scheduling requests
+        # not used since we assume only one user
         user_to_requests = defaultdict(list)
         for i, request in enumerate(requests):
             user_to_requests[request.user_id].append(i)
+        if len(user_to_requests) != 1:
+            raise ValueError('Schedule only accpets 1 user. Received {}'.format(len(user_to_requests)))
 
         cards = self.get_cards(requests)
-
-        # for u, indices in user_to_requests.items():
-        # cards = [cards[i] for i in user_to_requests[user.user_id]]
-        assert len(user_to_requests) == 1
         user, indices = list(user_to_requests.items())[0]
         user = self.get_user(user)
+        cards = [cards[i] for i in indices]
+
+        if user.user_id not in self.precomputed_results:
+            results = self.schedule(user, cards, date, add_history=True, plot=plot)
+        elif 'response' not in self.precomputed_results[user.user_id]:
+            # previous study did not get an update, throw away precomputed results
+            results = self.schedule(user, cards, date, add_history=True, plot=plot)
+        else:
+            # precomputed_results[user.user_id]
+            # | user
+            # | cards
+            # | date
+            # | 'correct'
+            # | | user
+            # | | order
+            # | | scores
+            # | | rationale
+            # | | cards_info
+            # | | (plot)
+            # | 'wrong'
+            # | | user
+            # | | order
+            # | | scores
+            # | | rationale
+            # | | cards_info
+            # | | (plot)
+            # | response: actual response, filled in by update
+            prev_results = self.precomputed_results[user.user_id]
+            prev_results = prev_results[prev_results['response']]  # choose the one that matches reality
+            prev_cards = prev_results['cards']
+            prev_card_ids = [c.card_id for c in prev_cards]
+            # prev_cards -> cards
+            prev_card_indices = [None] * len(prev_cards)
+            # new_cards -> cards
+            new_cards, new_card_indices = [], [], []
+            for i, c in enumerate(cards):
+                if c.card_id in prev_card_ids:
+                    prev_card_indices[prev_card_ids.index(c.card_id)] = i
+                else:
+                    new_cards.append(c)
+                    new_card_indices.append(i)
+
+            if len(new_cards) == 0:
+                results = prev_results
+            else:
+                new_results = self.schedule(user, new_cards, date, add_history=False, plot=plot)
+
+                scores = [None] * len(cards)
+                # new_cards -> cards
+                for i, idx in enumerate(new_card_indices):
+                    scores[idx] = new_results['scores'][i]
+                # prev_cards -> cards
+                for i, idx in enumerate(prev_card_indices):
+                    scores[idx] = prev_results['scores'][i]
+        
+                scores_summed = [s['sum'] for s in scores]
+                order = np.argsort(scores_summed).tolist()
+
+                # TODO get new rationale and cards_info
+                results = {
+                    'order': order,
+                    'rationale': prev_results['rationale'],
+                    'cards_info': prev_results['cards_info'],
+                    'scores': scores,
+                }
+
+        card = cards[results['order'][0]]
+        user_correct = copy.deepcopy(user)
+        user_wrong = copy.deepcopy(user)
+        # TODO update_with_response also changes card
+        self.update_with_response(user_correct, card, date, 'correct')
+        self.update_with_response(user_wrong, card, date, 'correct')
+        results_correct = self.schedule(user_correct, cards, date, add_history=False, plot=plot)
+        results_wrong = self.schedule(user_wrong, cards, date, add_history=False, plot=plot)
+        # cached results: User -> (cards, scores)
+        self.precomputed_results[user.user_id] = {
+            'user': user,
+            'cards': cards,
+            'card_id': card.card_id,
+            'date': date,
+            'correct': {
+                'user': user_correct,
+                'order': results_correct['order'],
+                'scores': results_correct['scores'],
+                'rationale': results_correct['rationale'],
+                'cards_info': results_correct['cards_info'],
+            },
+            'wrong': {
+                'user': user_wrong,
+                'order': results_wrong['order'],
+                'scores': results_wrong['scores'],
+                'rationale': results_wrong['rationale'],
+                'cards_info': results_wrong['cards_info'],
+            },
+        }
+
+        return results
+        
+    def schedule(self,
+                 user: User,
+                 cards: List[Card],
+                 date: datetime,
+                 add_history: bool = True,
+                 plot: bool = True) -> Dict:
         scores = self.score(user, cards, date)
         scores_summed = [
             sum([self.params.__dict__[key] * value for key, value in ss.items()])
@@ -410,6 +544,7 @@ class MovingAvgScheduler:
         ]
         for i, ss in enumerate(scores):
             ss['sum'] = scores_summed[i]
+
         order = np.argsort(scores_summed).tolist()
         card = cards[order[0]]
 
@@ -417,16 +552,16 @@ class MovingAvgScheduler:
         # plot_polar(user_qrep, '/fs/www-users/shifeng/temp/user.jpg', fill='green')
         # plot_polar(card.qrep, '/fs/www-users/shifeng/temp/card.jpg', fill='yellow')
 
-        figname = '{}_{}_{}.jpg'.format(user.user_id, card.card_id, date.strftime('%Y-%m-%d-%H-%M'))
-        local_filename = '/fs/www-users/shifeng/temp/' + figname
-        remote_filename = 'http://users.umiacs.umd.edu/~shifeng/temp/' + figname
-        self.plot_histogram(card.qrep, user_qrep, local_filename)
+        if plot:
+            figname = '{}_{}_{}.jpg'.format(user.user_id, card.card_id, date.strftime('%Y-%m-%d-%H-%M'))
+            local_filename = '/fs/www-users/shifeng/temp/' + figname
+            remote_filename = 'http://users.umiacs.umd.edu/~shifeng/temp/' + figname
+            self.plot_histogram(card.qrep, user_qrep, local_filename)
 
         # create rationale
         cards_info = [copy.deepcopy(c.__dict__) for c in cards]
         for i, card_info in enumerate(cards_info):
             card_info['scores'] = scores[i]
-            card_info['scores']['sum'] = scores_summed[i]
             prev_date, prev_response = user.previous_study.get(card_info['card_id'], ('-', '-'))
             card_info.update({
                 'current date': date,
@@ -439,7 +574,7 @@ class MovingAvgScheduler:
             card_info.pop('results')
         cards_info = [cards_info[i] for i in order[:3]]
 
-        rr = '''
+        rr = """
              <style>
              table {
                border-collapse: collapse;
@@ -452,7 +587,7 @@ class MovingAvgScheduler:
 
              tr:nth-child(even) {background-color: #f2f2f2;}
              </style>
-             '''
+             """
         # print('', file=detail_file)
         # print(' ' * 3, 'update details', file=detail_file)
         # for key, value in update_outputs.items():
@@ -485,37 +620,71 @@ class MovingAvgScheduler:
             rr += row_template.format('sm2 dat', user.sm2_scheduled_date.get(c.card_id, '-'))
             rr += '</table>'
 
-        rr += "</br>"
-        rr += "</br>"
-        rr += "<img src={}>".format(remote_filename)
-        # rr += "<img src='http://users.umiacs.umd.edu/~shifeng/temp/card.jpg'>"
-        # rr += "<img src='http://users.umiacs.umd.edu/~shifeng/temp/user.jpg'>"
-
-        # add temporary history
-        # ID and response will be completed by a call to `update`
-        temp_history_id = json.dumps({'user_id': user.user_id, 'card_id': card.card_id})
-        history = History(
-            history_id=temp_history_id,
-            user_id=user.user_id,
-            card_id=card.card_id,
-            response='PLACEHOLDER',
-            judgement='PLACEHOLDER',
-            user_snapshot=json.dumps(user.pack()),
-            scheduler_snapshot=json.dumps(self.params.__dict__),
-            card_ids=json.dumps([x.card_id for x in cards]),
-            scheduler_output=json.dumps({'order': order, 'rationale': rr}),
-            date=date)
-        self.db.add_history(history)
-
-        logger.debug('{} {}'.format(card.card_id, card.answer))
-        logger.debug('schedule ' + str(datetime.now() - t0))
-        logger.debug(remote_filename)
-
-        return {
+        output_dict = {
             'order': order,
             'rationale': rr,
-            'cards_info': cards_info
+            'cards_info': cards_info,
+            'scores': scores,
         }
+
+        if plot:
+            rr += "</br>"
+            rr += "</br>"
+            rr += "<img src={}>".format(remote_filename)
+            # rr += "<img src='http://users.umiacs.umd.edu/~shifeng/temp/card.jpg'>"
+            # rr += "<img src='http://users.umiacs.umd.edu/~shifeng/temp/user.jpg'>"
+            output_dict['plot'] = remote_filename
+
+        if add_history:
+            # add temporary history
+            # ID and response will be completed by a call to `update`
+            temp_history_id = json.dumps({'user_id': user.user_id, 'card_id': card.card_id})
+            history = History(
+                history_id=temp_history_id,
+                user_id=user.user_id,
+                card_id=card.card_id,
+                response='PLACEHOLDER',
+                judgement='PLACEHOLDER',
+                user_snapshot=json.dumps(user.pack()),
+                scheduler_snapshot=json.dumps(self.params.__dict__),
+                card_ids=json.dumps([x.card_id for x in cards]),
+                scheduler_output=json.dumps({'order': order, 'rationale': rr}),
+                date=date)
+
+            self.db.add_history(history)
+            output_dict['temp_history_id'] = temp_history_id
+
+        return output_dict
+
+    def update_with_response(self, user: User, card: Card, date: datetime, response: str):
+        # update qrep
+        user.qrep.append(card.qrep)
+        if len(user.qrep) >= self.params.max_qreps:
+            user.qrep.pop(0)
+
+        # update skill
+        if response:
+            user.skill.append(card.skill)
+            if len(user.skill) >= self.params.max_qreps:
+                user.skill.pop(0)
+
+        user.category = card.category
+        user.previous_study[card.card_id] = (date, response)
+
+        # update retention features
+        card.results.append(response == 'correct')
+        user.results.append(response == 'correct')
+        if card.card_id not in user.count_correct_before:
+            user.count_correct_before[card.card_id] = 0
+        if card.card_id not in user.count_wrong_before:
+            user.count_wrong_before[card.card_id] = 0
+        if response:
+            user.count_correct_before[card.card_id] += 1
+        else:
+            user.count_wrong_before[card.card_id] += 1
+
+        self.leitner_update(user, card, response)
+        self.sm2_update(user, card, response)
 
     def update(self, requests: List[ScheduleRequest], date: datetime) -> Dict:
         user_to_requests = defaultdict(list)
@@ -533,63 +702,36 @@ class MovingAvgScheduler:
         assert len(indices) == 1
         request = requests[indices[0]]
         card = cards[indices[0]]
-        response = request.label == 'correct'
 
-        tmp = {
-            'old ltn box': user.leitner_box.get(card.card_id, '-'),
-            'old ltn dat': str(user.leitner_scheduled_date.get(card.card_id, '-')),
-            'old sm2 rep': user.sm2_repetition.get(card.card_id, '-'),
-            'old sm2 inv': user.sm2_interval.get(card.card_id, '-'),
-            'old sm2 e_f': user.sm2_efactor.get(card.card_id, '-'),
-            'old sm2 dat': str(user.sm2_scheduled_date.get(card.card_id, '-'))
-        }
-
-        # update qrep
-        user.qrep.append(card.qrep)
-        if len(user.qrep) >= self.params.max_qreps:
-            user.qrep.pop(0)
-
-        # update skill
-        if response:
-            user.skill.append(card.skill)
-            if len(user.skill) >= self.params.max_qreps:
-                user.skill.pop(0)
-
-        user.category = card.category
-        user.previous_study[card.card_id] = (date, request.label)
-
-        # update retention features
-        user.results.append(response)
-        card.results.append(response)
-        if card.card_id not in user.count_correct_before:
-            user.count_correct_before[card.card_id] = 0
-        if card.card_id not in user.count_wrong_before:
-            user.count_wrong_before[card.card_id] = 0
-        if response:
-            user.count_correct_before[card.card_id] += 1
+        old_user = copy.deepcopy(user)
+        results = self.precomputed_results.get(user.user_id, None)
+        if results is None:
+            self.update_with_response(user, card, date, request.label)
+        elif results['card_id'] != card.card_id:
+            self.update_with_response(user, card, date, request.label)
+            self.precomputed_results.pop(user.user_id)
         else:
-            user.count_wrong_before[card.card_id] += 1
-
-        self.leitner_update(user, card, request.label)
-        self.sm2_update(user, card, request.label)
+            results['response'] = request.label
+            user = results[request.label]['user']
 
         detail = {
             'response': request.label,
-            'old ltn box': tmp['old ltn box'],
+            'old ltn box': old_user.leitner_box.get(card.card_id, '-'),
             'new ltn box': user.leitner_box.get(card.card_id, '-'),
-            'old ltn dat': tmp['old ltn dat'],
+            'old ltn dat': str(old_user.leitner_scheduled_date.get(card.card_id, '-')),
             'new ltn dat': str(user.leitner_scheduled_date.get(card.card_id, '-')),
-            'old sm2 rep': tmp['old sm2 rep'],
+            'old sm2 rep': old_user.sm2_repetition.get(card.card_id, '-'),
             'new sm2 rep': user.sm2_repetition.get(card.card_id, '-'),
-            'old sm2 inv': tmp['old sm2 inv'],
+            'old sm2 inv': old_user.sm2_interval.get(card.card_id, '-'),
             'new sm2 inv': user.sm2_interval.get(card.card_id, '-'),
-            'old sm2 e_f': tmp['old sm2 e_f'],
+            'old sm2 e_f': old_user.sm2_efactor.get(card.card_id, '-'),
             'new sm2 e_f': user.sm2_efactor.get(card.card_id, '-'),
-            'old sm2 dat': tmp['old sm2 dat'],
-            'new sm2 dat': str(user.sm2_scheduled_date.get(card.card_id, '-'))
+            'old sm2 dat': str(old_user.sm2_scheduled_date.get(card.card_id, '-')),
+            'new sm2 dat': str(user.sm2_scheduled_date.get(card.card_id, '-')),
         }
 
         # find that temporary history entry and update
+        # TODO with precompute enabled, we no longer write temporary history entry
         temp_history_id = json.dumps({'user_id': user.user_id, 'card_id': card.card_id})
         history = self.db.get_history(temp_history_id)
         if history is not None:
@@ -601,7 +743,6 @@ class MovingAvgScheduler:
             })
             self.db.update_history(temp_history_id, history)
         else:
-            # this really shouldn't happen if DB is working properly
             history = History(
                 history_id=request.history_id,
                 user_id=request.user_id,
