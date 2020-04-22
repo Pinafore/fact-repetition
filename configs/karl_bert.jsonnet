@@ -4,6 +4,7 @@ local bert_finetune = false;
 local batch_size = 20;
 local num_epochs = 4;
 local model_name = '/fs/clip-quiz/entilzha/qanta_lm';
+local data_dir = '/fs/clip-quiz/shifeng/karl/data/protobowl/';
 {
     "pytorch_seed": 0,
     "numpy_seed": 0,

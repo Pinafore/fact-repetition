@@ -25,6 +25,9 @@ from allennlp.data.token_indexers import TokenIndexer, SingleIdTokenIndexer
 
 log = logging.getLogger(__name__)
 
+import warnings
+warnings.filterwarnings('ignore', module='torch.data.dataloader')
+
 DATA_DIR = '/fs/clip-quiz/shifeng/karl/data/protobowl/'
 
 
@@ -43,8 +46,8 @@ def parse_date(date: str):
         raise TypeError("unrecognized type for parse_date")
 
 
-def get_questions():
-    questions_dir = os.path.join(DATA_DIR, 'protobowl-042818.log.questions.pkl')
+def get_questions(data_dir=DATA_DIR):
+    questions_dir = os.path.join(data_dir, 'protobowl-042818.log.questions.pkl')
 
     if os.path.exists(questions_dir):
         with open(questions_dir, 'rb') as f:
@@ -55,10 +58,10 @@ def get_questions():
         return pickle.load(f)
 
 
-def get_raw_df():
-    log_dir = os.path.join(DATA_DIR, 'protobowl-042818.log')
-    raw_df_dir = os.path.join(DATA_DIR, 'protobowl-042818.log.h5')
-    questions_dir = os.path.join(DATA_DIR, 'protobowl-042818.log.questions.pkl')
+def get_raw_df(data_dir=DATA_DIR):
+    log_dir = os.path.join(data_dir, 'protobowl-042818.log')
+    raw_df_dir = os.path.join(data_dir, 'protobowl-042818.log.h5')
+    questions_dir = os.path.join(data_dir, 'protobowl-042818.log.questions.pkl')
 
     if os.path.exists(raw_df_dir):
         log.info('loading raw_df')
@@ -121,8 +124,8 @@ def get_raw_df():
     return df
 
 
-def get_filtered_df():
-    filtered_df_dir = os.path.join(DATA_DIR, 'protobowl-042818.log.filtered.h5')
+def get_filtered_df(data_dir=DATA_DIR):
+    filtered_df_dir = os.path.join(data_dir, 'protobowl-042818.log.filtered.h5')
 
     if os.path.exists(filtered_df_dir):
         log.info('loading filtered_df')
@@ -246,8 +249,8 @@ def _question_features(group):
     )
 
 
-def get_featurized_df():
-    featurized_df_dir = os.path.join(DATA_DIR, 'protobowl-042818.log.features.h5')
+def get_featurized_df(data_dir=DATA_DIR):
+    featurized_df_dir = os.path.join(data_dir, 'protobowl-042818.log.features.h5')
 
     if os.path.exists(featurized_df_dir):
         log.info('loading featurized_df')
@@ -303,9 +306,9 @@ def get_featurized_df():
     return df
 
 
-def get_split_dfs():
-    train_df_dir = os.path.join(DATA_DIR, 'protobowl-042818.log.train.h5')
-    test_df_dir = os.path.join(DATA_DIR, 'protobowl-042818.log.test.h5')
+def get_split_dfs(data_dir=DATA_DIR):
+    train_df_dir = os.path.join(data_dir, 'protobowl-042818.log.train.h5')
+    test_df_dir = os.path.join(data_dir, 'protobowl-042818.log.test.h5')
 
     if os.path.exists(train_df_dir) and os.path.exists(test_df_dir):
         log.info('loading train test df')
@@ -313,33 +316,29 @@ def get_split_dfs():
 
     df = get_featurized_df()
 
-    '''
-    def get_first_appearance_date(group):
-        group = group.sort_values('date')
-        return group.iloc[0]['uid'], group.iloc[0]['date']
+    # def get_first_appearance_date(group):
+    #     group = group.sort_values('date')
+    #     return group.iloc[0]['uid'], group.iloc[0]['date']
 
-    log.info('generating train test df')
-    df_by_uid = df.groupby('uid')
-    log.info('    order and split users by first appearance dates')
-    returns = apply_parallel(get_first_appearance_date, df_by_uid)
-    returns = sorted(returns, key=lambda x: x[1])
-    uids, first_appearance_dates = list(zip(*returns))
-    train_uids = uids[:int(len(uids) * 0.7)]
-    test_uids = uids[int(len(uids) * 0.7):]
-    train_index = list(itertools.chain(*[
-        df_by_uid.get_group(uid).index.tolist() for uid in train_uids]))
-    test_index = list(itertools.chain(*[
-        df_by_uid.get_group(uid).index.tolist() for uid in test_uids]))
-    train_df = df.loc[train_index]
-    test_df = df.loc[test_index]
-    '''
+    # log.info('generating train test df')
+    # df_by_uid = df.groupby('uid')
+    # log.info('    order and split users by first appearance dates')
+    # returns = apply_parallel(get_first_appearance_date, df_by_uid)
+    # returns = sorted(returns, key=lambda x: x[1])
+    # uids, first_appearance_dates = list(zip(*returns))
+    # train_uids = uids[:int(len(uids) * 0.7)]
+    # test_uids = uids[int(len(uids) * 0.7):]
+    # train_index = list(itertools.chain(*[
+    #     df_by_uid.get_group(uid).index.tolist() for uid in train_uids]))
+    # test_index = list(itertools.chain(*[
+    #     df_by_uid.get_group(uid).index.tolist() for uid in test_uids]))
+    # train_df = df.loc[train_index]
+    # test_df = df.loc[test_index]
 
-    '''
-    # split records by date
-    df = df.sort_values('date')
-    train_df = df.head(int(len(df) * 0.7))
-    test_df = df.tail(int(len(df) * 0.3))
-    '''
+    # # split records by date
+    # df = df.sort_values('date')
+    # train_df = df.head(int(len(df) * 0.7))
+    # test_df = df.tail(int(len(df) * 0.3))
 
     # randomly split users
     uids = list(set(df['uid']))
@@ -360,12 +359,12 @@ def get_split_dfs():
     return train_df, test_df
 
 
-def get_split_numpy():
+def get_split_numpy(data_dir=DATA_DIR):
     dirs = [
-        os.path.join(DATA_DIR, 'x_train.npy'),
-        os.path.join(DATA_DIR, 'y_train.npy'),
-        os.path.join(DATA_DIR, 'x_test.npy'),
-        os.path.join(DATA_DIR, 'y_test.npy')
+        os.path.join(data_dir, 'x_train.npy'),
+        os.path.join(data_dir, 'y_train.npy'),
+        os.path.join(data_dir, 'x_test.npy'),
+        os.path.join(data_dir, 'y_test.npy')
     ]
     if all(os.path.exists(d) for d in dirs):
         log.info('loading train test numpy')
@@ -397,13 +396,15 @@ class RetentionReader(DatasetReader):
             token_indexers: Dict[str, TokenIndexer],
             max_length: int = 128,
             debug: bool = False,
-            lazy: bool = False
+            lazy: bool = False,
+            data_dir: str = DATA_DIR
     ) -> None:
         super().__init__(lazy)
         self.tokenizer = tokenizer
         self.token_indexers = token_indexers
         self.max_length = max_length
         self.debug = debug
+        self.data_dir = data_dir
 
         # embed ids
         self.uid_indexers = {'uid_tokens': SingleIdTokenIndexer(namespace='uid_tokens')}
@@ -414,15 +415,15 @@ class RetentionReader(DatasetReader):
 
     def _read(self, fold: str) -> Iterator[Instance]:
         # precomputed feature vectors
-        x_train, y_train, x_test, y_test = get_split_numpy()
+        x_train, y_train, x_test, y_test = get_split_numpy(self.data_dir)
         self.mean = np.mean(x_train, axis=0)
         self.std = np.std(x_train, axis=0)
         # don't normalize bias
         self.mean[-1] = 0
         self.std[-1] = 1
         # precompute featurized dataframes
-        df_train, df_test = get_split_dfs()
-        questions = get_questions()
+        df_train, df_test = get_split_dfs(self.data_dir)
+        questions = get_questions(self.data_dir)
 
         if fold == 'train':
             xs, ys = x_train, y_train
@@ -474,8 +475,8 @@ class RetentionReader(DatasetReader):
 
 class RetentionDataset(torch.utils.data.Dataset):
 
-    def __init__(self, fold='train'):
-        x_train, y_train, x_test, y_test = get_split_numpy()
+    def __init__(self, fold='train', data_dir=DATA_DIR):
+        x_train, y_train, x_test, y_test = get_split_numpy(data_dir)
         self.mean = np.mean(x_train, axis=0)
         self.std = np.std(x_train, axis=0)
         self.mean[-1] = 0
