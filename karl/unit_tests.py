@@ -216,43 +216,38 @@ class TestScheduler(unittest.TestCase):
             cards = pickle.load(f)
         cards = cards[:5]
 
-        for i, c in enumerate(cards):
-            cards[i] = ScheduleRequest(
-                text=c['text'],
-                answer=c['answer'],
-                category=c['category'],
-                user_id='shi',
-                question_id=c['question_id']
-            )
+        scores = []
+        for user_id, params in zip(
+                ['precompute_no', 'precompute_yes'], 
+                [Params(precompute=False), Params(precompute=True)]
+        ):
+            self.scheduler.set_params(params)
 
-        print(cards[0])
+            scores.append([])
+            requests = [
+                ScheduleRequest(
+                    user_id=user_id,
+                    text=c['text'],
+                    answer=c['answer'],
+                    category=c['category'],
+                    question_id=c['question_id']
+                ) for c in cards
+            ]
 
-        # using deepcopy here because DB lookup converts dict cards into Card
-        # cards. not a problem in actual use because objects go through web API
-        # and not reused
-        result = self.scheduler.schedule_and_predict(copy.deepcopy(cards), datetime.now())
-        order = result['order']
-
-        print()
-        print()
-        print(cards[0])
-
-        card_selected = cards[order[0]]
-        card_selected.__dict__.update({
-            'label': 'correct',
-            'history_id': 'real_history_id'
-        })
-
-        self.scheduler.update([card_selected], datetime.now())
-
-        h = self.scheduler.db.get_history()[0]
-        for key, value in h.__dict__.items():
-            print(key, value)
-
-        print()
-        print()
-        user = self.scheduler.db.get_user('shi')
-        print(user)
+            for i in range(5):
+                results = self.scheduler.schedule_and_predict(copy.deepcopy(requests), datetime.now())
+                order = results['order']
+                request = requests[order[0]]
+                request.__dict__.update({
+                    'label': 'correct',
+                    'history_id': 'real_history_id_{}_{}'.format(user_id, request.question_id)
+                })
+                self.scheduler.update([request], datetime.now())
+                scores[-1].append([s['sum'] for s in results['scores']])
+        for ss in list(zip(*scores)):
+            print(ss[0])
+            print(ss[1])
+            print()
 
 
 if __name__ == '__main__':

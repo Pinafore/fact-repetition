@@ -338,7 +338,7 @@ class MovingAvgScheduler:
         # topic_idx = np.argmax(card.qrep)
         # d = card.skill[topic_idx] - skill[topic_idx]
         # # penalize easier questions by ten
-        # d *= 1 if d <= 0 else 10  # TODO add to param
+        # d *= 1 if d <= 0 else 10
         # return abs(d)
 
     def dist_recall_batch(self, user: User, cards: List[Card]) -> float:
@@ -506,14 +506,18 @@ class MovingAvgScheduler:
         if not self.params.precompute:
             return results
 
+        idx = results['order'][0]
         card = cards[results['order'][0]]
-        user_correct = copy.deepcopy(user)
-        user_wrong = copy.deepcopy(user)
-        # TODO update_with_response also changes card
-        self.update_with_response(user_correct, card, date, 'correct')
-        self.update_with_response(user_wrong, card, date, 'correct')
-        results_correct = self.schedule(user_correct, cards, date, add_history=False, plot=plot)
-        results_wrong = self.schedule(user_wrong, cards, date, add_history=False, plot=plot)
+        user_positive = copy.deepcopy(user)
+        user_negative = copy.deepcopy(user)
+        card_positive = copy.deepcopy(card)
+        card_negative = copy.deepcopy(card)
+        self.update_with_response(user_positive, card_positive, date, 'correct')
+        self.update_with_response(user_negative, card_negative, date, 'wrong')
+        cards_positive = [card_positive if i == idx else c for i, c in enumerate(cards)]
+        cards_negative = [card_negative if i == idx else c for i, c in enumerate(cards)]
+        results_positive = self.schedule(user_positive, cards_positive, date, add_history=False, plot=plot)
+        results_negative = self.schedule(user_negative, cards_negative, date, add_history=False, plot=plot)
         # cached results: User -> (cards, scores)
         self.precomputed_results[user.user_id] = {
             'user': user,
@@ -521,18 +525,18 @@ class MovingAvgScheduler:
             'card_id': card.card_id,
             'date': date,
             'correct': {
-                'user': user_correct,
-                'order': results_correct['order'],
-                'scores': results_correct['scores'],
-                'rationale': results_correct['rationale'],
-                'cards_info': results_correct['cards_info'],
+                'user': user_positive,
+                'order': results_positive['order'],
+                'scores': results_positive['scores'],
+                'rationale': results_positive['rationale'],
+                'cards_info': results_positive['cards_info'],
             },
             'wrong': {
-                'user': user_wrong,
-                'order': results_wrong['order'],
-                'scores': results_wrong['scores'],
-                'rationale': results_wrong['rationale'],
-                'cards_info': results_wrong['cards_info'],
+                'user': user_negative,
+                'order': results_negative['order'],
+                'scores': results_negative['scores'],
+                'rationale': results_negative['rationale'],
+                'cards_info': results_negative['cards_info'],
             },
             # 'response': None,
         }
@@ -680,6 +684,7 @@ class MovingAvgScheduler:
         user.previous_study[card.card_id] = (date, response)
 
         # update retention features
+        # TODO
         card.results.append(response == 'correct')
         user.results.append(response == 'correct')
         if card.card_id not in user.count_correct_before:
@@ -770,13 +775,13 @@ class MovingAvgScheduler:
         self.db.update_user(user)
         self.db.update_card(card)
 
-        print(' ' * 3, '{: <16} : {}'.format('card_id', card.card_id))
-        print(' ' * 3, '{: <16} : {}'.format('answer', card.answer))
-        for key, value in detail.items():
-            if isinstance(value, float):
-                print(' ' * 3, '{: <16} : {:.4f}'.format(key, value))
-            elif isinstance(value, int) or isinstance(value, str):
-                print(' ' * 3, '{: <16} : {}'.format(key, value))
+        # print(' ' * 3, '{: <16} : {}'.format('card_id', card.card_id))
+        # print(' ' * 3, '{: <16} : {}'.format('answer', card.answer))
+        # for key, value in detail.items():
+        #     if isinstance(value, float):
+        #         print(' ' * 3, '{: <16} : {:.4f}'.format(key, value))
+        #     elif isinstance(value, int) or isinstance(value, str):
+        #         print(' ' * 3, '{: <16} : {}'.format(key, value))
 
         return detail
 
@@ -852,4 +857,4 @@ class MovingAvgScheduler:
             + theme_fs()
             # + theme(axis_text_x=(element_text(rotation=90)))
         )
-        p.save(filename)
+        p.save(filename, verbose=False)
