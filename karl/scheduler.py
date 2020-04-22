@@ -437,7 +437,7 @@ class MovingAvgScheduler:
 
         if user.user_id not in self.precomputed_results:
             results = self.schedule(user, cards, date, add_history=True, plot=plot)
-        elif 'response' not in self.precomputed_results[user.user_id]:
+        elif not self.precomputed_results[user.user_id].get('response', None):
             # previous study did not get an update, throw away precomputed results
             results = self.schedule(user, cards, date, add_history=True, plot=plot)
         else:
@@ -461,13 +461,16 @@ class MovingAvgScheduler:
             # | | (plot)
             # | response: actual response, filled in by update
             prev_results = self.precomputed_results[user.user_id]
-            prev_results = prev_results[prev_results['response']]  # choose the one that matches reality
             prev_cards = prev_results['cards']
             prev_card_ids = [c.card_id for c in prev_cards]
             # prev_cards -> cards
             prev_card_indices = [None] * len(prev_cards)
+
+            # choose the one that matches reality
+            prev_results_reality = prev_results[prev_results['response']]
+
             # new_cards -> cards
-            new_cards, new_card_indices = [], [], []
+            new_cards, new_card_indices = [], []
             for i, c in enumerate(cards):
                 if c.card_id in prev_card_ids:
                     prev_card_indices[prev_card_ids.index(c.card_id)] = i
@@ -476,7 +479,7 @@ class MovingAvgScheduler:
                     new_card_indices.append(i)
 
             if len(new_cards) == 0:
-                results = prev_results
+                results = prev_results_reality
             else:
                 new_results = self.schedule(user, new_cards, date, add_history=False, plot=plot)
 
@@ -486,7 +489,7 @@ class MovingAvgScheduler:
                     scores[idx] = new_results['scores'][i]
                 # prev_cards -> cards
                 for i, idx in enumerate(prev_card_indices):
-                    scores[idx] = prev_results['scores'][i]
+                    scores[idx] = prev_results_reality['scores'][i]
         
                 scores_summed = [s['sum'] for s in scores]
                 order = np.argsort(scores_summed).tolist()
@@ -494,8 +497,8 @@ class MovingAvgScheduler:
                 # TODO get new rationale and cards_info
                 results = {
                     'order': order,
-                    'rationale': prev_results['rationale'],
-                    'cards_info': prev_results['cards_info'],
+                    'rationale': prev_results_reality['rationale'],
+                    'cards_info': prev_results_reality['cards_info'],
                     'scores': scores,
                 }
 
@@ -527,6 +530,7 @@ class MovingAvgScheduler:
                 'rationale': results_wrong['rationale'],
                 'cards_info': results_wrong['cards_info'],
             },
+            'response': None,
         }
 
         return results
@@ -746,7 +750,7 @@ class MovingAvgScheduler:
             history = History(
                 history_id=request.history_id,
                 user_id=request.user_id,
-                card_id=request.card_id,
+                card_id=request.question_id,
                 response=request.label,
                 judgement=request.label,
                 user_snapshot=json.dumps(user.pack()),

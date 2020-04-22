@@ -22,7 +22,7 @@ def schedule(requests: List[ScheduleRequest]):
     date = datetime.now()
     if requests[0].date is not None:
         date = parse_date(requests[0].date)
-    results = scheduler.schedule_and_predict(requests, date)
+    results = scheduler.schedule_and_predict(requests, date, plot=False)
     return {
         'order': results['order'],
         'rationale': results['rationale'],
