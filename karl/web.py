@@ -22,7 +22,7 @@ def schedule(requests: List[ScheduleRequest]):
     date = datetime.now()
     if requests[0].date is not None:
         date = parse_date(requests[0].date)
-    results = scheduler.schedule_and_predict(requests, date, plot=False)
+    results = scheduler.schedule(requests, date, plot=False)
     return {
         'order': results['order'],
         'rationale': results['rationale'],
@@ -40,8 +40,9 @@ def update(requests: List[ScheduleRequest]):
 
 @app.post('/api/karl/reset')
 def reset(user_id: UserID):
+    # TODO change to reset_user
     user_id = user_id.dict().get('user_id', None)
-    scheduler.reset(user_id=user_id)
+    scheduler.reset_user(user_id=user_id)
 
 @app.post('/api/karl/set_params')
 def set_params(params: Params):

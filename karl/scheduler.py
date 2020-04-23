@@ -106,28 +106,28 @@ class MovingAvgScheduler:
         # build default estimate for users
         self.avg_user_skill_estimate = self.estimate_avg()
 
-        # cache of precomputed results
-        # user.user_id
-        # | user
-        # | cards
-        # | card
-        # | date
-        # | 'correct'
-        # | | user
+        # True
+        # |user.user_id
+        # | | user  # after branching update
+        # | | card  # previously selected card, after branching update
+        # | | cards # previously scored cards, after branching update
         # | | order
         # | | scores
         # | | rationale
         # | | cards_info
         # | | (plot)
-        # | 'wrong'
-        # | | user
+        # False
+        # |user.user_id
+        # | | user  # after branching update
+        # | | card  # previously selected card, after branching update
+        # | | cards # previously scored cards, after branching update
         # | | order
         # | | scores
         # | | rationale
         # | | cards_info
         # | | (plot)
-        # | response: actual response, filled in by update
-        self.precomputed_results = dict()
+        self.precompute_future = {'correct': {}, 'wrong': {}}
+        self.precompute_commit = dict()
 
     def estimate_avg(self) -> np.ndarray:
         # estimate the average acccuracy for each component
@@ -165,10 +165,21 @@ class MovingAvgScheduler:
                 f.write(str(e) + '\n')
         return np.array(estimates)
 
-    def reset(self, user_id=None):
+    def reset_user(self, user_id=None):
         # delete users and history from db
         self.db.delete_user(user_id=user_id)
         self.db.delete_history(user_id=user_id)
+        if user_id is not None:
+            if user_id in self.precompute_future['correct']:
+                self.precompute_future['correct'].pop(user_id)
+            if user_id in self.precompute_future['wrong']:
+                self.precompute_future['wrong'].pop(user_id)
+            if user_id in self.precompute_commit:
+                self.precompute_commit.pop(user_id)
+
+    def reset_card(self, card_id=None):
+        # delete card from db
+        self.db.delete_card(card_id=card_id)
 
     def build_whoosh(self):
         from whoosh.fields import Schema, ID, TEXT
@@ -405,150 +416,8 @@ class MovingAvgScheduler:
             'leitner': self.dist_leitner(user, card, date),
             'sm2': self.dist_sm2(user, card, date),
         } for i, card in enumerate(cards)]
-    
-    def schedule_and_predict(self,
-                             requests: List[ScheduleRequest],
-                             date: datetime,
-                             plot: bool = True) -> Dict:
-        # 0. (update) merge with reality
-        # 1. schedule
-        #    1.1 check if new cards got added
-        #    1.2 if new cards, get scores for new cards, rank, return
-        #    1.3 if not new cards, return cached results
-        # 2. copy user, update with response=True, schedule again, cache results
-        # 3. copy user, update with response=False, schedule again, cache results
-        # cached results: User -> (cards, scores)
 
-        if len(requests) == 0:
-            return [], [], ''
-
-        # mapping from user to scheduling requests
-        # not used since we assume only one user
-        user_to_requests = defaultdict(list)
-        for i, request in enumerate(requests):
-            user_to_requests[request.user_id].append(i)
-        if len(user_to_requests) != 1:
-            raise ValueError('Schedule only accpets 1 user. Received {}'.format(len(user_to_requests)))
-
-        cards = self.get_cards(requests)
-        user, indices = list(user_to_requests.items())[0]
-        user = self.get_user(user)
-        cards = [cards[i] for i in indices]
-
-        if not all((
-                self.params.precompute,
-                user.user_id in self.precomputed_results,
-                'response' in self.precomputed_results.get(user.user_id, {}),
-        )):
-            results = self.schedule(user, cards, date, add_history=True, plot=plot)
-        else:
-            # precomputed_results[user.user_id]
-            # | user
-            # | cards
-            # | date
-            # | 'correct'
-            # | | user
-            # | | order
-            # | | scores
-            # | | rationale
-            # | | cards_info
-            # | | (plot)
-            # | 'wrong'
-            # | | user
-            # | | order
-            # | | scores
-            # | | rationale
-            # | | cards_info
-            # | | (plot)
-            # | response: actual response, filled in by update
-            prev_results = self.precomputed_results[user.user_id]
-            prev_cards = prev_results['cards']
-            prev_card_ids = [c.card_id for c in prev_cards]
-            # prev_cards -> cards
-            prev_card_indices = [None] * len(prev_cards)
-
-            # choose the one that matches reality
-            prev_results_reality = prev_results[prev_results['response']]
-
-            # new_cards -> cards
-            new_cards, new_card_indices = [], []
-            for i, c in enumerate(cards):
-                if c.card_id in prev_card_ids:
-                    prev_card_indices[prev_card_ids.index(c.card_id)] = i
-                else:
-                    new_cards.append(c)
-                    new_card_indices.append(i)
-
-            if len(new_cards) == 0:
-                results = prev_results_reality
-            else:
-                new_results = self.schedule(user, new_cards, date, add_history=False, plot=plot)
-
-                scores = [None] * len(cards)
-                # new_cards -> cards
-                for i, idx in enumerate(new_card_indices):
-                    scores[idx] = new_results['scores'][i]
-                # prev_cards -> cards
-                for i, idx in enumerate(prev_card_indices):
-                    scores[idx] = prev_results_reality['scores'][i]
-        
-                scores_summed = [s['sum'] for s in scores]
-                order = np.argsort(scores_summed).tolist()
-
-                # TODO get new rationale and cards_info
-                results = {
-                    'order': order,
-                    'rationale': prev_results_reality['rationale'],
-                    'cards_info': prev_results_reality['cards_info'],
-                    'scores': scores,
-                }
-
-        if not self.params.precompute:
-            return results
-
-        idx = results['order'][0]
-        card = cards[results['order'][0]]
-        user_positive = copy.deepcopy(user)
-        user_negative = copy.deepcopy(user)
-        card_positive = copy.deepcopy(card)
-        card_negative = copy.deepcopy(card)
-        self.update_with_response(user_positive, card_positive, date, 'correct')
-        self.update_with_response(user_negative, card_negative, date, 'wrong')
-        cards_positive = [card_positive if i == idx else c for i, c in enumerate(cards)]
-        cards_negative = [card_negative if i == idx else c for i, c in enumerate(cards)]
-        results_positive = self.schedule(user_positive, cards_positive, date, add_history=False, plot=plot)
-        results_negative = self.schedule(user_negative, cards_negative, date, add_history=False, plot=plot)
-        # cached results: User -> (cards, scores)
-        self.precomputed_results[user.user_id] = {
-            'user': user,
-            'cards': cards,
-            'card_id': card.card_id,
-            'date': date,
-            'correct': {
-                'user': user_positive,
-                'order': results_positive['order'],
-                'scores': results_positive['scores'],
-                'rationale': results_positive['rationale'],
-                'cards_info': results_positive['cards_info'],
-            },
-            'wrong': {
-                'user': user_negative,
-                'order': results_negative['order'],
-                'scores': results_negative['scores'],
-                'rationale': results_negative['rationale'],
-                'cards_info': results_negative['cards_info'],
-            },
-            # 'response': None,
-        }
-
-        return results
-        
-    def schedule(self,
-                 user: User,
-                 cards: List[Card],
-                 date: datetime,
-                 add_history: bool = True,
-                 plot: bool = True) -> Dict:
+    def score_user_cards(self, user: User, cards: List[Card], date: datetime, plot=True) -> Dict:
         scores = self.score(user, cards, date)
         scores_summed = [
             sum([self.params.__dict__[key] * value for key, value in ss.items()])
@@ -583,7 +452,7 @@ class MovingAvgScheduler:
             })
             card_info.pop('qrep')
             card_info.pop('skill')
-            card_info.pop('results')
+            # card_info.pop('results')
         cards_info = [cards_info[i] for i in order[:3]]
 
         rr = """
@@ -647,27 +516,126 @@ class MovingAvgScheduler:
             # rr += "<img src='http://users.umiacs.umd.edu/~shifeng/temp/user.jpg'>"
             output_dict['plot'] = remote_filename
 
-        if add_history:
-            # add temporary history
-            # ID and response will be completed by a call to `update`
-            temp_history_id = json.dumps({'user_id': user.user_id, 'card_id': card.card_id})
-            history = History(
-                history_id=temp_history_id,
-                user_id=user.user_id,
-                card_id=card.card_id,
-                response='PLACEHOLDER',
-                judgement='PLACEHOLDER',
-                user_snapshot=json.dumps(user.pack()),
-                scheduler_snapshot=json.dumps(self.params.__dict__),
-                card_ids=json.dumps([x.card_id for x in cards]),
-                scheduler_output=json.dumps({'order': order, 'rationale': rr}),
-                date=date)
+        # if add_history:
+        #     # add temporary history
+        #     # ID and response will be completed by a call to `update`
+        #     temp_history_id = json.dumps({'user_id': user.user_id, 'card_id': card.card_id})
+        #     history = History(
+        #         history_id=temp_history_id,
+        #         user_id=user.user_id,
+        #         card_id=card.card_id,
+        #         response='PLACEHOLDER',
+        #         judgement='PLACEHOLDER',
+        #         user_snapshot=json.dumps(user.pack()),
+        #         scheduler_snapshot=json.dumps(self.params.__dict__),
+        #         card_ids=json.dumps([x.card_id for x in cards]),
+        #         scheduler_output=json.dumps({'order': order, 'rationale': rr}),
+        #         date=date)
 
-            self.db.add_history(history)
-            output_dict['temp_history_id'] = temp_history_id
+        #     self.db.add_history(history)
+        #     output_dict['temp_history_id'] = temp_history_id
 
         return output_dict
 
+    def schedule(
+            self,
+            requests: List[ScheduleRequest],
+            date: datetime,
+            plot: bool = False,
+    ) -> dict:
+        if len(requests) == 0:
+            return [], [], ''
+        # mapping from user to scheduling requests
+        # not used since we assume only one user
+        user_to_requests = defaultdict(list)
+        for i, request in enumerate(requests):
+            user_to_requests[request.user_id].append(i)
+        if len(user_to_requests) != 1:
+            raise ValueError('Schedule only accpets 1 user. Received {}'.format(len(user_to_requests)))
+
+        # load card and user from db
+        cards = self.get_cards(requests)
+        user, indices = list(user_to_requests.items())[0]
+        user = self.get_user(user)
+        cards = [cards[i] for i in indices]
+
+        if not self.params.precompute:
+            return self.score_user_cards(user, cards, date, plot=plot)
+            
+        # using precomputed schedules
+        # read confirmed update & corresponding schedule
+        if user.user_id not in self.precompute_commit:
+            # no existing precomupted schedule, do regular schedule
+            return self.score_user_cards(user, cards, date, plot=plot)
+
+        # read precomputed schedule, check if new cards are added
+        # if so, compute score for new cards, re-sort cards
+        # no need to update previous card / user
+        # since updates does the commit after updating user & card in db
+        prev_results = self.precompute_commit[user.user_id]
+        prev_card_ids = [c.card_id for c in prev_results['cards']]
+
+        new_cards = []
+        # prev_cards -> cards
+        prev_card_indices = {}
+        # new_cards -> cards
+        new_card_indices = {}
+        for i, c in enumerate(cards):
+            if c.card_id in prev_card_ids:
+                prev_idx = prev_card_ids.index(c.card_id)
+                prev_card_indices[prev_idx] = i
+            else:
+                new_card_indices[len(new_cards)] = i
+                new_cards.append(i)
+
+        # gather scores for both new and previous cards
+        scores = [None] * len(cards)
+        if len(new_cards) > 0:
+            new_results = self.score_user_cards(user, new_cards, date, plot=plot)
+            for i, idx in enumerate(new_card_indices):
+                scores[idx] = new_results['scores'][i]
+        for i, idx in enumerate(prev_card_indices):
+            scores[idx] = prev_results['scores'][i]
+        
+        order = np.argsort([s['sum'] for s in scores]).tolist()
+        # TODO get new rationale and cards_info, and add plot
+        output_dict = {
+            'order': order,
+            'scores': scores,
+            'rationale': prev_results['rationale'],
+            'cards_info': prev_results['cards_info'],
+        }
+
+        if not self.params.precompute:
+            return output_dict
+
+        # TODO below should be async
+        self.branch(user, cards, date, order[0], 'correct', plot=plot)
+        self.branch(user, cards, date, order[0], 'wrong', plot=plot)
+        # end async
+
+        return output_dict
+
+    def branch(self, user: User, cards: List[Card],
+               date: datetime, card_idx: int,
+               response: str, plot=True) -> None:
+        # make copy of user and top card
+        # update (copied) user and top card by response
+        # make new schedule with updated user and cards (with updated card)
+        # TODO if user answered before we could do the branching, skip
+        card = copy.deepcopy(cards[card_idx])
+        user = copy.deepcopy(user)
+        self.update_with_response(user, card, date, response)
+
+        cards[card_idx] = card
+        results = self.score_user_cards(user, cards, date, plot=plot)
+        results.update({
+            'user': user,
+            'card': card,
+            'cards': cards,
+        })
+        self.precompute_future[response][user.user_id] = results
+        
     def update_with_response(self, user: User, card: Card, date: datetime, response: str):
         # update qrep
         user.qrep.append(card.qrep)
@@ -684,7 +652,6 @@ class MovingAvgScheduler:
         user.previous_study[card.card_id] = (date, response)
 
         # update retention features
-        # TODO
         card.results.append(response == 'correct')
         user.results.append(response == 'correct')
         if card.card_id not in user.count_correct_before:
@@ -700,10 +667,11 @@ class MovingAvgScheduler:
         self.sm2_update(user, card, response)
 
     def update(self, requests: List[ScheduleRequest], date: datetime) -> Dict:
+        # mapping from user to card indices
+        # not used since we assume only one user
         user_to_requests = defaultdict(list)
         for i, request in enumerate(requests):
             user_to_requests[request.user_id].append(i)
-
         cards = self.get_cards(requests)
 
         if len(user_to_requests) != 1:
@@ -716,38 +684,7 @@ class MovingAvgScheduler:
         request = requests[indices[0]]
         card = cards[indices[0]]
 
-        old_user = copy.deepcopy(user)
-
-        results = self.precomputed_results.get(user.user_id, {})
-        if not all((
-                self.params.precompute,
-                len(results),
-                results.get('card_id', None) == card.card_id,
-        )):
-            # do normal update
-            self.update_with_response(user, card, date, request.label)
-        else:
-            results['response'] = request.label
-            user = results[request.label]['user']
-
-        detail = {
-            'response': request.label,
-            'old ltn box': old_user.leitner_box.get(card.card_id, '-'),
-            'new ltn box': user.leitner_box.get(card.card_id, '-'),
-            'old ltn dat': str(old_user.leitner_scheduled_date.get(card.card_id, '-')),
-            'new ltn dat': str(user.leitner_scheduled_date.get(card.card_id, '-')),
-            'old sm2 rep': old_user.sm2_repetition.get(card.card_id, '-'),
-            'new sm2 rep': user.sm2_repetition.get(card.card_id, '-'),
-            'old sm2 inv': old_user.sm2_interval.get(card.card_id, '-'),
-            'new sm2 inv': user.sm2_interval.get(card.card_id, '-'),
-            'old sm2 e_f': old_user.sm2_efactor.get(card.card_id, '-'),
-            'new sm2 e_f': user.sm2_efactor.get(card.card_id, '-'),
-            'old sm2 dat': str(old_user.sm2_scheduled_date.get(card.card_id, '-')),
-            'new sm2 dat': str(user.sm2_scheduled_date.get(card.card_id, '-')),
-        }
-
         # find that temporary history entry and update
-        # TODO with precompute enabled, we no longer write temporary history entry
         temp_history_id = json.dumps({'user_id': user.user_id, 'card_id': card.card_id})
         history = self.db.get_history(temp_history_id)
         if history is not None:
@@ -772,16 +709,37 @@ class MovingAvgScheduler:
                 date=date)
             self.db.add_history(history)
 
+        # for detail display
+        old_user = copy.deepcopy(user)
+
+        if not self.params.precompute:
+            self.update_with_response(user, card, date, request.label)
+        elif user.user_id not in self.precompute_future[request.label]:
+            self.update_with_response(user, card, date, request.label)
+        else:
+            results = self.precompute_future[request.label][user.user_id]
+            self.precompute_commit[user.user_id] = results
+            user = results['user']
+            card = results['card']
+
         self.db.update_user(user)
         self.db.update_card(card)
 
-        # print(' ' * 3, '{: <16} : {}'.format('card_id', card.card_id))
-        # print(' ' * 3, '{: <16} : {}'.format('answer', card.answer))
-        # for key, value in detail.items():
-        #     if isinstance(value, float):
-        #         print(' ' * 3, '{: <16} : {:.4f}'.format(key, value))
-        #     elif isinstance(value, int) or isinstance(value, str):
-        #         print(' ' * 3, '{: <16} : {}'.format(key, value))
+        detail = {
+            'response': request.label,
+            'old ltn box': old_user.leitner_box.get(card.card_id, '-'),
+            'new ltn box': user.leitner_box.get(card.card_id, '-'),
+            'old ltn dat': str(old_user.leitner_scheduled_date.get(card.card_id, '-')),
+            'new ltn dat': str(user.leitner_scheduled_date.get(card.card_id, '-')),
+            'old sm2 rep': old_user.sm2_repetition.get(card.card_id, '-'),
+            'new sm2 rep': user.sm2_repetition.get(card.card_id, '-'),
+            'old sm2 inv': old_user.sm2_interval.get(card.card_id, '-'),
+            'new sm2 inv': user.sm2_interval.get(card.card_id, '-'),
+            'old sm2 e_f': old_user.sm2_efactor.get(card.card_id, '-'),
+            'new sm2 e_f': user.sm2_efactor.get(card.card_id, '-'),
+            'old sm2 dat': str(old_user.sm2_scheduled_date.get(card.card_id, '-')),
+            'new sm2 dat': str(user.sm2_scheduled_date.get(card.card_id, '-')),
+        }
 
         return detail
 

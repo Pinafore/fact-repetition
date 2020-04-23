@@ -4,10 +4,10 @@ import copy
 import pickle
 import unittest
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from karl.db import SchedulerDB
-from karl.util import User, Card, History, Params, ScheduleRequest
+from karl.util import User, Card, History, Params, ScheduleRequest, parse_date
 from karl.scheduler import MovingAvgScheduler
 
 
@@ -217,25 +217,50 @@ class TestScheduler(unittest.TestCase):
         cards = cards[:5]
 
         scores = []
+
         for user_id, params in zip(
                 ['precompute_no', 'precompute_yes'], 
                 [Params(precompute=False), Params(precompute=True)]
         ):
             self.scheduler.set_params(params)
+            self.scheduler.reset_user(user_id)
+            
+            requests = []
+            for c in cards:
+                self.scheduler.reset_card(c['question_id'])
+                requests.append(
+                    ScheduleRequest(
+                        user_id=user_id,
+                        text=c['text'],
+                        answer=c['answer'],
+                        category=c['category'],
+                        question_id=c['question_id']
+                    )
+                )
 
             scores.append([])
-            requests = [
-                ScheduleRequest(
-                    user_id=user_id,
-                    text=c['text'],
-                    answer=c['answer'],
-                    category=c['category'],
-                    question_id=c['question_id']
-                ) for c in cards
-            ]
-
+            start_date = parse_date('2028-06-1 08:00:00.000001')
+            print()
             for i in range(5):
-                results = self.scheduler.schedule_and_predict(copy.deepcopy(requests), datetime.now())
+                current_date = start_date + timedelta(seconds=i * 30)
+                for r in requests:
+                    r.date = current_date
+
+                if user_id in self.scheduler.precompute_commit:
+                    returned_cards = self.scheduler.precompute_commit[user_id]['cards']
+                    print(i, 'yes card', [c.results for c in returned_cards])
+                else:
+                    returned_cards = self.scheduler.get_cards(requests)
+                    print(i, 'no  card', [c.results for c in returned_cards])
+
+                if user_id in self.scheduler.precompute_commit:
+                    returned_user = self.scheduler.precompute_commit[user_id]['user']
+                    print(i, 'yes user', returned_user.results)
+                else:
+                    returned_user = self.scheduler.get_user(user_id)
+                    print(i, 'no  user', returned_user.results)
+
+                results = self.scheduler.schedule(copy.deepcopy(requests), datetime.now())
                 order = results['order']
                 request = requests[order[0]]
                 request.__dict__.update({
@@ -244,6 +269,8 @@ class TestScheduler(unittest.TestCase):
                 })
                 self.scheduler.update([request], datetime.now())
                 scores[-1].append([s['sum'] for s in results['scores']])
+
+        print()
         for ss in list(zip(*scores)):
             print(ss[0])
             print(ss[1])
