@@ -23,11 +23,13 @@ def schedule(requests: List[ScheduleRequest]):
     if len(requests) == 0:
         return {
             'order': [],
-            'rationale': 'no card received',
+            'rationale': '<p>no card received</p>',
             'cards_info': '',
         }
+
     if requests[0].date is not None:
         date = parse_date(requests[0].date)
+
     results = scheduler.schedule(requests, date, plot=False)
     return {
         'order': results['order'],

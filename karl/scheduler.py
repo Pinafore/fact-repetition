@@ -418,6 +418,66 @@ class MovingAvgScheduler:
             'sm2': self.dist_sm2(user, card, date),
         } for i, card in enumerate(cards)]
 
+    def get_rationale(self, user, cards, date, scores, order, top_n_cards=3) -> str:
+        # TODO take top_n_cards first
+        rr = """
+             <style>
+             table {
+               border-collapse: collapse;
+             }
+
+             td, th {
+               padding: 0.5rem;
+               text-align: left;
+             }
+
+             tr:nth-child(even) {background-color: #f2f2f2;}
+             </style>
+             """
+
+        rr += '<h2>Top ranked cards</h2>'
+        row_template = '<tr><td><b>{}</b></td> <td>{}</td></tr>'
+        row_template_3 = '<tr><td><b>{}</b></td> <td>{:.4f} x {:.2f}</td></tr>'
+        for i in order[:top_n_cards]:
+            c = cards[i]
+            prev_date, prev_response = user.previous_study.get(c.card_id, ('-', '-'))
+            rr += '<table style="float: left;">'
+            rr += row_template.format('card_id', c.card_id)
+            rr += row_template.format('answer', c.answer)
+            rr += row_template.format('category', c.category)
+            rr += row_template.format('topic', self.topic_words[np.argmax(c.qrep)])
+            rr += row_template.format('prev_date', prev_date)
+            rr += row_template.format('prev_response', prev_response)
+            for k, v in scores[i].items():
+                rr += row_template_3.format(k, v, self.params.__dict__.get(k, 0))
+            rr += '<tr><td><b>{}</b></td> <td>{:.4f}</td></tr>'.format('sum', scores[i]['sum'])
+            rr += row_template.format('ltn box', user.leitner_box.get(c.card_id, '-'))
+            rr += row_template.format('ltn dat', user.leitner_scheduled_date.get(c.card_id, '-'))
+            rr += row_template.format('sm2 rep', user.sm2_repetition.get(c.card_id, '-'))
+            rr += row_template.format('sm2 inv', user.sm2_interval.get(c.card_id, '-'))
+            rr += row_template.format('sm2 e_f', user.sm2_efactor.get(c.card_id, '-'))
+            rr += row_template.format('sm2 dat', user.sm2_scheduled_date.get(c.card_id, '-'))
+            rr += '</table>'
+        return rr
+
+    def get_cards_info(self, user, cards, date, scores, order, top_n_cards=3) -> dict:
+        # TODO take top_n_cards first
+        cards_info = [copy.deepcopy(c.__dict__) for c in cards]
+        for i, card_info in enumerate(cards_info):
+            card_info['scores'] = scores[i]
+            prev_date, prev_response = user.previous_study.get(card_info['card_id'], ('-', '-'))
+            card_info.update({
+                'current date': date,
+                'topic': self.topic_words[np.argmax(card_info['qrep'])],
+                'prev_response': prev_response,
+                'prev_date': prev_date
+            })
+            card_info.pop('qrep')
+            card_info.pop('skill')
+            # card_info.pop('results')
+        cards_info = [cards_info[i] for i in order[:top_n_cards]]
+        return cards_info
+
     def score_user_cards(self, user: User, cards: List[Card], date: datetime, plot=True) -> Dict:
         scores = self.score(user, cards, date)
         scores_summed = [
@@ -434,108 +494,27 @@ class MovingAvgScheduler:
         # plot_polar(user_qrep, '/fs/www-users/shifeng/temp/user.jpg', fill='green')
         # plot_polar(card.qrep, '/fs/www-users/shifeng/temp/card.jpg', fill='yellow')
 
+        rationale = self.get_rationale(user, cards, date, scores, order)
+
         if plot:
             figname = '{}_{}_{}.jpg'.format(user.user_id, card.card_id, date.strftime('%Y-%m-%d-%H-%M'))
             local_filename = '/fs/www-users/shifeng/temp/' + figname
             remote_filename = 'http://users.umiacs.umd.edu/~shifeng/temp/' + figname
             self.plot_histogram(card.qrep, user_qrep, local_filename)
 
-        # create rationale
-        cards_info = [copy.deepcopy(c.__dict__) for c in cards]
-        for i, card_info in enumerate(cards_info):
-            card_info['scores'] = scores[i]
-            prev_date, prev_response = user.previous_study.get(card_info['card_id'], ('-', '-'))
-            card_info.update({
-                'current date': date,
-                'topic': self.topic_words[np.argmax(card_info['qrep'])],
-                'prev_response': prev_response,
-                'prev_date': prev_date
-            })
-            card_info.pop('qrep')
-            card_info.pop('skill')
-            # card_info.pop('results')
-        cards_info = [cards_info[i] for i in order[:3]]
+            rationale += "</br>"
+            rationale += "</br>"
+            rationale += "<img src={}>".format(remote_filename)
+            # rr += "<img src='http://users.umiacs.umd.edu/~shifeng/temp/card.jpg'>"
+            # rr += "<img src='http://users.umiacs.umd.edu/~shifeng/temp/user.jpg'>"
 
-        rr = """
-             <style>
-             table {
-               border-collapse: collapse;
-             }
-
-             td, th {
-               padding: 0.5rem;
-               text-align: left;
-             }
-
-             tr:nth-child(even) {background-color: #f2f2f2;}
-             </style>
-             """
-        # print('', file=detail_file)
-        # print(' ' * 3, 'update details', file=detail_file)
-        # for key, value in update_outputs.items():
-        #     if isinstance(value, float):
-        #         print(' ' * 7, '{: <16} : {:.4f}'.format(key, value), file=detail_file)
-        #     elif isinstance(value, int) or isinstance(value, str):
-        #         print(' ' * 7, '{: <16} : {}'.format(key, value), file=detail_file)
-
-        rr += '<h2>Top ranked cards</h2>'
-        row_template = '<tr><td><b>{}</b></td> <td>{}</td></tr>'
-        row_template_3 = '<tr><td><b>{}</b></td> <td>{:.4f} x {:.2f}</td></tr>'
-        for i in order[:3]:
-            c = cards[i]
-            prev_date, prev_response = user.previous_study.get(c.card_id, ('-', '-'))
-            rr += '<table style="float: left;">'
-            rr += row_template.format('card_id', c.card_id)
-            rr += row_template.format('answer', c.answer)
-            rr += row_template.format('category', c.category)
-            rr += row_template.format('topic', self.topic_words[np.argmax(c.qrep)])
-            rr += row_template.format('prev_date', prev_date)
-            rr += row_template.format('prev_response', prev_response)
-            for k, v in scores[i].items():
-                rr += row_template_3.format(k, v, self.params.__dict__.get(k, 0))
-            rr += '<tr><td><b>{}</b></td> <td>{:.4f}</td></tr>'.format('sum', scores_summed[i])
-            rr += row_template.format('ltn box', user.leitner_box.get(c.card_id, '-'))
-            rr += row_template.format('ltn dat', user.leitner_scheduled_date.get(c.card_id, '-'))
-            rr += row_template.format('sm2 rep', user.sm2_repetition.get(c.card_id, '-'))
-            rr += row_template.format('sm2 inv', user.sm2_interval.get(c.card_id, '-'))
-            rr += row_template.format('sm2 e_f', user.sm2_efactor.get(c.card_id, '-'))
-            rr += row_template.format('sm2 dat', user.sm2_scheduled_date.get(c.card_id, '-'))
-            rr += '</table>'
-
+        cards_info = self.get_cards_info(user, cards, date, scores, order)
         output_dict = {
             'order': order,
-            'rationale': rr,
+            'rationale': rationale,
             'cards_info': cards_info,
             'scores': scores,
         }
-
-        if plot:
-            rr += "</br>"
-            rr += "</br>"
-            rr += "<img src={}>".format(remote_filename)
-            # rr += "<img src='http://users.umiacs.umd.edu/~shifeng/temp/card.jpg'>"
-            # rr += "<img src='http://users.umiacs.umd.edu/~shifeng/temp/user.jpg'>"
-            output_dict['plot'] = remote_filename
-
-        # if add_history:
-        #     # add temporary history
-        #     # ID and response will be completed by a call to `update`
-        #     temp_history_id = json.dumps({'user_id': user.user_id, 'card_id': card.card_id})
-        #     history = History(
-        #         history_id=temp_history_id,
-        #         user_id=user.user_id,
-        #         card_id=card.card_id,
-        #         response='PLACEHOLDER',
-        #         judgement='PLACEHOLDER',
-        #         user_snapshot=json.dumps(user.pack()),
-        #         scheduler_snapshot=json.dumps(self.params.__dict__),
-        #         card_ids=json.dumps([x.card_id for x in cards]),
-        #         scheduler_output=json.dumps({'order': order, 'rationale': rr}),
-        #         date=date)
-
-        #     self.db.add_history(history)
-        #     output_dict['temp_history_id'] = temp_history_id
-
         return output_dict
 
     def schedule(self, requests: List[ScheduleRequest], date: datetime, plot=False) -> dict:
@@ -602,14 +581,17 @@ class MovingAvgScheduler:
                 scores[idx] = prev_results['scores'][i]
 
             order = np.argsort([s['sum'] for s in scores]).tolist()
+            rationale = self.get_rationale(user, cards, date, scores, order)
 
+            cards_info = self.get_cards_info(user, cards, date, scores, order)
             output_dict = {
                 'order': order,
                 'scores': scores,
-                # TODO new rationale, cards_info, plot
-                'rationale': prev_results['rationale'],
-                'cards_info': prev_results['cards_info'],
+                'rationale': rationale,
+                'cards_info': cards_info,
             }
+
+        # output_dict generated
         card_idx = output_dict['order'][0]
 
         if user.user_id in self.precompute_commit:
@@ -652,17 +634,16 @@ class MovingAvgScheduler:
         #             date, card_idx, 'correct', plot=plot)
         # self.branch(copy.deepcopy(user), copy.deepcopy(cards),
         #             date, card_idx, 'wrong', plot=plot)
-        # end async
 
         return output_dict
 
     def branch(self, user: User, cards: List[Card],
                date: datetime, card_idx: int,
-               response: str, plot=True) -> None:
+               response: str, plot=False) -> None:
         # make copy of user and top card
         # update (copied) user and top card by response
         # make new schedule with updated user and cards (with updated card)
-        # TODO note that here dates used in both update and score are not accurate
+        # NOTE here dates used in both update and score are not accurate
         # since we don't know when the user will respond and request for the 
         # next card. but it should affect all cards (with repetition) equally
         self.update_user_card(user, cards[card_idx], date, response)
@@ -725,16 +706,18 @@ class MovingAvgScheduler:
         card = cards[indices[0]]
 
         # find that temporary history entry and update
-        temp_history_id = json.dumps({'user_id': user.user_id, 'card_id': card.card_id})
-        history = self.db.get_history(temp_history_id)
-        if history is not None:
-            history.__dict__.update({
-                'history_id': request.history_id,
-                'response': request.label,
-                'judgement': request.label,
-                'date': date
-            })
-            self.db.update_history(temp_history_id, history)
+        # temp_history_id = json.dumps({'user_id': user.user_id, 'card_id': card.card_id})
+        # history = self.db.get_history(temp_history_id)
+        # if history is not None:
+        if False:
+            pass
+        #     history.__dict__.update({
+        #         'history_id': request.history_id,
+        #         'response': request.label,
+        #         'judgement': request.label,
+        #         'date': date
+        #     })
+        #     self.db.update_history(temp_history_id, history)
         else:
             history = History(
                 history_id=request.history_id,
