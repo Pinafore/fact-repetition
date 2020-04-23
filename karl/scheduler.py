@@ -8,6 +8,7 @@ import copy
 import pickle
 import gensim
 import logging
+import threading
 import numpy as np
 import pandas as pd
 import en_core_web_lg
@@ -557,11 +558,15 @@ class MovingAvgScheduler:
 
         if not self.params.precompute:
             return self.score_user_cards(user, cards, date, plot=plot)
-            
+
         # using precomputed schedules
         # read confirmed update & corresponding schedule
         if user.user_id not in self.precompute_commit:
             # no existing precomupted schedule, do regular schedule
+            output_dict = self.score_user_cards(user, cards, date, plot=plot)
+        elif self.precompute_commit[user.user_id] == 'done':
+            # precompute threads didn't finish before user responded
+            # marked as done by update
             output_dict = self.score_user_cards(user, cards, date, plot=plot)
         else:
             # read precomputed schedule, check if new cards are added
@@ -592,7 +597,7 @@ class MovingAvgScheduler:
                     scores[idx] = new_results['scores'][i]
             for i, idx in enumerate(prev_card_indices):
                 scores[idx] = prev_results['scores'][i]
-            
+
             order = np.argsort([s['sum'] for s in scores]).tolist()
 
             output_dict = {
@@ -602,12 +607,48 @@ class MovingAvgScheduler:
                 'rationale': prev_results['rationale'],
                 'cards_info': prev_results['cards_info'],
             }
-        # TODO below should be async
         card_idx = output_dict['order'][0]
-        self.branch(copy.deepcopy(user), copy.deepcopy(cards),
-                    date, card_idx, 'correct', plot=plot)
-        self.branch(copy.deepcopy(user), copy.deepcopy(cards),
-                    date, card_idx, 'wrong', plot=plot)
+
+        if user.user_id in self.precompute_commit:
+            # necessary to remove 'done' marked by update if exists
+            self.precompute_commit.pop(user.user_id)
+
+        # 'correct' branch
+        thr_correct = threading.Thread(
+            target=self.branch,
+            args=(
+                copy.deepcopy(user),
+                copy.deepcopy(cards),
+                date,
+                card_idx,
+                'correct',
+                plot,
+            ),
+            kwargs={}
+        )
+        thr_correct.start()
+        # thr_correct.join()
+
+        # 'wrong' branch
+        thr_wrong = threading.Thread(
+            target=self.branch,
+            args=(
+                copy.deepcopy(user),
+                copy.deepcopy(cards),
+                date,
+                card_idx,
+                'wrong',
+                plot,
+            ),
+            kwargs={}
+        )
+        thr_wrong.start()
+        # thr_wrong.join()
+
+        # self.branch(copy.deepcopy(user), copy.deepcopy(cards),
+        #             date, card_idx, 'correct', plot=plot)
+        # self.branch(copy.deepcopy(user), copy.deepcopy(cards),
+        #             date, card_idx, 'wrong', plot=plot)
         # end async
 
         return output_dict
@@ -618,20 +659,21 @@ class MovingAvgScheduler:
         # make copy of user and top card
         # update (copied) user and top card by response
         # make new schedule with updated user and cards (with updated card)
-        # TODO if user answered before we could do the branching, skip
-        # TODO note that dates used both here and below are not totally accurate
-        # since we don't know when the user will send in the response and request
-        # for the next card. but it should affect all cards equally
-        self.update_with_response(user, cards[card_idx], date, response)
+        # TODO note that here dates used in both update and score are not accurate
+        # since we don't know when the user will respond and request for the 
+        # next card. but it should affect all cards (with repetition) equally
+        self.update_user_card(user, cards[card_idx], date, response)
         results = self.score_user_cards(user, cards, date, plot=plot)
         results.update({
             'user': user,
             'card': cards[card_idx],
             'cards': cards,
         })
-        self.precompute_future[response][user.user_id] = results
-        
-    def update_with_response(self, user: User, card: Card, date: datetime, response: str):
+        if self.precompute_commit.get(user.user_id, None) != 'done':
+            # if done, user already responded, marked as done by update
+            self.precompute_future[response][user.user_id] = results
+
+    def update_user_card(self, user: User, card: Card, date: datetime, response: str):
         # update qrep
         user.qrep.append(card.qrep)
         if len(user.qrep) >= self.params.max_qreps:
@@ -708,9 +750,12 @@ class MovingAvgScheduler:
         old_user = copy.deepcopy(user)
 
         if not self.params.precompute:
-            self.update_with_response(user, card, date, request.label)
+            self.update_user_card(user, card, date, request.label)
         elif user.user_id not in self.precompute_future[request.label]:
-            self.update_with_response(user, card, date, request.label)
+            self.update_user_card(user, card, date, request.label)
+            # NOTE precompute did not finish before user responded
+            # mark commit as taken
+            self.precompute_commit[user.user_id] = 'done'
         else:
             results = self.precompute_future[request.label][user.user_id]
             self.precompute_commit[user.user_id] = results

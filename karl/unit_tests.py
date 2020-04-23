@@ -268,7 +268,7 @@ class TestScheduler(unittest.TestCase):
                 print(self.scheduler_w.precompute_future.keys())
                 print(self.scheduler_w.precompute_future['correct'].keys())
                 print(self.scheduler_w.precompute_future['wrong'].keys())
-            else:
+            elif self.scheduler_w.precompute_commit[user_id] != 'done':
                 cards_w = self.scheduler_w.precompute_commit[user_id]['cards']
                 print('cards_wp', [c.results for c in cards_w])
 
@@ -277,7 +277,7 @@ class TestScheduler(unittest.TestCase):
 
             if user_id not in self.scheduler_w.precompute_commit:
                 pass
-            else:
+            elif self.scheduler_w.precompute_commit[user_id] != 'done':
                 user_w = self.scheduler_w.precompute_commit[user_id]['user']
                 print('users_wp', user_w.results)
             user_wo = self.scheduler_wo.get_user(user_id)

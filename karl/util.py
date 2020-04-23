@@ -27,7 +27,7 @@ class Params(BaseModel):
     skill: float = 0                    # card difficulty vs user skill level
     recall: float = 1                   # recall probability
     category: float = 1                 # change in category from prev
-    leitner: float = 1                  # hours till leitner scheduled date
+    leitner: float = 0                  # hours till leitner scheduled date
     sm2: float = 1                      # hours till sm2 scheduled date
     decay_qrep: float = 0.9             # discount factor
     decay_skill: float = 0.9            # discount factor
