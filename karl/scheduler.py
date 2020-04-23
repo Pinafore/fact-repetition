@@ -537,14 +537,10 @@ class MovingAvgScheduler:
 
         return output_dict
 
-    def schedule(
-            self,
-            requests: List[ScheduleRequest],
-            date: datetime,
-            plot: bool = False,
-    ) -> dict:
+    def schedule(self, requests: List[ScheduleRequest], date: datetime, plot=False) -> dict:
         if len(requests) == 0:
             return [], [], ''
+
         # mapping from user to scheduling requests
         # not used since we assume only one user
         user_to_requests = defaultdict(list)
@@ -566,52 +562,52 @@ class MovingAvgScheduler:
         # read confirmed update & corresponding schedule
         if user.user_id not in self.precompute_commit:
             # no existing precomupted schedule, do regular schedule
-            return self.score_user_cards(user, cards, date, plot=plot)
+            output_dict = self.score_user_cards(user, cards, date, plot=plot)
+        else:
+            # read precomputed schedule, check if new cards are added
+            # if so, compute score for new cards, re-sort cards
+            # no need to update previous card / user
+            # since updates does the commit after updating user & card in db
+            prev_results = self.precompute_commit[user.user_id]
+            prev_card_ids = [c.card_id for c in prev_results['cards']]
 
-        # read precomputed schedule, check if new cards are added
-        # if so, compute score for new cards, re-sort cards
-        # no need to update previous card / user
-        # since updates does the commit after updating user & card in db
-        prev_results = self.precompute_commit[user.user_id]
-        prev_card_ids = [c.card_id for c in prev_results['cards']]
+            new_cards = []
+            # prev_cards -> cards
+            prev_card_indices = {}
+            # new_cards -> cards
+            new_card_indices = {}
+            for i, c in enumerate(cards):
+                if c.card_id in prev_card_ids:
+                    prev_idx = prev_card_ids.index(c.card_id)
+                    prev_card_indices[prev_idx] = i
+                else:
+                    new_card_indices[len(new_cards)] = i
+                    new_cards.append(c)
 
-        new_cards = []
-        # prev_cards -> cards
-        prev_card_indices = {}
-        # new_cards -> cards
-        new_card_indices = {}
-        for i, c in enumerate(cards):
-            if c.card_id in prev_card_ids:
-                prev_idx = prev_card_ids.index(c.card_id)
-                prev_card_indices[prev_idx] = i
-            else:
-                new_card_indices[len(new_cards)] = i
-                new_cards.append(i)
+            # gather scores for both new and previous cards
+            scores = [None] * len(cards)
+            if len(new_cards) > 0:
+                new_results = self.score_user_cards(user, new_cards, date, plot=plot)
+                for i, idx in enumerate(new_card_indices):
+                    scores[idx] = new_results['scores'][i]
+            for i, idx in enumerate(prev_card_indices):
+                scores[idx] = prev_results['scores'][i]
+            
+            order = np.argsort([s['sum'] for s in scores]).tolist()
 
-        # gather scores for both new and previous cards
-        scores = [None] * len(cards)
-        if len(new_cards) > 0:
-            new_results = self.score_user_cards(user, new_cards, date, plot=plot)
-            for i, idx in enumerate(new_card_indices):
-                scores[idx] = new_results['scores'][i]
-        for i, idx in enumerate(prev_card_indices):
-            scores[idx] = prev_results['scores'][i]
-        
-        order = np.argsort([s['sum'] for s in scores]).tolist()
-        # TODO get new rationale and cards_info, and add plot
-        output_dict = {
-            'order': order,
-            'scores': scores,
-            'rationale': prev_results['rationale'],
-            'cards_info': prev_results['cards_info'],
-        }
-
-        if not self.params.precompute:
-            return output_dict
-
+            output_dict = {
+                'order': order,
+                'scores': scores,
+                # TODO new rationale, cards_info, plot
+                'rationale': prev_results['rationale'],
+                'cards_info': prev_results['cards_info'],
+            }
         # TODO below should be async
-        self.branch(user, cards, date, order[0], 'correct', plot=plot)
-        self.branch(user, cards, date, order[0], 'wrong', plot=plot)
+        card_idx = output_dict['order'][0]
+        self.branch(copy.deepcopy(user), copy.deepcopy(cards),
+                    date, card_idx, 'correct', plot=plot)
+        self.branch(copy.deepcopy(user), copy.deepcopy(cards),
+                    date, card_idx, 'wrong', plot=plot)
         # end async
 
         return output_dict
@@ -623,18 +619,14 @@ class MovingAvgScheduler:
         # update (copied) user and top card by response
         # make new schedule with updated user and cards (with updated card)
         # TODO if user answered before we could do the branching, skip
-        card = copy.deepcopy(cards[card_idx])
-        user = copy.deepcopy(user)
         # TODO note that dates used both here and below are not totally accurate
         # since we don't know when the user will send in the response and request
         # for the next card. but it should affect all cards equally
-        self.update_with_response(user, card, date, response)
-
-        cards[card_idx] = card
+        self.update_with_response(user, cards[card_idx], date, response)
         results = self.score_user_cards(user, cards, date, plot=plot)
         results.update({
             'user': user,
-            'card': card,
+            'card': cards[card_idx],
             'cards': cards,
         })
         self.precompute_future[response][user.user_id] = results

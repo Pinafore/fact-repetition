@@ -238,43 +238,51 @@ class TestScheduler(unittest.TestCase):
                     question_id=c['question_id']
                 )
             )
-            start_date = parse_date('2028-06-1 08:00:00.000001')
+
+        print()
+
+        start_date = parse_date('2028-06-1 08:00:00.000001')
+        for i in range(5):
+            current_date = start_date + timedelta(seconds=i * 30)
+            for r in requests:
+                r.date = current_date
+
+            results_w = self.scheduler_w.schedule(copy.deepcopy(requests), current_date)
+            results_wo = self.scheduler_wo.schedule(copy.deepcopy(requests), current_date)
+            print(i)
+            print('scores_p', [s['sum'] for s in results_w['scores']])
+            print('scores_o', [s['sum'] for s in results_wo['scores']])
+
+            self.assertEqual(results_w['order'], results_wo['order'])
+            order = results_w['order']
+            request = requests[order[0]]
+            request.__dict__.update({
+                'label': 'correct',
+                'history_id': 'real_history_id_{}_{}'.format(user_id, request.question_id)
+            })
+            self.scheduler_w.update([request], current_date)
+            self.scheduler_wo.update([request], current_date)
+
+            if user_id not in self.scheduler_w.precompute_commit:
+                print('not in commit')
+                print(self.scheduler_w.precompute_future.keys())
+                print(self.scheduler_w.precompute_future['correct'].keys())
+                print(self.scheduler_w.precompute_future['wrong'].keys())
+            else:
+                cards_w = self.scheduler_w.precompute_commit[user_id]['cards']
+                print('cards_wp', [c.results for c in cards_w])
+
+            cards_wo = self.scheduler_wo.get_cards(requests)
+            print('cards_wo', [c.results for c in cards_wo])
+
+            if user_id not in self.scheduler_w.precompute_commit:
+                pass
+            else:
+                user_w = self.scheduler_w.precompute_commit[user_id]['user']
+                print('users_wp', user_w.results)
+            user_wo = self.scheduler_wo.get_user(user_id)
+            print('users_wo', user_wo.results)
             print()
-            for i in range(5):
-                current_date = start_date + timedelta(seconds=i * 30)
-                for r in requests:
-                    r.date = current_date
-
-                results_w = self.scheduler_w.schedule(copy.deepcopy(requests), current_date)
-                results_wo = self.scheduler_wo.schedule(copy.deepcopy(requests), current_date)
-                print(i)
-                print([s['sum'] for s in results_w['scores']])
-                print([s['sum'] for s in results_wo['scores']])
-                print()
-
-                self.assertEqual(results_w['order'], results_wo['order'])
-                order = results_w['order']
-                request = requests[order[0]]
-                request.__dict__.update({
-                    'label': 'correct',
-                    'history_id': 'real_history_id_{}_{}'.format(user_id, request.question_id)
-                })
-                self.scheduler_w.update([request], current_date + timedelta(seconds=5))
-                self.scheduler_wo.update([request], current_date + timedelta(seconds=5))
-
-                # if user_id in self.scheduler.precompute_commit:
-                #     returned_cards = self.scheduler.precompute_commit[user_id]['cards']
-                #     print(i, 'yes card', [c.results for c in returned_cards])
-                # else:
-                #     returned_cards = self.scheduler.get_cards(requests)
-                #     print(i, 'no  card', [c.results for c in returned_cards])
-
-                # if user_id in self.scheduler.precompute_commit:
-                #     returned_user = self.scheduler.precompute_commit[user_id]['user']
-                #     print(i, 'yes user', returned_user.results)
-                # else:
-                #     returned_user = self.scheduler.get_user(user_id)
-                #     print(i, 'no  user', returned_user.results)
 
 
 if __name__ == '__main__':
