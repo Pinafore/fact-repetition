@@ -165,26 +165,32 @@ class TestDB(unittest.TestCase):
         self.assert_user_equal(user, returned_user)
         self.assertFalse(self.db.check_history(old_history_id))
 
-        t0 = datetime.now()
         new_user = copy.deepcopy(user)
         new_user.user_id = 'new user 1'
         new_user.sm2_efactor = {'card 1': 0.05},
         self.assert_user_equal(user, returned_user)
-        print('deep copy user takes', datetime.now() - t0)
 
 
 class TestScheduler(unittest.TestCase):
 
     def setUp(self):
-        self.filename = 'db_test.sqlite'
-        if os.path.exists(self.filename):
-            os.remove(self.filename)
-        self.scheduler = MovingAvgScheduler(db_filename=self.filename)
-        self.db = self.scheduler.db
+        self.filename_w_pre = 'db_test_w_pre.sqlite'
+        if os.path.exists(self.filename_w_pre):
+            os.remove(self.filename_w_pre)
+        self.scheduler_w = MovingAvgScheduler(
+            db_filename=self.filename_w_pre, params=Params(precompute=True))
+
+        self.filename_wo_pre = 'db_test_wo_pre.sqlite'
+        if os.path.exists(self.filename_wo_pre):
+            os.remove(self.filename_wo_pre)
+        self.scheduler_wo = MovingAvgScheduler(
+            db_filename=self.filename_wo_pre, params=Params(precompute=False))
 
     def tearDown(self):
-        if os.path.exists(self.filename):
-            os.remove(self.filename)
+        if os.path.exists(self.filename_w_pre):
+            os.remove(self.filename_w_pre)
+        if os.path.exists(self.filename_wo_pre):
+            os.remove(self.filename_wo_pre)
 
     def assert_user_equal(self, u1, u2):
         self.assertEqual(u1.user_id, u2.user_id)
@@ -216,29 +222,22 @@ class TestScheduler(unittest.TestCase):
             cards = pickle.load(f)
         cards = cards[:5]
 
-        scores = []
-
-        for user_id, params in zip(
-                ['precompute_no', 'precompute_yes'], 
-                [Params(precompute=False), Params(precompute=True)]
-        ):
-            self.scheduler.set_params(params)
-            self.scheduler.reset_user(user_id)
-            
-            requests = []
-            for c in cards:
-                self.scheduler.reset_card(c['question_id'])
-                requests.append(
-                    ScheduleRequest(
-                        user_id=user_id,
-                        text=c['text'],
-                        answer=c['answer'],
-                        category=c['category'],
-                        question_id=c['question_id']
-                    )
+        user_id = 'test_dummy'
+        self.scheduler_w.reset_user(user_id)
+        self.scheduler_wo.reset_user(user_id)
+        requests = []
+        for c in cards:
+            self.scheduler_w.reset_card(c['question_id'])
+            self.scheduler_wo.reset_card(c['question_id'])
+            requests.append(
+                ScheduleRequest(
+                    user_id=user_id,
+                    text=c['text'],
+                    answer=c['answer'],
+                    category=c['category'],
+                    question_id=c['question_id']
                 )
-
-            scores.append([])
+            )
             start_date = parse_date('2028-06-1 08:00:00.000001')
             print()
             for i in range(5):
@@ -246,35 +245,36 @@ class TestScheduler(unittest.TestCase):
                 for r in requests:
                     r.date = current_date
 
-                if user_id in self.scheduler.precompute_commit:
-                    returned_cards = self.scheduler.precompute_commit[user_id]['cards']
-                    print(i, 'yes card', [c.results for c in returned_cards])
-                else:
-                    returned_cards = self.scheduler.get_cards(requests)
-                    print(i, 'no  card', [c.results for c in returned_cards])
+                results_w = self.scheduler_w.schedule(copy.deepcopy(requests), current_date)
+                results_wo = self.scheduler_wo.schedule(copy.deepcopy(requests), current_date)
+                print(i)
+                print([s['sum'] for s in results_w['scores']])
+                print([s['sum'] for s in results_wo['scores']])
+                print()
 
-                if user_id in self.scheduler.precompute_commit:
-                    returned_user = self.scheduler.precompute_commit[user_id]['user']
-                    print(i, 'yes user', returned_user.results)
-                else:
-                    returned_user = self.scheduler.get_user(user_id)
-                    print(i, 'no  user', returned_user.results)
-
-                results = self.scheduler.schedule(copy.deepcopy(requests), datetime.now())
-                order = results['order']
+                self.assertEqual(results_w['order'], results_wo['order'])
+                order = results_w['order']
                 request = requests[order[0]]
                 request.__dict__.update({
                     'label': 'correct',
                     'history_id': 'real_history_id_{}_{}'.format(user_id, request.question_id)
                 })
-                self.scheduler.update([request], datetime.now())
-                scores[-1].append([s['sum'] for s in results['scores']])
+                self.scheduler_w.update([request], current_date + timedelta(seconds=5))
+                self.scheduler_wo.update([request], current_date + timedelta(seconds=5))
 
-        print()
-        for ss in list(zip(*scores)):
-            print(ss[0])
-            print(ss[1])
-            print()
+                # if user_id in self.scheduler.precompute_commit:
+                #     returned_cards = self.scheduler.precompute_commit[user_id]['cards']
+                #     print(i, 'yes card', [c.results for c in returned_cards])
+                # else:
+                #     returned_cards = self.scheduler.get_cards(requests)
+                #     print(i, 'no  card', [c.results for c in returned_cards])
+
+                # if user_id in self.scheduler.precompute_commit:
+                #     returned_user = self.scheduler.precompute_commit[user_id]['user']
+                #     print(i, 'yes user', returned_user.results)
+                # else:
+                #     returned_user = self.scheduler.get_user(user_id)
+                #     print(i, 'no  user', returned_user.results)
 
 
 if __name__ == '__main__':

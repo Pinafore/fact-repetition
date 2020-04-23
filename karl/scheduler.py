@@ -625,6 +625,9 @@ class MovingAvgScheduler:
         # TODO if user answered before we could do the branching, skip
         card = copy.deepcopy(cards[card_idx])
         user = copy.deepcopy(user)
+        # TODO note that dates used both here and below are not totally accurate
+        # since we don't know when the user will send in the response and request
+        # for the next card. but it should affect all cards equally
         self.update_with_response(user, card, date, response)
 
         cards[card_idx] = card
