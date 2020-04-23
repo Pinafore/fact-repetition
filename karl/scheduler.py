@@ -24,7 +24,7 @@ from pandas.api.types import CategoricalDtype
 from karl.db import SchedulerDB
 from karl.lda import process_question
 from karl.util import ScheduleRequest, Params, Card, User, History, theme_fs
-from karl.baseline import RetentionModel
+from karl.retention.baseline import RetentionModel
 
 nlp = en_core_web_lg.load()
 nlp.add_pipe(process_question, name='process', last=True)
