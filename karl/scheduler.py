@@ -231,6 +231,9 @@ class MovingAvgScheduler:
         )
 
         self.embed([card])
+        # the skill of a card is an one-hot vector 
+        # the non-zero entry is a value between 0 and 1
+        # indicating the average question accuracy
         card.skill = np.zeros_like(card.qrep)
         card.skill[np.argmax(card.qrep)] = 1
         card.skill *= self.predict_one(card)
@@ -259,11 +262,11 @@ class MovingAvgScheduler:
 
         logger.debug('embed cards ' + str(len(new_cards)))
         self.embed(new_cards)
-        probs = self.predict(new_cards)
+        card_skills = self.get_card_skills(new_cards)
         for i, card in enumerate(new_cards):
             card.skill = np.zeros_like(card.qrep)
             card.skill[np.argmax(card.qrep)] = 1
-            card.skill *= probs[i]
+            card.skill *= card_skills[i]
         self.db.add_cards(new_cards)
         return cards
 
@@ -279,7 +282,7 @@ class MovingAvgScheduler:
         qrep = np.array([1 / k for _ in range(k)])
         new_user = User(
             user_id=user_id,
-            category='HISTORY',  # TODO don't hard code
+            category=None,
             qrep=[qrep],
             skill=[self.avg_user_skill_estimate]
         )
@@ -314,7 +317,7 @@ class MovingAvgScheduler:
     #     # 3. not found
     #     return [], []
 
-    def predict_one(self, card: Card) -> float:
+    def get_card_skill(self, card: Card) -> float:
         # # 1. find same or similar card in records
         # cards, scores = self.retrieve(card)
         # if len(cards) > 0:
@@ -323,9 +326,8 @@ class MovingAvgScheduler:
         # return self.retention_model.predict_one(user, card)
         return 0.5
 
-    def predict(self, cards: List[Card]) -> List[float]:
-        # return self.retention_model.predict(user, cards)
-        return [self.predict_one(card) for card in cards]
+    def get_card_skills(self, cards: List[Card]) -> List[float]:
+        return [self.get_card_skill(card) for card in cards]
 
     def set_params(self, params: Params):
         self.params.__dict__.update(params)
@@ -336,25 +338,20 @@ class MovingAvgScheduler:
         return float(card.category.lower() != user.category.lower())
 
     def dist_skill(self, user: User, card: Card) -> float:
-        return 0
-        # # measures difficulty difference
-        # weight = 1
-        # skills, weights = [], []
-        # for q in user.skill:
-        #     skills.append(weight * q)
-        #     weights.append(weight)
-        #     weight *= self.params.decay_skill
-        # skill = np.sum(skills, axis=0) / np.sum(weights)
-        # # skill is a (vector of) probability
-        # skill = np.clip(skill, a_min=0.0, a_max=1.0)
-        # topic_idx = np.argmax(card.qrep)
-        # d = card.skill[topic_idx] - skill[topic_idx]
-        # # penalize easier questions by ten
-        # d *= 1 if d <= 0 else 10
-        # return abs(d)
+        # card skill is a n_topics dimensional one-hot vector
+        # where the non-zero entry is the average question accuracy
+        # user skill equals the accumulated skill vectors
+        # of the max_queue previous cards
+        # measures difficulty difference
+        user_skill = self.get_discounted_average(user.skill, self.params.decay_qrep)
+        user_skill = np.clip(user_skill, a_min=0.0, a_max=1.0)
+        topic_idx = np.argmax(card.qrep)
+        d = card.skill[topic_idx] - user_skill[topic_idx]
+        # penalize easier questions by ten
+        d *= 1 if d <= 0 else 10
+        return abs(d)
 
     def dist_recall_batch(self, user: User, cards: List[Card]) -> float:
-        # return [0 for _ in cards]
         return (1 - self.retention_model.predict(user, cards)).tolist()
 
     def dist_cool_down(self, user: User, card: Card, date: datetime) -> float:
@@ -371,22 +368,21 @@ class MovingAvgScheduler:
             else:
                 return max(self.params.cool_down_time_wrong - delta_minutes, 0)
 
-    def get_average_qrep(self, qreps):
+    def get_discounted_average(self, vectors, decay):
         weight = 1
-        qrep, weights = [], []
-        for q in qreps:
-            qrep.append(weight * q)
-            weights.append(weight)
-            weight *= self.params.decay_qrep
-        qrep = np.sum(qrep, axis=0) / np.sum(weights)
-        return qrep
+        vs, ws = [], []
+        for v in vectors:
+            vs.append(weight * v)
+            ws.append(weight)
+            weight *= decay
+        return np.sum(vs, axis=0) / np.sum(ws)
 
     def dist_qrep(self, user: User, card: Card) -> float:
         # measures topical similarity
         def cosine_distance(a, b):
             return 1 - (a @ b.T) / (np.linalg.norm(a) * np.linalg.norm(b))
-        qrep = self.get_average_qrep(user.qrep)
-        return cosine_distance(qrep, card.qrep)
+        user_qrep = self.get_discounted_average(user.qrep, self.params.decay_qrep)
+        return cosine_distance(user_qrep, card.qrep)
 
     def dist_leitner(self, user: User, card: Card, date: datetime) -> float:
         # hours till scheduled date by Leitner
@@ -410,7 +406,7 @@ class MovingAvgScheduler:
         recall_scores = self.dist_recall_batch(user, cards)
         return [{
             'qrep': self.dist_qrep(user, card),
-            # 'skill': self.dist_skill(user, card),
+            'skill': self.dist_skill(user, card),
             'recall': recall_scores[i],
             'category': self.dist_category(user, card),
             'cool_down': self.dist_cool_down(user, card, date),
@@ -419,7 +415,6 @@ class MovingAvgScheduler:
         } for i, card in enumerate(cards)]
 
     def get_rationale(self, user, cards, date, scores, order, top_n_cards=3) -> str:
-        # TODO take top_n_cards first
         rr = """
              <style>
              table {
@@ -461,9 +456,9 @@ class MovingAvgScheduler:
         return rr
 
     def get_cards_info(self, user, cards, date, scores, order, top_n_cards=3) -> dict:
-        # TODO take top_n_cards first
-        cards_info = [copy.deepcopy(c.__dict__) for c in cards]
-        for i, card_info in enumerate(cards_info):
+        cards_info = []
+        for i in order[:top_n_cards]:
+            card_info = copy.deepcopy(cards[i].__dict__)
             card_info['scores'] = scores[i]
             prev_date, prev_response = user.previous_study.get(card_info['card_id'], ('-', '-'))
             card_info.update({
@@ -475,10 +470,10 @@ class MovingAvgScheduler:
             card_info.pop('qrep')
             card_info.pop('skill')
             # card_info.pop('results')
-        cards_info = [cards_info[i] for i in order[:top_n_cards]]
+            cards_info.append(card_info)
         return cards_info
 
-    def score_user_cards(self, user: User, cards: List[Card], date: datetime, plot=True) -> Dict:
+    def score_user_cards(self, user: User, cards: List[Card], date: datetime, plot=False) -> Dict:
         scores = self.score(user, cards, date)
         scores_summed = [
             sum([self.params.__dict__[key] * value for key, value in ss.items()])
@@ -490,7 +485,7 @@ class MovingAvgScheduler:
         order = np.argsort(scores_summed).tolist()
         card = cards[order[0]]
 
-        user_qrep = self.get_average_qrep(user.qrep)
+        user_qrep = self.get_discounted_average(user.qrep, self.params.decay_qrep)
         # plot_polar(user_qrep, '/fs/www-users/shifeng/temp/user.jpg', fill='green')
         # plot_polar(card.qrep, '/fs/www-users/shifeng/temp/card.jpg', fill='yellow')
 
@@ -660,13 +655,14 @@ class MovingAvgScheduler:
     def update_user_card(self, user: User, card: Card, date: datetime, response: str):
         # update qrep
         user.qrep.append(card.qrep)
-        if len(user.qrep) >= self.params.max_qreps:
+        if len(user.qrep) >= self.params.max_queue:
             user.qrep.pop(0)
 
         # update skill
         if response:
             user.skill.append(card.skill)
-            if len(user.skill) >= self.params.max_qreps:
+            if len(user.skill) >= self.params.max_queue:
+                # queue is full, remove oldest entry
                 user.skill.pop(0)
 
         user.category = card.category
