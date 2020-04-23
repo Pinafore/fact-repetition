@@ -35,7 +35,7 @@ class Params(BaseModel):
     cool_down_time_correct: float = 20  # minutes to cool down
     cool_down_time_wrong: float = 2     # minutes to cool down
     max_qreps: int = 10                 # num of qreps to average over
-    precompute: bool = False            # optimize speed by precompute next step
+    precompute: bool = True             # optimize speed by precompute next step
     lda_dir: str = 'checkpoints/gensim_quizbowl_10_1585102364.5221019'
     whoosh_index: str = 'whoosh_index'
 

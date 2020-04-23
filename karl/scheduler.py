@@ -589,13 +589,16 @@ class MovingAvgScheduler:
                     new_card_indices[len(new_cards)] = i
                     new_cards.append(c)
 
+            if len(new_card_indices) + len(prev_card_indices) != len(cards):
+                raise ValueError('len(new_card_indices) + len(prev_card_indices) != len(cards)')
+
             # gather scores for both new and previous cards
             scores = [None] * len(cards)
             if len(new_cards) > 0:
                 new_results = self.score_user_cards(user, new_cards, date, plot=plot)
-                for i, idx in enumerate(new_card_indices):
+                for i, idx in new_card_indices.items():
                     scores[idx] = new_results['scores'][i]
-            for i, idx in enumerate(prev_card_indices):
+            for i, idx in prev_card_indices.items():
                 scores[idx] = prev_results['scores'][i]
 
             order = np.argsort([s['sum'] for s in scores]).tolist()

@@ -20,6 +20,12 @@ class UserID(BaseModel):
 def schedule(requests: List[ScheduleRequest]):
     # TODO assuming single user single date
     date = datetime.now()
+    if len(requests) == 0:
+        return {
+            'order': [],
+            'rationale': 'no card received',
+            'cards_info': '',
+        }
     if requests[0].date is not None:
         date = parse_date(requests[0].date)
     results = scheduler.schedule(requests, date, plot=False)
