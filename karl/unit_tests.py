@@ -227,15 +227,15 @@ class TestScheduler(unittest.TestCase):
         self.scheduler_wo.reset_user(user_id)
         requests = []
         for c in cards:
-            self.scheduler_w.reset_card(c['question_id'])
-            self.scheduler_wo.reset_card(c['question_id'])
+            self.scheduler_w.reset_card(c['card_id'])
+            self.scheduler_wo.reset_card(c['card_id'])
             requests.append(
                 ScheduleRequest(
                     user_id=user_id,
+                    card_id=c['card_id'],
                     text=c['text'],
                     answer=c['answer'],
                     category=c['category'],
-                    question_id=c['question_id']
                 )
             )
 
@@ -258,7 +258,7 @@ class TestScheduler(unittest.TestCase):
             request = requests[order[0]]
             request.__dict__.update({
                 'label': 'correct',
-                'history_id': 'real_history_id_{}_{}'.format(user_id, request.question_id)
+                'history_id': 'real_history_id_{}_{}'.format(user_id, request.card_id)
             })
             self.scheduler_w.update([request], current_date)
             self.scheduler_wo.update([request], current_date)

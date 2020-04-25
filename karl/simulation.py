@@ -1,15 +1,15 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-import sys
 import json
 import copy
 import pickle
 import requests
 import numpy as np
+from collections import defaultdict
 from datetime import datetime, timedelta
 
-from util import parse_date, ScheduleRequest, Card, User, Params
+from karl.util import parse_date, ScheduleRequest, Card, User, Params
 
 
 params = Params()
@@ -29,7 +29,7 @@ def get_result(card: dict, date: datetime):
         answer=card['answer'],
         category=card['category'],
         user_id=USER_ID,
-        question_id=card['question_id'],
+        card_id=card['card_id'],
     )
     r = requests.post('http://127.0.0.1:8000/api/karl/get_card', data=json.dumps(request.__dict__))
     card = Card.unpack(json.loads(r.text))
@@ -56,21 +56,18 @@ def schedule_and_update(cards, date):
     for card in cards:
         card['date'] = str(date)
 
-    t0 = datetime.now()
     r = requests.post('http://127.0.0.1:8000/api/karl/schedule', data=json.dumps(cards))
     schedule_outputs = json.loads(r.text)
-    t1 = datetime.now()
 
     card = cards[schedule_outputs['order'][0]]
     card['label'] = get_result(card, date)
 
-    card['history_id'] = 'dummy_{}_{}'.format(card['question_id'], str(date))
+    card['history_id'] = 'dummy_{}_{}'.format(card['card_id'], str(date))
     r = requests.post('http://127.0.0.1:8000/api/karl/update', data=json.dumps([card]))
     update_outputs = json.loads(r.text)
-    t2 = datetime.now()
 
     print(current_date.strftime('%Y-%m-%d-%H-%M'), file=detail_file)
-    print('    {: <16} : {}'.format('card_id', card['question_id']), file=detail_file)
+    print('    {: <16} : {}'.format('card_id', card['card_id']), file=detail_file)
     print('    {: <16} : {}'.format('result', card['label']), file=detail_file)
     print('    {: <16} : {}'.format('text', card['text']), file=detail_file)
     print('    {: <16} : {}'.format('answer', card['answer']), file=detail_file)
@@ -100,16 +97,13 @@ def schedule_and_update(cards, date):
                   file=detail_file)
         print('', file=detail_file)
 
-    schedule_time = t1 - t0
-    update_time = t2 - t1
-
-    return schedule_outputs, update_outputs, schedule_time, update_time
+    return schedule_outputs, update_outputs,
 
 
 if __name__ == '__main__':
-    N_DAYS = 4
+    N_DAYS = 1
     N_TOTAL_CARDS = 100
-    MAX_CARDS = 100
+    MAX_CARDS_PER_DAY = 100
     TURN_AROUND = 0.5 * 60  # seconds
     MAX_REVIEW_WINDOW = 2 * 60 * 60  # seconds
 
@@ -124,12 +118,11 @@ if __name__ == '__main__':
 
     card_to_column = dict()
     start_date = parse_date('2028-06-1 08:00:00.000001')
-    schedule_times, update_times = [], []
+    profile = defaultdict(list)
     for days in range(N_DAYS):
         print('day {}'.format(days), file=fret_file)
         time_offset = 0
-        n_cards = 0
-        while True:
+        for ith_card in range(MAX_CARDS_PER_DAY):
             current_date = start_date + timedelta(days=days) + timedelta(seconds=time_offset)
 
             # # stop if both True
@@ -145,13 +138,11 @@ if __name__ == '__main__':
             #     delta = (next_review_date - current_date).total_seconds()
             # if delta >= MAX_REVIEW_WINDOW:
             #     break
-            if n_cards > MAX_CARDS:
-                break
 
-            schedule_outputs, update_outputs, t_s, t_u = schedule_and_update(cards, current_date)
-            schedule_times.append(t_s)
-            update_times.append(t_u)
-            card_id = cards[schedule_outputs['order'][0]]['question_id']
+            schedule_outputs, update_outputs = schedule_and_update(cards, current_date)
+            card_id = cards[schedule_outputs['order'][0]]['card_id']
+            for key, value in schedule_outputs['profile'].items():
+                profile[key].append(value)
 
             if card_id not in card_to_column:
                 card_to_column[card_id] = len(card_to_column)
@@ -159,13 +150,14 @@ if __name__ == '__main__':
             print('{} {: <6} {: <3} {}{}'.format(
                 current_date.strftime('%Y-%m-%d-%H-%M'),
                 card_id,
-                n_cards,
+                ith_card,
                 ' ' * card_to_column[card_id],
                 'o' if update_outputs['response'] == 'correct' else 'x'
             ), file=fret_file)
 
             time_offset += TURN_AROUND
-            n_cards += 1
         print('', file=fret_file)
-    print('average schedule delay:', np.mean(schedule_times))
-    print('average update delay:', np.mean(schedule_times))
+
+    for key, value in profile.items():
+        count, time = list(zip(*value))
+        print(key, np.mean(count), np.mean(time))

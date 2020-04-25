@@ -35,6 +35,7 @@ def schedule(requests: List[ScheduleRequest]):
         'order': results['order'],
         'rationale': results['rationale'],
         'cards_info': results['cards_info'],
+        'profile': results['profile'],
     }
 
 @app.post('/api/karl/update')

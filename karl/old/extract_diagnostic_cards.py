@@ -73,10 +73,12 @@ category_whitelist = [
     'PSYCHOLOGY',
 ]
 
+DATA_DIR = '/fs/clip-quiz/shifeng/karl/data/'
+
 # load jeopardy data
-with open('data/jeopardy_358974_questions_20190612.pkl', 'rb') as f:
+with open(DATA_DIR + 'jeopardy_358974_questions_20190612.pkl', 'rb') as f:
     questions_df = pickle.load(f)
-with open('data/jeopardy_310326_question_player_pairs_20190612.pkl', 'rb') as f:
+with open(DATA_DIR + 'jeopardy_310326_question_player_pairs_20190612.pkl', 'rb') as f:
     records_df = pickle.load(f)
 
 # merge question_df and records_df into one
@@ -97,7 +99,7 @@ for category in category_whitelist:
     ranking_dict.update(group['count'].rank(ascending=False, method='min').to_dict())
 records_df['category_ranking'] = records_df['question_id'].apply(lambda x: ranking_dict.get(x, None))
 # remove questions ranked lower than top 20
-records_df = records_df[records_df['category_ranking'] <= 30]
+# records_df = records_df[records_df['category_ranking'] <= 30]
 
 records_grouped = records_df.drop('question_id', axis=1).groupby('question_id')
 flashcards = []
@@ -110,10 +112,14 @@ for question_id, records_group in records_grouped:
         'text': question['text'],
         'answer': question['answer'],
         'record_id': question_id,
-        'question_id': int(question['karl_id']),
+        'card_id': int(question['karl_id']),
         'category': question['category'],
     })
-with open('data/diagnostic_questions.pkl', 'wb') as f:
+
+print("extracted {} cards".format(len(flashcards)))
+print("with {} records".format(len(records_df)))
+
+with open(DATA_DIR + 'diagnostic_questions.pkl', 'wb') as f:
     pickle.dump(flashcards, f)
-with open('data/diagnostic_records.pkl', 'wb') as f:
+with open(DATA_DIR + 'diagnostic_records.pkl', 'wb') as f:
     pickle.dump(records_df, f)

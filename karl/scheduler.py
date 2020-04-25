@@ -146,7 +146,7 @@ class MovingAvgScheduler:
 
         logger.info('estimate average user skill')
         cards = [Card(
-            card_id=c['question_id'],
+            card_id=c['card_id'],
             text=c['text'],
             answer=c['answer'],
             category=c['category'],
@@ -217,12 +217,12 @@ class MovingAvgScheduler:
     def get_card(self, request: ScheduleRequest) -> Card:
         '''get card from db, insert if new'''
         # retrieve from db if exists
-        card = self.db.get_card(request.question_id)
+        card = self.db.get_card(request.card_id)
         if card is not None:
             return card
 
         card = Card(
-            card_id=request.question_id,
+            card_id=request.card_id,
             text=request.text,
             answer=request.answer,
             category=request.category,
@@ -231,7 +231,7 @@ class MovingAvgScheduler:
         )
 
         self.embed([card])
-        # the skill of a card is an one-hot vector 
+        # the skill of a card is an one-hot vector
         # the non-zero entry is a value between 0 and 1
         # indicating the average question accuracy
         card.skill = np.zeros_like(card.qrep)
@@ -244,10 +244,10 @@ class MovingAvgScheduler:
     def get_cards(self, requests: List[ScheduleRequest]) -> List[Card]:
         new_cards, cards = [], []
         for i, r in enumerate(requests):
-            card = self.db.get_card(r.question_id)
+            card = self.db.get_card(r.card_id)
             if card is None:
                 card = Card(
-                    card_id=r.question_id,
+                    card_id=r.card_id,
                     text=r.text,
                     answer=r.answer,
                     category=r.category,
@@ -516,6 +516,8 @@ class MovingAvgScheduler:
         if len(requests) == 0:
             return [], [], ''
 
+        schedule_profile = {}
+
         # mapping from user to scheduling requests
         # not used since we assume only one user
         user_to_requests = defaultdict(list)
@@ -525,23 +527,37 @@ class MovingAvgScheduler:
             raise ValueError('Schedule only accpets 1 user. Received {}'.format(len(user_to_requests)))
 
         # load card and user from db
+        t0 = datetime.now()
+        logger.debug('scheduling {} cards'.format(len(requests)))
         cards = self.get_cards(requests)
+        t1 = datetime.now()
+        schedule_profile['get_cards'] = (len(requests), t1 - t0)
+
         user, indices = list(user_to_requests.items())[0]
         user = self.get_user(user)
         cards = [cards[i] for i in indices]
 
+        t0 = datetime.now()
         if not self.params.precompute:
             return self.score_user_cards(user, cards, date, plot=plot)
+        t1 = datetime.now()
+        schedule_profile['score_user_cards (wo pre)'] = (len(cards), t1 - t0)
 
         # using precomputed schedules
         # read confirmed update & corresponding schedule
         if user.user_id not in self.precompute_commit:
             # no existing precomupted schedule, do regular schedule
+            t0 = datetime.now()
             output_dict = self.score_user_cards(user, cards, date, plot=plot)
+            t1 = datetime.now()
+            schedule_profile['score_user_cards (pre not found)'] = (len(cards), t1 - t0)
         elif self.precompute_commit[user.user_id] == 'done':
             # precompute threads didn't finish before user responded
             # marked as done by update
+            t0 = datetime.now()
             output_dict = self.score_user_cards(user, cards, date, plot=plot)
+            t1 = datetime.now()
+            schedule_profile['score_user_cards (pre marked done)'] = (len(cards), t1 - t0)
         else:
             # read precomputed schedule, check if new cards are added
             # if so, compute score for new cards, re-sort cards
@@ -566,6 +582,7 @@ class MovingAvgScheduler:
             if len(new_card_indices) + len(prev_card_indices) != len(cards):
                 raise ValueError('len(new_card_indices) + len(prev_card_indices) != len(cards)')
 
+            t0 = datetime.now()
             # gather scores for both new and previous cards
             scores = [None] * len(cards)
             if len(new_cards) > 0:
@@ -574,11 +591,16 @@ class MovingAvgScheduler:
                     scores[idx] = new_results['scores'][i]
             for i, idx in prev_card_indices.items():
                 scores[idx] = prev_results['scores'][i]
+            t1 = datetime.now()
+            schedule_profile['score_user_cards (new cards)'] = (len(new_cards), t1 - t0)
 
+            t0 = datetime.now()
             order = np.argsort([s['sum'] for s in scores]).tolist()
             rationale = self.get_rationale(user, cards, date, scores, order)
-
             cards_info = self.get_cards_info(user, cards, date, scores, order)
+            t1 = datetime.now()
+            schedule_profile['get rationale and cards info'] = (len(cards), t1 - t0)
+
             output_dict = {
                 'order': order,
                 'scores': scores,
@@ -630,6 +652,8 @@ class MovingAvgScheduler:
         # self.branch(copy.deepcopy(user), copy.deepcopy(cards),
         #             date, card_idx, 'wrong', plot=plot)
 
+        output_dict['profile'] = schedule_profile
+
         return output_dict
 
     def branch(self, user: User, cards: List[Card],
@@ -639,7 +663,7 @@ class MovingAvgScheduler:
         # update (copied) user and top card by response
         # make new schedule with updated user and cards (with updated card)
         # NOTE here dates used in both update and score are not accurate
-        # since we don't know when the user will respond and request for the 
+        # since we don't know when the user will respond and request for the
         # next card. but it should affect all cards (with repetition) equally
         self.update_user_card(user, cards[card_idx], date, response)
         results = self.score_user_cards(user, cards, date, plot=plot)
@@ -718,7 +742,7 @@ class MovingAvgScheduler:
             history = History(
                 history_id=request.history_id,
                 user_id=request.user_id,
-                card_id=card.card_id,  # or, request.question_id
+                card_id=card.card_id,
                 response=request.label,
                 judgement=request.label,
                 user_snapshot=json.dumps(user.pack()),
