@@ -23,8 +23,8 @@ def schedule(requests: List[ScheduleRequest]):
     if len(requests) == 0:
         return {
             'order': [],
-            'rationale': '<p>no card received</p>',
-            'cards_info': '',
+            'rationale': '<p>no fact received</p>',
+            'facts_info': '',
         }
 
     if requests[0].date is not None:
@@ -34,7 +34,7 @@ def schedule(requests: List[ScheduleRequest]):
     return {
         'order': results['order'],
         'rationale': results['rationale'],
-        'cards_info': results['cards_info'],
+        'facts_info': results['facts_info'],
         'profile': results['profile'],
     }
 
@@ -66,9 +66,9 @@ def get_user(user_id: UserID):
     user_id = user_id.dict()['user_id']
     return scheduler.get_user(user_id).pack()
 
-@app.post('/api/karl/get_card')
-def get_card(request: ScheduleRequest):
-    return scheduler.get_card(request).pack()
+@app.post('/api/karl/get_fact')
+def get_fact(request: ScheduleRequest):
+    return scheduler.get_fact(request).pack()
 
 @atexit.register
 def finalize_db():

@@ -24,7 +24,7 @@ def parse_date(date: str):
 class Params(BaseModel):
     n_topics: int = 10                  # LDA
     qrep: float = 1                     # cosine distance between qreps
-    skill: float = 0                    # card difficulty vs user skill level
+    skill: float = 0                    # fact difficulty vs user skill level
     recall: float = 1                   # recall probability
     category: float = 1                 # change in category from prev
     leitner: float = 0                  # hours till leitner scheduled date
@@ -41,8 +41,8 @@ class Params(BaseModel):
 
 
 @dataclass
-class Card:
-    card_id: str
+class Fact:
+    fact_id: str
     text: str
     answer: str
     category: str
@@ -57,7 +57,7 @@ class Card:
     @classmethod
     def unpack(cls, r):
         fields = [
-            'card_id',
+            'fact_id',
             'text',
             'answer',
             'category',
@@ -72,8 +72,8 @@ class Card:
         if isinstance(r, dict):
             r = [r[f] for f in fields]
 
-        return Card(
-            card_id=r[0],
+        return Fact(
+            fact_id=r[0],
             text=r[1],
             answer=r[2],
             category=r[3],
@@ -85,7 +85,7 @@ class Card:
     def pack(self):
         x = self
         return [
-            x.card_id,
+            x.fact_id,
             x.text,
             x.answer,
             x.category,
@@ -101,7 +101,7 @@ class ScheduleRequest(BaseModel):
     answer: Optional[str]
     category: Optional[str]
     user_id: Optional[str]
-    card_id: Optional[str]
+    fact_id: Optional[str]
     label: Optional[str]
     history_id: Optional[str]
 
@@ -110,12 +110,12 @@ class ScheduleRequest(BaseModel):
 class History:
     history_id: str
     user_id: str
-    card_id: str
+    fact_id: str
     response: str
     judgement: str
     user_snapshot: str
     scheduler_snapshot: str
-    card_ids: List[str]
+    fact_ids: List[str]
     scheduler_output: str
     date: datetime
 
@@ -123,9 +123,9 @@ class History:
 @dataclass
 class User:
     user_id: str
-    # qrep of recently studied cards
+    # qrep of recently studied Facts
     qrep: List[np.ndarray]
-    # skill of recently studied cards
+    # skill of recently studied Facts
     skill: List[np.ndarray]
     category: str
     previous_study: dict = field(default_factory=dict)

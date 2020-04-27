@@ -12,7 +12,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim.lr_scheduler import StepLR
 
-from karl.util import User, Card
+from karl.util import User, Fact
 from karl.retention.data import RetentionDataset, apply_parallel, get_split_dfs
 
 
@@ -147,7 +147,7 @@ class RetentionModel:
         self.model.load_state_dict(torch.load('checkpoints/retention_model.pt'))
         self.model.eval()
 
-    def predict(self, user: User, cards: List[Card], date=None) -> np.ndarray:
+    def predict(self, user: User, facts: List[Fact], date=None) -> np.ndarray:
         if date is None:
             date = datetime.now()
         # user_count_correct
@@ -163,12 +163,12 @@ class RetentionModel:
         # question_count_wrong
         # bias
         xs = []
-        for card in cards:
-            uq_correct = user.count_correct_before.get(card.card_id, 0)
-            uq_wrong = user.count_wrong_before.get(card.card_id, 0)
+        for fact in facts:
+            uq_correct = user.count_correct_before.get(fact.fact_id, 0)
+            uq_wrong = user.count_wrong_before.get(fact.fact_id, 0)
             uq_total = uq_correct + uq_wrong
-            if card.card_id in user.previous_study:
-                prev_date, prev_response = user.previous_study[card.card_id]
+            if fact.fact_id in user.previous_study:
+                prev_date, prev_response = user.previous_study[fact.fact_id]
             else:
                 prev_date = date
             xs.append([
@@ -179,21 +179,27 @@ class RetentionModel:
                 0 if uq_total == 0 else uq_correct / uq_total,  # user_average_question_accuracy
                 0 if len(user.results) == 0 else user.results[-1],  # user_previous_result
                 (date - prev_date).seconds / (60 * 60),  # user_gap_from_previous
-                0 if len(card.results) == 0 else np.mean(card.results),  # question_average_overall_accuracy
-                len(card.results),  # question_count_total
-                sum(card.results),  # question_count_correct
-                len(card.results) - sum(card.results),  # question_count_wrong
+                0 if len(fact.results) == 0 else np.mean(fact.results),  # question_average_overall_accuracy
+                len(fact.results),  # question_count_total
+                sum(fact.results),  # question_count_correct
+                len(fact.results) - sum(fact.results),  # question_count_wrong
                 1  # bias
             ])
         xs = np.array(xs).astype(np.float32)
         xs = (xs - self.dataset.mean) / self.dataset.std
-        xs = torch.from_numpy(xs).to(self.device)
-        logits = self.model.forward(xs)
-        # return the probability of positive
-        return F.softmax(logits, dim=1).detach().cpu().numpy()[:, 1]
+        ys = []
+        batch_size = 128
+        for i in range(0, xs.shape[0], batch_size):
+            x = xs[i: i + batch_size]
+            x = torch.from_numpy(x).to(self.device)
+            logits = self.model.forward(x)
+            # return the probability of positive
+            y = F.softmax(logits, dim=1).detach().cpu().numpy()[:, 1]
+            ys.append(y)
+        return np.concatenate(ys)
 
-    def predict_one(self, user: User, card: Card) -> float:
-        return self.predict(user, [card])[0]
+    def predict_one(self, user: User, fact: Fact) -> float:
+        return self.predict(user, [fact])[0]
 
 
 def test_wrapper():
@@ -202,20 +208,20 @@ def test_wrapper():
         qrep=[np.array([0.1, 0.2, 0.3])],
         skill=[np.array([0.1, 0.2, 0.3])],
         category='History',
-        previous_study={'card 1': (datetime.now(), 'correct')},
-        leitner_box={'card 1': 2},
-        leitner_scheduled_date={'card 2': datetime.now()},
-        sm2_efactor={'card 1': 0.5},
-        sm2_interval={'card 1': 6},
-        sm2_repetition={'card 1': 10},
-        sm2_scheduled_date={'card 2': datetime.now()},
+        previous_study={'fact 1': (datetime.now(), 'correct')},
+        leitner_box={'fact 1': 2},
+        leitner_scheduled_date={'fact 2': datetime.now()},
+        sm2_efactor={'fact 1': 0.5},
+        sm2_interval={'fact 1': 6},
+        sm2_repetition={'fact 1': 10},
+        sm2_scheduled_date={'fact 2': datetime.now()},
         results=[True, False, True],
-        count_correct_before={'card 1': 1},
-        count_wrong_before={'card 1': 3}
+        count_correct_before={'fact 1': 1},
+        count_wrong_before={'fact 1': 3}
     )
 
-    card = Card(
-        card_id='card 1',
+    fact = Fact(
+        fact_id='fact 1',
         text='This is the question text',
         answer='Answer Text III',
         category='WORLD',
@@ -225,8 +231,8 @@ def test_wrapper():
     )
 
     model = RetentionModel()
-    print(1 - model.predict(user, [card, card, card]))
-    print(model.predict_one(user, card))
+    print(1 - model.predict(user, [fact, fact, fact]))
+    print(model.predict_one(user, fact))
 
 
 def test_majority():

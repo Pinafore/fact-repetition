@@ -7,7 +7,7 @@ import numpy as np
 from datetime import datetime, timedelta
 
 from karl.db import SchedulerDB
-from karl.util import User, Card, History, Params, ScheduleRequest, parse_date
+from karl.util import User, Fact, History, Params, ScheduleRequest, parse_date
 from karl.scheduler import MovingAvgScheduler
 
 
@@ -29,16 +29,16 @@ class TestDB(unittest.TestCase):
             qrep=[np.array([0.1, 0.2, 0.3])],
             skill=[np.array([0.1, 0.2, 0.3])],
             category='History',
-            previous_study={'card 1': (datetime.now(), 'correct')},
-            leitner_box={'card 1': 2},
-            leitner_scheduled_date={'card 2': datetime.now()},
-            sm2_efactor={'card 1': 0.5},
-            sm2_interval={'card 1': 6},
-            sm2_repetition={'card 1': 10},
-            sm2_scheduled_date={'card 2': datetime.now()},
+            previous_study={'fact 1': (datetime.now(), 'correct')},
+            leitner_box={'fact 1': 2},
+            leitner_scheduled_date={'fact 2': datetime.now()},
+            sm2_efactor={'fact 1': 0.5},
+            sm2_interval={'fact 1': 6},
+            sm2_repetition={'fact 1': 10},
+            sm2_scheduled_date={'fact 2': datetime.now()},
             results=[True, False, True],
-            count_correct_before={'card 1': 1},
-            count_wrong_before={'card 1': 3}
+            count_correct_before={'fact 1': 1},
+            count_wrong_before={'fact 1': 3}
         )
         self.assertFalse(self.db.check_user(user.user_id))
         self.assertFalse(self.db.get_user(user.user_id))
@@ -50,7 +50,7 @@ class TestDB(unittest.TestCase):
         user.qrep.append(np.array([0.7, 0.8, 0.9]))
         user.skill.append(np.array([0.4, 0.5, 0.6]))
         user.results.append(False)
-        user.count_correct_before['card 1'] = 2
+        user.count_correct_before['fact 1'] = 2
         user.date = datetime.now()
         self.db.update_user(user)
         returned_user = self.db.get_user(user.user_id)
@@ -72,8 +72,8 @@ class TestDB(unittest.TestCase):
         self.assertEqual(u1.count_correct_before, u2.count_correct_before)
         self.assertEqual(u1.count_wrong_before, u2.count_wrong_before)
 
-    def assert_card_equal(self, c1, c2):
-        self.assertEqual(c1.card_id, c2.card_id)
+    def assert_fact_equal(self, c1, c2):
+        self.assertEqual(c1.fact_id, c2.fact_id)
         self.assertEqual(c1.text, c2.text)
         self.assertEqual(c1.answer, c2.answer)
         self.assertEqual(c1.category, c2.category)
@@ -81,9 +81,9 @@ class TestDB(unittest.TestCase):
         np.testing.assert_array_equal(c1.skill, c2.skill)
         self.assertEqual(c1.results, c2.results)
 
-    def test_card(self):
-        card = Card(
-            card_id='card 1',
+    def test_fact(self):
+        fact = Fact(
+            fact_id='fact 1',
             text='This is the question text',
             answer='Answer Text III',
             category='WORLD',
@@ -92,13 +92,13 @@ class TestDB(unittest.TestCase):
             results=[True, False, True, True]
         )
 
-        self.assertFalse(self.db.check_card(card.card_id))
-        self.db.add_card(card)
-        self.assertTrue(self.db.check_card(card.card_id))
-        returned_card = self.db.get_card(card.card_id)
-        self.assert_card_equal(card, returned_card)
+        self.assertFalse(self.db.check_fact(fact.fact_id))
+        self.db.add_fact(fact)
+        self.assertTrue(self.db.check_fact(fact.fact_id))
+        returned_fact = self.db.get_fact(fact.fact_id)
+        self.assert_fact_equal(fact, returned_fact)
 
-        card.__dict__.update({
+        fact.__dict__.update({
             'text': 'This is the NEWWWWWWW question text',
             'answer': 'Answer Text IVVVV',
             'category': 'WORLD',
@@ -106,9 +106,9 @@ class TestDB(unittest.TestCase):
             'skill': np.array([0.1, 0.7, 0.3, 0.8]),
             'results': [True, False, True, True, False]
         })
-        self.db.update_card(card)
-        returned_card = self.db.get_card(card.card_id)
-        self.assert_card_equal(card, returned_card)
+        self.db.update_fact(fact)
+        returned_fact = self.db.get_fact(fact.fact_id)
+        self.assert_fact_equal(fact, returned_fact)
 
     def test_history(self):
         user = User(
@@ -116,19 +116,19 @@ class TestDB(unittest.TestCase):
             qrep=[np.array([0.1, 0.2, 0.3])],
             skill=[np.array([0.1, 0.2, 0.3])],
             category='History',
-            previous_study={'card 1': (datetime.now(), 'correct')},
-            leitner_box={'card 1': 2},
-            leitner_scheduled_date={'card 2': datetime.now()},
-            sm2_efactor={'card 1': 0.5},
-            sm2_interval={'card 1': 6},
-            sm2_repetition={'card 1': 10},
-            sm2_scheduled_date={'card 2': datetime.now()},
+            previous_study={'fact 1': (datetime.now(), 'correct')},
+            leitner_box={'fact 1': 2},
+            leitner_scheduled_date={'fact 2': datetime.now()},
+            sm2_efactor={'fact 1': 0.5},
+            sm2_interval={'fact 1': 6},
+            sm2_repetition={'fact 1': 10},
+            sm2_scheduled_date={'fact 2': datetime.now()},
             results=[True, False, True],
-            count_correct_before={'card 1': 1},
-            count_wrong_before={'card 1': 3}
+            count_correct_before={'fact 1': 1},
+            count_wrong_before={'fact 1': 3}
         )
-        card = Card(
-            card_id='card 1',
+        fact = Fact(
+            fact_id='fact 1',
             text='This is the question text',
             answer='Answer Text III',
             category='WORLD',
@@ -137,16 +137,16 @@ class TestDB(unittest.TestCase):
             results=[True, False, True, True]
         )
         params = Params()
-        old_history_id = json.dumps({'user_id': user.user_id, 'card_id': card.card_id})
+        old_history_id = json.dumps({'user_id': user.user_id, 'fact_id': fact.fact_id})
         history = History(
             history_id=old_history_id,
             user_id=user.user_id,
-            card_id=card.card_id,
+            fact_id=fact.fact_id,
             response='User Guess',
             judgement='wrong',
             user_snapshot=json.dumps(user.pack()),
             scheduler_snapshot=json.dumps(params.__dict__),
-            card_ids=json.dumps([1, 2, 3, 4, 5]),
+            fact_ids=json.dumps([1, 2, 3, 4, 5]),
             scheduler_output='(awd, awd, awd)',
             date=datetime.now())
         self.db.add_history(history)
@@ -167,7 +167,7 @@ class TestDB(unittest.TestCase):
 
         new_user = copy.deepcopy(user)
         new_user.user_id = 'new user 1'
-        new_user.sm2_efactor = {'card 1': 0.05},
+        new_user.sm2_efactor = {'fact 1': 0.05},
         self.assert_user_equal(user, returned_user)
 
 
@@ -208,8 +208,8 @@ class TestScheduler(unittest.TestCase):
         self.assertEqual(u1.count_correct_before, u2.count_correct_before)
         self.assertEqual(u1.count_wrong_before, u2.count_wrong_before)
 
-    def assert_card_equal(self, c1, c2):
-        self.assertEqual(c1.card_id, c2.card_id)
+    def assert_fact_equal(self, c1, c2):
+        self.assertEqual(c1.fact_id, c2.fact_id)
         self.assertEqual(c1.text, c2.text)
         self.assertEqual(c1.answer, c2.answer)
         self.assertEqual(c1.category, c2.category)
@@ -219,20 +219,20 @@ class TestScheduler(unittest.TestCase):
 
     def test_scheduler_update(self):
         with open('data/diagnostic_questions.pkl', 'rb') as f:
-            cards = pickle.load(f)
-        cards = cards[:5]
+            facts = pickle.load(f)
+        facts = facts[:5]
 
         user_id = 'test_dummy'
         self.scheduler_w.reset_user(user_id)
         self.scheduler_wo.reset_user(user_id)
         requests = []
-        for c in cards:
-            self.scheduler_w.reset_card(c['card_id'])
-            self.scheduler_wo.reset_card(c['card_id'])
+        for c in facts:
+            self.scheduler_w.reset_fact(c['fact_id'])
+            self.scheduler_wo.reset_fact(c['fact_id'])
             requests.append(
                 ScheduleRequest(
                     user_id=user_id,
-                    card_id=c['card_id'],
+                    fact_id=c['fact_id'],
                     text=c['text'],
                     answer=c['answer'],
                     category=c['category'],
@@ -258,7 +258,7 @@ class TestScheduler(unittest.TestCase):
             request = requests[order[0]]
             request.__dict__.update({
                 'label': 'correct',
-                'history_id': 'real_history_id_{}_{}'.format(user_id, request.card_id)
+                'history_id': 'real_history_id_{}_{}'.format(user_id, request.fact_id)
             })
             self.scheduler_w.update([request], current_date)
             self.scheduler_wo.update([request], current_date)
@@ -269,11 +269,11 @@ class TestScheduler(unittest.TestCase):
                 print(self.scheduler_w.precompute_future['correct'].keys())
                 print(self.scheduler_w.precompute_future['wrong'].keys())
             elif self.scheduler_w.precompute_commit[user_id] != 'done':
-                cards_w = self.scheduler_w.precompute_commit[user_id]['cards']
-                print('cards_wp', [c.results for c in cards_w])
+                facts_w = self.scheduler_w.precompute_commit[user_id]['facts']
+                print('facts_wp', [c.results for c in facts_w])
 
-            cards_wo = self.scheduler_wo.get_cards(requests)
-            print('cards_wo', [c.results for c in cards_wo])
+            facts_wo = self.scheduler_wo.get_facts(requests)
+            print('facts_wo', [c.results for c in facts_wo])
 
             if user_id not in self.scheduler_w.precompute_commit:
                 pass

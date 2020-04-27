@@ -7,7 +7,7 @@ import sqlite3
 import logging
 from typing import List
 
-from karl.util import User, Card, History
+from karl.util import User, Fact, History
 
 logger = logging.getLogger('scheduler')
 
@@ -44,9 +44,9 @@ class SchedulerDB:
                      count_wrong_before TEXT)'
                     )
 
-        # *current* cache of cards
-        cur.execute('CREATE TABLE cards (\
-                     card_id PRIMARY KEY, \
+        # *current* cache of facts 
+        cur.execute('CREATE TABLE facts(\
+                     fact_id PRIMARY KEY, \
                      text TEXT, \
                      answer TEXT, \
                      category TEXT, \
@@ -62,12 +62,12 @@ class SchedulerDB:
         cur.execute('CREATE TABLE history (\
                      history_id PRIMARY KEY, \
                      user_id TEXT, \
-                     card_id TEXT, \
+                     fact_id TEXT, \
                      response TEXT, \
                      judgement TEXT, \
                      user_snapshot TEXT, \
                      scheduler_snapshot TEXT, \
-                     card_ids TEXT, \
+                     fact_ids TEXT, \
                      scheduler_output TEXT, \
                      date timestamp)'
                     )
@@ -136,67 +136,67 @@ class SchedulerDB:
         # NOTE web.py will commit at exit
         # self.conn.commit()
 
-    def check_card(self, card_id: str) -> bool:
+    def check_fact(self, fact_id: str) -> bool:
         cur = self.conn.cursor()
-        cur.execute("SELECT * FROM cards WHERE card_id=?", (card_id,))
+        cur.execute("SELECT * FROM facts WHERE fact_id=?", (fact_id,))
         return True if cur.fetchone() else False
 
-    def add_card(self, c: Card):
+    def add_fact(self, c: Fact):
         cur = self.conn.cursor()
         try:
-            cur.execute('INSERT INTO cards VALUES (?,?,?,?,?,?,?)', c.pack())
+            cur.execute('INSERT INTO facts VALUES (?,?,?,?,?,?,?)', c.pack())
         except sqlite3.IntegrityError:
-            logger.info("card {} exists".format(c.card_id))
+            logger.info("fact {} exists".format(c.fact_id))
         # NOTE web.py will commit at exit
         # self.conn.commit()
 
-    def add_cards(self, cards: List[Card]):
+    def add_facts(self, facts: List[Fact]):
         cur = self.conn.cursor()
-        for c in cards:
+        for c in facts:
             try:
-                cur.execute('INSERT INTO cards VALUES (?,?,?,?,?,?,?)', c.pack())
+                cur.execute('INSERT INTO facts VALUES (?,?,?,?,?,?,?)', c.pack())
             except sqlite3.IntegrityError:
-                logger.info("card {} exists".format(c.card_id))
+                logger.info("fact {} exists".format(c.fact_id))
         # NOTE web.py will commit at exit
         # self.conn.commit()
 
-    def get_card(self, card_id=None):
+    def get_fact(self, fact_id=None):
         def row_to_dict(r):
-            return Card.unpack(r)
+            return Fact.unpack(r)
 
         cur = self.conn.cursor()
-        if card_id is None:
-            cur.execute("SELECT * FROM cards")
+        if fact_id is None:
+            cur.execute("SELECT * FROM facts")
             return [row_to_dict(r) for r in cur.fetchall()]
         else:
-            cur.execute("SELECT * FROM cards WHERE card_id=?", (card_id,))
+            cur.execute("SELECT * FROM facts WHERE fact_id=?", (fact_id,))
             r = cur.fetchone()
             return row_to_dict(r) if r else None
 
-    def update_card(self, c: Card):
+    def update_fact(self, c: Fact):
         cur = self.conn.cursor()
         c = c.pack()
-        c = c[1:] + c[:1]  # move card_id to the end
-        cur.execute("UPDATE cards SET \
+        c = c[1:] + c[:1]  # move fact_id to the end
+        cur.execute("UPDATE facts SET \
                      text=?, \
                      answer=?, \
                      category=?, \
                      qrep=?, \
                      skill=?, \
                      results=? \
-                     WHERE card_id=?",
+                     WHERE fact_id=?",
                     c)
         # NOTE web.py will commit at exit
         # self.conn.commit()
 
-    def delete_card(self, card_id: str):
+    def delete_fact(self, fact_id: str):
         cur = self.conn.cursor()
-        if card_id is None:
-            logger.info('deleting all cards from db')
-            cur.execute("DELETE FROM cards")
+        if fact_id is None:
+            logger.info('deleting all facts from db')
+            cur.execute("DELETE FROM facts")
         else:
-            logger.info('deleting card {} from db'.format(card_id))
-            cur.execute("DELETE FROM cards WHERE card_id=?", (card_id,))
+            logger.info('deleting fact {} from db'.format(fact_id))
+            cur.execute("DELETE FROM facts WHERE fact_id=?", (fact_id,))
         # NOTE web.py will commit at exit
         # self.conn.commit()
 
@@ -207,17 +207,17 @@ class SchedulerDB:
                         (
                             h.history_id,
                             h.user_id,
-                            h.card_id,
+                            h.fact_id,
                             h.response,
                             h.judgement,
                             h.user_snapshot,
                             h.scheduler_snapshot,
-                            json.dumps(h.card_ids),
+                            json.dumps(h.fact_ids),
                             h.scheduler_output,
                             h.date
                         ))
         except sqlite3.IntegrityError:
-            # this means the card was shown to user but we didn't receive a
+            # this means the fact was shown to user but we didn't receive a
             # response, replace
             logger.info("history {} exists, replacing".format(h.history_id))
             self.delete_history(h.history_id)
@@ -230,12 +230,12 @@ class SchedulerDB:
             return History(
                 history_id=r[0],
                 user_id=r[1],
-                card_id=r[2],
+                fact_id=r[2],
                 response=r[3],
                 judgement=r[4],
                 user_snapshot=r[5],
                 scheduler_snapshot=r[6],
-                card_ids=json.loads(r[7]),
+                fact_ids=json.loads(r[7]),
                 scheduler_output=r[8],
                 date=r[9])
         cur = self.conn.cursor()
@@ -259,22 +259,22 @@ class SchedulerDB:
             # inplace update with same id
             cur.execute("UPDATE history SET \
                          user_id=?, \
-                         card_id=?, \
+                         fact_id=?, \
                          response=?, \
                          judgement=?, \
                          user_snapshot=?, \
                          scheduler_snapshot=?, \
-                         card_ids=?, \
+                         fact_ids=?, \
                          scheduler_output=?, \
                          date=? \
                          WHERE history_id=?", (
                 h.user_id,
-                h.card_id,
+                h.fact_id,
                 h.response,
                 h.judgement,
                 h.user_snapshot,
                 h.scheduler_snapshot,
-                json.dumps(h.card_ids),
+                json.dumps(h.fact_ids),
                 h.scheduler_output,
                 h.date,
                 h.history_id))
@@ -283,23 +283,23 @@ class SchedulerDB:
             cur.execute("UPDATE history SET \
                          history_id=?, \
                          user_id=?, \
-                         card_id=?, \
+                         fact_id=?, \
                          response=?, \
                          judgement=?, \
                          user_snapshot=?, \
                          scheduler_snapshot=?, \
-                         card_ids=?, \
+                         fact_ids=?, \
                          scheduler_output=?, \
                          date=? \
                          WHERE history_id=?", (
                 h.history_id,
                 h.user_id,
-                h.card_id,
+                h.fact_id,
                 h.response,
                 h.judgement,
                 h.user_snapshot,
                 h.scheduler_snapshot,
-                json.dumps(h.card_ids),
+                json.dumps(h.fact_ids),
                 h.scheduler_output,
                 h.date,
                 old_history_id))

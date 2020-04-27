@@ -31,8 +31,8 @@ def get_texts(data_type: str) -> List[str]:
         texts += df.text.to_list()
     if data_type in ['diagnostic']:
         with open('data/diagnostic_questions.pkl', 'rb') as f:
-            cards = pickle.load(f)
-        texts += [card['text'] for card in cards]
+            facts = pickle.load(f)
+        texts += [fact['text'] for fact in facts]
     return texts
 
 def process_question(doc):

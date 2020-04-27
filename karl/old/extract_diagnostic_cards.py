@@ -112,7 +112,7 @@ for question_id, records_group in records_grouped:
         'text': question['text'],
         'answer': question['answer'],
         'record_id': question_id,
-        'card_id': int(question['karl_id']),
+        'fact_id': int(question['karl_id']),
         'category': question['category'],
     })
 
