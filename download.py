@@ -8,9 +8,6 @@ S3_DIR = 'https://pinafore-us-west-2.s3-us-west-2.amazonaws.com/karl/protobowl/'
 
 pathlib.Path(DATA_DIR).mkdir(parents=True, exist_ok=True)
 
-if not os.path.exists('data'):
-    os.mkdir('data')
-
 files = [
     'protobowl-042818.log.train.h5',
     'protobowl-042818.log.test.h5',

@@ -104,6 +104,7 @@ class ScheduleRequest(BaseModel):
     fact_id: Optional[str]
     label: Optional[str]
     history_id: Optional[str]
+    repetition_model: Optional[str]
 
 
 @dataclass
