@@ -64,18 +64,18 @@ class MovingAvgScheduler:
     def __init__(
             self,
             db_filename='db.sqlite',
-            precompute=True,
+            preemptive=True,
             lda_dir='checkpoints/gensim_quizbowl_10_1585102364.5221019',
             whoosh_index='whoosh_index',
     ) -> None:
         """
         :param db_filename: location of database store.
-        :param precompute: on-off switch of precompute optimization.
+        :param preemptive: on-off switch of preemptive scheduling.
         :param lda_dir: gensim LDA model directory.
         :param whoosh_index: whoosh index for text matching.
         """
         self.db_filename = db_filename
-        self.precompute = precompute
+        self.preemptive = preemptive
         self.lda_dir = lda_dir
         self.whoosh_index = whoosh_index
 
@@ -141,8 +141,8 @@ class MovingAvgScheduler:
         # | | rationale
         # | | facts_info
         # | | (plot)
-        self.precompute_future = {'correct': {}, 'wrong': {}}
-        self.precompute_commit = dict()
+        self.preemptive_future = {'correct': {}, 'wrong': {}}
+        self.preemptive_commit = dict()
 
     def estimate_avg(self) -> np.ndarray:
         """
@@ -193,12 +193,12 @@ class MovingAvgScheduler:
         self.db.delete_user(user_id=user_id)
         self.db.delete_history(user_id=user_id)
         if user_id is not None:
-            if user_id in self.precompute_future['correct']:
-                self.precompute_future['correct'].pop(user_id)
-            if user_id in self.precompute_future['wrong']:
-                self.precompute_future['wrong'].pop(user_id)
-            if user_id in self.precompute_commit:
-                self.precompute_commit.pop(user_id)
+            if user_id in self.preemptive_future['correct']:
+                self.preemptive_future['correct'].pop(user_id)
+            if user_id in self.preemptive_future['wrong']:
+                self.preemptive_future['wrong'].pop(user_id)
+            if user_id in self.preemptive_commit:
+                self.preemptive_commit.pop(user_id)
 
     def reset_fact(self, fact_id=None) -> None:
         """
@@ -704,9 +704,9 @@ class MovingAvgScheduler:
         """
         The main schedule function.
         1. Load user and fact from database, insert if new.
-            2.1. If precompute is off or no committed precompute schedule exists, compute schedule.
-            2.2. Otherwise, load committed precompute schedule, score new cards if any and merge.
-        4. If precompute is on, spin up two threads to compute the next-step schedule for both
+            2.1. If preemptive is off or no committed preemptive schedule exists, compute schedule.
+            2.2. Otherwise, load committed preemptive schedule, score new cards if any and merge.
+        4. If preemptive is on, spin up two threads to compute the next-step schedule for both
            possible outcomes.
         5. Return the schedule.
 
@@ -744,32 +744,32 @@ class MovingAvgScheduler:
         # TODO use special params for certain repetition_model
 
         t0 = datetime.now()
-        if not self.precompute:
+        if not self.preemptive:
             return self.rank_facts_for_user(user, facts, date, plot=plot)
         t1 = datetime.now()
         schedule_profile['rank_facts_for_user (wo pre)'] = (len(facts), t1 - t0)
 
-        # using precomputed schedules
+        # using preemptived schedules
         # read confirmed update & corresponding schedule
-        if user.user_id not in self.precompute_commit:
+        if user.user_id not in self.preemptive_commit:
             # no existing precomupted schedule, do regular schedule
             t0 = datetime.now()
             output_dict = self.rank_facts_for_user(user, facts, date, plot=plot)
             t1 = datetime.now()
             schedule_profile['rank_facts_for_user (pre not found)'] = (len(facts), t1 - t0)
-        elif self.precompute_commit[user.user_id] == 'done':
-            # precompute threads didn't finish before user responded and is marked as done by update
+        elif self.preemptive_commit[user.user_id] == 'done':
+            # preemptive threads didn't finish before user responded and is marked as done by update
             # TODO this might be too conservative
             t0 = datetime.now()
             output_dict = self.rank_facts_for_user(user, facts, date, plot=plot)
             t1 = datetime.now()
             schedule_profile['rank_facts_for_user (pre marked done)'] = (len(facts), t1 - t0)
         else:
-            # read precomputed schedule, check if new facts are added
+            # read preemptived schedule, check if new facts are added
             # if so, compute score for new facts, re-sort facts
             # no need to update previous fact / user
             # since updates does the commit after updating user & fact in db
-            prev_results = self.precompute_commit[user.user_id]
+            prev_results = self.preemptive_commit[user.user_id]
             prev_fact_ids = [c.fact_id for c in prev_results['facts']]
 
             new_facts = []
@@ -817,9 +817,9 @@ class MovingAvgScheduler:
         # output_dict generated
         fact_idx = output_dict['order'][0]
 
-        if user.user_id in self.precompute_commit:
+        if user.user_id in self.preemptive_commit:
             # necessary to remove 'done' marked by update if exists
-            self.precompute_commit.pop(user.user_id)
+            self.preemptive_commit.pop(user.user_id)
 
         # 'correct' branch
         thr_correct = threading.Thread(
@@ -894,14 +894,18 @@ class MovingAvgScheduler:
         """
         self.update_user_fact(user, facts[fact_idx], date, response)
         results = self.rank_facts_for_user(user, facts, date, plot=plot)
-        results.update({
+        pre_schedule = {
+            'order': results['order'],
+            'rationale': results['rationale'],
+            'facts_info': results['facts_info'],
+            'scores': results['scores'],
             'user': user,
             'fact': facts[fact_idx],
             'facts': facts,
-        })
-        if self.precompute_commit.get(user.user_id, None) != 'done':
+        }
+        if self.preemptive_commit.get(user.user_id, None) != 'done':
             # if done, user already responded, marked as done by update
-            self.precompute_future[response][user.user_id] = results
+            self.preemptive_future[response][user.user_id] = pre_schedule
 
     def update_user_fact(self, user: User, fact: Fact, date: datetime, response: str) -> None:
         """
@@ -965,8 +969,8 @@ class MovingAvgScheduler:
         The main update function.
         1. Read user and facts from database.
         2. Create history entry.
-            3.1. If precompute is off, update user and fact
-            3.2. If otherwise but precompute scheduling is not done, mark it as obsolete.
+            3.1. If preemptive is off, update user and fact
+            3.2. If otherwise but preemptive scheduling is not done, mark it as obsolete.
             3.3. If scheduling is finished, commit the one corresponding to the actual response.
         4. Update user and fact in database.
         5. Return update details.
@@ -1023,16 +1027,16 @@ class MovingAvgScheduler:
         old_user = copy.deepcopy(user)
 
         # commit
-        if not self.precompute:
+        if not self.preemptive:
             self.update_user_fact(user, fact, date, request.label)
-        elif user.user_id not in self.precompute_future[request.label]:
+        elif user.user_id not in self.preemptive_future[request.label]:
             self.update_user_fact(user, fact, date, request.label)
-            # NOTE precompute did not finish before user responded
+            # NOTE preemptive did not finish before user responded
             # mark commit as taken
-            self.precompute_commit[user.user_id] = 'done'
+            self.preemptive_commit[user.user_id] = 'done'
         else:
-            results = self.precompute_future[request.label][user.user_id]
-            self.precompute_commit[user.user_id] = results
+            results = self.preemptive_future[request.label][user.user_id]
+            self.preemptive_commit[user.user_id] = results
             user = results['user']
             fact = results['fact']
 
@@ -1068,7 +1072,7 @@ class MovingAvgScheduler:
         # leitner boxes 1~10
         # days[0] = None as placeholder since we don't have box 0
         # days[9] and days[10] = 9999 to make it never repeat
-        days = [None, 0, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 9999, 9999]
+        days = [0, 0, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 9999, 9999]
         increment_days = {i: x for i, x in enumerate(days)}
 
         # boxes: 1 ~ 10

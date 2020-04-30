@@ -183,13 +183,13 @@ class TestScheduler(unittest.TestCase):
         if os.path.exists(self.filename_w_pre):
             os.remove(self.filename_w_pre)
         self.scheduler_w = MovingAvgScheduler(
-            db_filename=self.filename_w_pre, precompute=True)
+            db_filename=self.filename_w_pre, preemptive=True)
 
         self.filename_wo_pre = 'db_test_wo_pre.sqlite'
         if os.path.exists(self.filename_wo_pre):
             os.remove(self.filename_wo_pre)
         self.scheduler_wo = MovingAvgScheduler(
-            db_filename=self.filename_wo_pre, precompute=False)
+            db_filename=self.filename_wo_pre, preemptive=False)
 
     def tearDown(self):
         if os.path.exists(self.filename_w_pre):
@@ -270,22 +270,22 @@ class TestScheduler(unittest.TestCase):
             self.scheduler_w.update([request], current_date)
             self.scheduler_wo.update([request], current_date)
 
-            if user_id not in self.scheduler_w.precompute_commit:
+            if user_id not in self.scheduler_w.preemptive_commit:
                 print('not in commit')
-                print(self.scheduler_w.precompute_future.keys())
-                print(self.scheduler_w.precompute_future['correct'].keys())
-                print(self.scheduler_w.precompute_future['wrong'].keys())
-            elif self.scheduler_w.precompute_commit[user_id] != 'done':
-                facts_w = self.scheduler_w.precompute_commit[user_id]['facts']
+                print(self.scheduler_w.preemptive_future.keys())
+                print(self.scheduler_w.preemptive_future['correct'].keys())
+                print(self.scheduler_w.preemptive_future['wrong'].keys())
+            elif self.scheduler_w.preemptive_commit[user_id] != 'done':
+                facts_w = self.scheduler_w.preemptive_commit[user_id]['facts']
                 print('facts_wp', [c.results for c in facts_w])
 
             facts_wo = self.scheduler_wo.get_facts(requests)
             print('facts_wo', [c.results for c in facts_wo])
 
-            if user_id not in self.scheduler_w.precompute_commit:
+            if user_id not in self.scheduler_w.preemptive_commit:
                 pass
-            elif self.scheduler_w.precompute_commit[user_id] != 'done':
-                user_w = self.scheduler_w.precompute_commit[user_id]['user']
+            elif self.scheduler_w.preemptive_commit[user_id] != 'done':
+                user_w = self.scheduler_w.preemptive_commit[user_id]['user']
                 print('users_wp', user_w.results)
             user_wo = self.scheduler_wo.get_user(user_id)
             print('users_wo', user_wo.results)
