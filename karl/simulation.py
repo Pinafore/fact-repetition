@@ -6,6 +6,7 @@ import copy
 import pickle
 import requests
 import numpy as np
+from tqdm import tqdm
 from collections import defaultdict
 from datetime import datetime, timedelta
 
@@ -18,7 +19,6 @@ USER_ID = 'test_web_dummy'
 # model = RetentionModel()
 
 fret_file = open('sim_fret.txt', 'w')
-# fret_file = sys.stdout
 detail_file = open('sim_detail.txt', 'w')
 
 
@@ -122,8 +122,9 @@ if __name__ == '__main__':
     profile = defaultdict(list)
     for days in range(N_DAYS):
         print('day {}'.format(days), file=fret_file)
+        print('day {}'.format(days))
         time_offset = 0
-        for ith_fact in range(MAX_FACTS_PER_DAY):
+        for ith_fact in tqdm(range(MAX_FACTS_PER_DAY)):
             current_date = start_date + timedelta(days=days) + timedelta(seconds=time_offset)
 
             # # stop if both True

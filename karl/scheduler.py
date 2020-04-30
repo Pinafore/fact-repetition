@@ -935,8 +935,9 @@ class MovingAvgScheduler:
             user.user_stats.review_known_rate = np.mean(user.user_stats.results_review)
         user.user_stats.total_seen += 1
         if user.user_stats.previous_study_date is not None:
+            # TODO this is probably wrong
             previous_study_date = parse_date(user.user_stats.previous_study_date)
-            new_seconds = (date - previous_study_date).total_seconds()
+            new_seconds = int((date - previous_study_date).total_seconds())
             user.user_stats.total_seconds += new_seconds
         user.user_stats.previous_study_date = str(date)
 
