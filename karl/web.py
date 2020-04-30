@@ -52,27 +52,34 @@ def set_params(params: Params):
 def get_fact(request: ScheduleRequest):
     return scheduler.get_fact(request).pack()
 
-@app.get('/api/karl/reset_user/')
+@app.get('/api/karl/reset_user/{user_id}')
 def reset_user(user_id: str = None):
-    print('reset_user with user_id:', user_id)
     scheduler.reset_user(user_id=user_id)
 
-@app.get('/api/karl/reset_fact/')
+@app.get('/api/karl/reset_fact/{fact_id}')
 def reset_fact(fact_id: str = None):
     scheduler.reset_fact(fact_id=fact_id)
 
-@app.get('/api/karl/status/')
+@app.get('/api/karl/status')
 def status():
     return True
 
-@app.get('/api/karl/get_user/')
+@app.get('/api/karl/get_user/{user_id}')
 def get_user(user_id: str):
     return scheduler.get_user(user_id).pack()
 
-@app.get('/api/karl/get_user_stats/')
+@app.get('/api/karl/get_user_stats/{user_id}')
 def get_user_stats(user_id: str):
-    user = scheduler.get_user(user_id).pack()
-    return json.dumps(user.user_stats)
+    user = scheduler.get_user(user_id)
+    stats = user.user_stats.__dict__
+    return json.dumps({
+        'new_facts': stats['new_facts'],
+        'reviewed_facts': stats['reviewed_facts'],
+        'total_seen': stats['total_seen'],
+        'total_seconds': stats['total_seconds'],
+        'new_known_rate': stats['new_known_rate'],
+        'review_known_rate': stats['review_known_rate'],
+    })
 
 @atexit.register
 def finalize_db():

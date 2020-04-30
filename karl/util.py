@@ -44,6 +44,7 @@ class UserStats:
     total_seconds: int = 0
     new_known_rate: float = 0
     review_known_rate: float = 0
+    # helper
     results_new: List[bool] = field(default_factory=list)
     results_review: List[bool] = field(default_factory=list)
     previous_study_date: str = None
