@@ -22,7 +22,6 @@ def parse_date(date: str):
 
 
 class Params(BaseModel):
-    n_topics: int = 10                  # LDA
     qrep: float = 1                     # cosine distance between qreps
     skill: float = 0                    # fact difficulty vs user skill level
     recall: float = 1                   # recall probability
@@ -35,9 +34,27 @@ class Params(BaseModel):
     cool_down_time_correct: float = 20  # minutes to cool down
     cool_down_time_wrong: float = 4     # minutes to cool down
     max_queue: int = 10                 # num of qrep/skill vectors to average over
-    precompute: bool = True             # optimize speed by precompute next step
-    lda_dir: str = 'checkpoints/gensim_quizbowl_10_1585102364.5221019'
-    whoosh_index: str = 'whoosh_index'
+
+
+leitner_params = Params(
+    qrep=0,
+    skill=0,
+    recall=0,
+    category=0,
+    leitner=1,
+    sm2=0,
+    cool_down=0,
+)
+
+sm2_params = Params(
+    qrep=0,
+    skill=0,
+    recall=0,
+    category=0,
+    leitner=0,
+    sm2=1,
+    cool_down=0,
+)
 
 
 @dataclass
@@ -146,6 +163,8 @@ class User:
     # qid -> number of times user and qid incorrectly
     count_wrong_before: Dict[str, int] = field(default_factory=dict)
 
+    params: Params = field(default_factory=Params)
+
     def pack(self):
         x = self
         return [
@@ -163,6 +182,7 @@ class User:
             json.dumps(x.results),
             json.dumps(x.count_correct_before),
             json.dumps(x.count_wrong_before),
+            json.dumps(x.params.__dict__),
         ]
 
     @classmethod
@@ -181,7 +201,8 @@ class User:
             'sm2_scheduled_date',
             'results',
             'count_correct_before',
-            'count_wrong_before'
+            'count_wrong_before',
+            'params',
         ]
 
         if isinstance(r, str):
@@ -205,6 +226,7 @@ class User:
             results=json.loads(r[11]),
             count_correct_before=json.loads(r[12]),
             count_wrong_before=json.loads(r[13]),
+            params=Params(**json.loads(r[14])),
         )
 
 

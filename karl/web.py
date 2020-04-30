@@ -16,9 +16,12 @@ scheduler = MovingAvgScheduler()
 class UserID(BaseModel):
     user_id: str = None
 
+class FactID(BaseModel):
+    fact_id: str = None
+
 @app.post('/api/karl/schedule')
 def schedule(requests: List[ScheduleRequest]):
-    # TODO assuming single user single date
+    # NOTE assuming single user single date
     date = datetime.now()
     if len(requests) == 0:
         return {
@@ -41,20 +44,25 @@ def schedule(requests: List[ScheduleRequest]):
 @app.post('/api/karl/update')
 def update(requests: List[ScheduleRequest]):
 
-    # TODO assuming single user single date
+    # NOTE assuming single user single date
     date = datetime.now()
     if requests[0].date is not None:
         date = parse_date(requests[0].date)
     return scheduler.update(requests, date)
 
-@app.post('/api/karl/reset')
-def reset(user_id: UserID):
-    # TODO change to reset_user
+@app.post('/api/karl/reset_user')
+def reset_user(user_id: UserID):
     user_id = user_id.dict().get('user_id', None)
     scheduler.reset_user(user_id=user_id)
 
+@app.post('/api/karl/reset_fact')
+def reset_fact(fact_id: FactID):
+    fact_id = fact_id.dict().get('fact_id', None)
+    scheduler.reset_fact(fact_id=fact_id)
+
 @app.post('/api/karl/set_params')
 def set_params(params: Params):
+    # TODO also pass a user_id
     scheduler.set_params(params)
 
 @app.post('/api/karl/status')

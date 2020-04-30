@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# coding: utf-8
+
 import os
 import json
 import copy
@@ -71,6 +74,7 @@ class TestDB(unittest.TestCase):
         self.assertEqual(u1.results, u2.results)
         self.assertEqual(u1.count_correct_before, u2.count_correct_before)
         self.assertEqual(u1.count_wrong_before, u2.count_wrong_before)
+        self.assertEqual(u1.params, u2.params)
 
     def assert_fact_equal(self, c1, c2):
         self.assertEqual(c1.fact_id, c2.fact_id)
@@ -178,13 +182,13 @@ class TestScheduler(unittest.TestCase):
         if os.path.exists(self.filename_w_pre):
             os.remove(self.filename_w_pre)
         self.scheduler_w = MovingAvgScheduler(
-            db_filename=self.filename_w_pre, params=Params(precompute=True))
+            db_filename=self.filename_w_pre, precompute=True)
 
         self.filename_wo_pre = 'db_test_wo_pre.sqlite'
         if os.path.exists(self.filename_wo_pre):
             os.remove(self.filename_wo_pre)
         self.scheduler_wo = MovingAvgScheduler(
-            db_filename=self.filename_wo_pre, params=Params(precompute=False))
+            db_filename=self.filename_wo_pre, precompute=False)
 
     def tearDown(self):
         if os.path.exists(self.filename_w_pre):
@@ -207,6 +211,7 @@ class TestScheduler(unittest.TestCase):
         self.assertEqual(u1.results, u2.results)
         self.assertEqual(u1.count_correct_before, u2.count_correct_before)
         self.assertEqual(u1.count_wrong_before, u2.count_wrong_before)
+        self.assertEqual(u1.params, u2.params)
 
     def assert_fact_equal(self, c1, c2):
         self.assertEqual(c1.fact_id, c2.fact_id)

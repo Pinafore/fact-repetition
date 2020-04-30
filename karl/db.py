@@ -41,7 +41,8 @@ class SchedulerDB:
                      sm2_scheduled_date TEXT, \
                      results TEXT, \
                      count_correct_before TEXT, \
-                     count_wrong_before TEXT)'
+                     count_wrong_before TEXT, \
+                     params TEXT)'
                     )
 
         # *current* cache of facts 
@@ -78,7 +79,7 @@ class SchedulerDB:
     def add_user(self, u: User):
         cur = self.conn.cursor()
         try:
-            cur.execute('INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)', u.pack())
+            cur.execute('INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', u.pack())
         except sqlite3.IntegrityError:
             logger.info("user {} exists".format(u.user_id))
         # NOTE web.py will commit at exit
@@ -119,7 +120,8 @@ class SchedulerDB:
                      sm2_scheduled_date=?, \
                      results=?, \
                      count_correct_before=?, \
-                     count_wrong_before=? \
+                     count_wrong_before=?, \
+                     params=? \
                      WHERE user_id=?",
                     u)
         # NOTE web.py will commit at exit
@@ -227,17 +229,7 @@ class SchedulerDB:
 
     def get_history(self, history_id=None):
         def row_to_dict(r):
-            return History(
-                history_id=r[0],
-                user_id=r[1],
-                fact_id=r[2],
-                response=r[3],
-                judgement=r[4],
-                user_snapshot=r[5],
-                scheduler_snapshot=r[6],
-                fact_ids=json.loads(r[7]),
-                scheduler_output=r[8],
-                date=r[9])
+            return History(*r)
         cur = self.conn.cursor()
         if history_id is None:
             cur.execute("SELECT * FROM history")
