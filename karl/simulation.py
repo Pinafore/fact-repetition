@@ -31,10 +31,11 @@ def get_result(fact: dict, date: datetime):
         user_id=USER_ID,
         fact_id=fact['fact_id'],
     )
-    r = requests.post('http://127.0.0.1:8000/api/karl/get_fact', data=json.dumps(request.__dict__))
+    r = requests.post('http://127.0.0.1:8000/api/karl/get_fact',
+                      data=json.dumps(request.__dict__))
     fact = Fact.unpack(json.loads(r.text))
 
-    r = requests.post('http://127.0.0.1:8000/api/karl/get_user', data=json.dumps({'user_id': USER_ID}))
+    r = requests.get('http://127.0.0.1:8000/api/karl/get_user', params={'user_id': USER_ID})
     user = User.unpack(json.loads(r.text))
 
     '''
@@ -114,7 +115,7 @@ if __name__ == '__main__':
         fact['user_id'] = USER_ID
 
     # requests.post('http://127.0.0.1:8000/api/karl/set_params', data=json.dumps(params))
-    requests.post('http://127.0.0.1:8000/api/karl/reset', data=json.dumps({'user_id': USER_ID}))
+    requests.get('http://127.0.0.1:8000/api/karl/reset_user', params={'user_id': USER_ID})
 
     fact_to_column = dict()
     start_date = parse_date('2028-06-1 08:00:00.000001')
@@ -128,7 +129,8 @@ if __name__ == '__main__':
             # # stop if both True
             # #   1) no reivew scheduled within MAX_REVIEW_WINDOW by Leitner
             # #   2) already studied 10 new facts
-            # r = requests.post('http://127.0.0.1:8000/api/karl/get_user', data=json.dumps({'user_id': USER_ID}))
+            # r = requests.get('http://127.0.0.1:8000/api/karl/get_user',
+            #                   params={'user_id': USER_ID}))
             # user = User.unpack(json.loads(r.text))
             # leitner_scheduled_dates = list(user.leitner_scheduled_date.values())
             # if len(leitner_scheduled_dates) == 0:

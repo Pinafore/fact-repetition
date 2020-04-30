@@ -42,10 +42,11 @@ class SchedulerDB:
                      results TEXT, \
                      count_correct_before TEXT, \
                      count_wrong_before TEXT, \
-                     params TEXT)'
+                     params TEXT, \
+                     user_stats TEXT)'
                     )
 
-        # *current* cache of facts 
+        # *current* cache of facts
         cur.execute('CREATE TABLE facts(\
                      fact_id PRIMARY KEY, \
                      text TEXT, \
@@ -79,7 +80,7 @@ class SchedulerDB:
     def add_user(self, u: User):
         cur = self.conn.cursor()
         try:
-            cur.execute('INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', u.pack())
+            cur.execute('INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', u.pack())
         except sqlite3.IntegrityError:
             logger.info("user {} exists".format(u.user_id))
         # NOTE web.py will commit at exit
@@ -121,7 +122,8 @@ class SchedulerDB:
                      results=?, \
                      count_correct_before=?, \
                      count_wrong_before=?, \
-                     params=? \
+                     params=?, \
+                     user_stats=? \
                      WHERE user_id=?",
                     u)
         # NOTE web.py will commit at exit

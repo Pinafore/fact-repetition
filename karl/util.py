@@ -36,25 +36,113 @@ class Params(BaseModel):
     max_queue: int = 10                 # num of qrep/skill vectors to average over
 
 
-leitner_params = Params(
-    qrep=0,
-    skill=0,
-    recall=0,
-    category=0,
-    leitner=1,
-    sm2=0,
-    cool_down=0,
-)
+@dataclass
+class UserStats:
+    new_facts: int = 0
+    reviewed_facts: int = 0
+    total_seen: int = 0
+    total_seconds: int = 0
+    new_known_rate: float = 0
+    review_known_rate: float = 0
+    results_new: List[bool] = field(default_factory=list)
+    results_review: List[bool] = field(default_factory=list)
+    previous_study_date: str = None
 
-sm2_params = Params(
-    qrep=0,
-    skill=0,
-    recall=0,
-    category=0,
-    leitner=0,
-    sm2=1,
-    cool_down=0,
-)
+
+@dataclass
+class User:
+    user_id: str
+    # qrep of recently studied Facts
+    qrep: List[np.ndarray]
+    # skill of recently studied Facts
+    skill: List[np.ndarray]
+    category: str
+    previous_study: dict = field(default_factory=dict)
+
+    leitner_box: Dict[str, int] = field(default_factory=dict)
+    leitner_scheduled_date: Dict[str, datetime] = field(default_factory=dict)
+
+    sm2_efactor: Dict[str, float] = field(default_factory=dict)
+    sm2_interval: Dict[str, float] = field(default_factory=dict)
+    sm2_repetition: Dict[str, int] = field(default_factory=dict)
+    sm2_scheduled_date: Dict[str, datetime] = field(default_factory=dict)
+
+    # for computing user average accuracy
+    results: List[bool] = field(default_factory=list)
+    # qid -> number of times user and qid correctly
+    count_correct_before: Dict[str, int] = field(default_factory=dict)
+    # qid -> number of times user and qid incorrectly
+    count_wrong_before: Dict[str, int] = field(default_factory=dict)
+
+    params: Params = field(default_factory=Params)
+    user_stats: UserStats = field(default_factory=UserStats)
+
+    def pack(self):
+        x = self
+        return [
+            x.user_id,
+            json.dumps([q.tolist() for q in x.qrep]),
+            json.dumps([q.tolist() for q in x.skill]),
+            x.category,
+            json.dumps({k: (str(v), r) for k, (v, r) in x.previous_study.items()}),
+            json.dumps(x.leitner_box),
+            json.dumps({k: str(v) for k, v in x.leitner_scheduled_date.items()}),
+            json.dumps(x.sm2_efactor),
+            json.dumps(x.sm2_interval),
+            json.dumps(x.sm2_repetition),
+            json.dumps({k: str(v) for k, v in x.sm2_scheduled_date.items()}),
+            json.dumps(x.results),
+            json.dumps(x.count_correct_before),
+            json.dumps(x.count_wrong_before),
+            json.dumps(x.params.__dict__),
+            json.dumps(x.user_stats.__dict__),
+        ]
+
+    @classmethod
+    def unpack(cls, r):
+        fields = [
+            'user_id',
+            'qrep',
+            'skill',
+            'category',
+            'previous_study',
+            'leitner_box',
+            'leitner_scheduled_date',
+            'sm2_efactor',
+            'sm2_interval',
+            'sm2_repetition',
+            'sm2_scheduled_date',
+            'results',
+            'count_correct_before',
+            'count_wrong_before',
+            'params',
+            'user_stats',
+        ]
+
+        if isinstance(r, str):
+            r = json.loads(r)
+
+        if isinstance(r, dict):
+            r = [r[f] for f in fields]
+
+        return User(
+            user_id=r[0],
+            qrep=[np.array(x) for x in json.loads(r[1])],
+            skill=[np.array(x) for x in json.loads(r[2])],
+            category=r[3],
+            previous_study={k: (parse_date(v), r) for k, (v, r) in json.loads(r[4]).items()},
+            leitner_box=json.loads(r[5]),
+            leitner_scheduled_date={k: parse_date(v) for k, v in json.loads(r[6]).items()},
+            sm2_efactor=json.loads(r[7]),
+            sm2_interval=json.loads(r[8]),
+            sm2_repetition=json.loads(r[9]),
+            sm2_scheduled_date={k: parse_date(v) for k, v in json.loads(r[10]).items()},
+            results=json.loads(r[11]),
+            count_correct_before=json.loads(r[12]),
+            count_wrong_before=json.loads(r[13]),
+            params=Params(**json.loads(r[14])),
+            user_stats=UserStats(**json.loads(r[15])),
+        )
 
 
 @dataclass
@@ -121,6 +209,7 @@ class ScheduleRequest(BaseModel):
     fact_id: Optional[str]
     label: Optional[str]
     history_id: Optional[str]
+    # TODO handle this
     repetition_model: Optional[str]
 
 
@@ -136,98 +225,6 @@ class History:
     fact_ids: List[str]
     scheduler_output: str
     date: datetime
-
-
-@dataclass
-class User:
-    user_id: str
-    # qrep of recently studied Facts
-    qrep: List[np.ndarray]
-    # skill of recently studied Facts
-    skill: List[np.ndarray]
-    category: str
-    previous_study: dict = field(default_factory=dict)
-
-    leitner_box: Dict[str, int] = field(default_factory=dict)
-    leitner_scheduled_date: Dict[str, datetime] = field(default_factory=dict)
-
-    sm2_efactor: Dict[str, float] = field(default_factory=dict)
-    sm2_interval: Dict[str, float] = field(default_factory=dict)
-    sm2_repetition: Dict[str, int] = field(default_factory=dict)
-    sm2_scheduled_date: Dict[str, datetime] = field(default_factory=dict)
-
-    # for computing user average accuracy
-    results: List[bool] = field(default_factory=list)
-    # qid -> number of times user and qid correctly
-    count_correct_before: Dict[str, int] = field(default_factory=dict)
-    # qid -> number of times user and qid incorrectly
-    count_wrong_before: Dict[str, int] = field(default_factory=dict)
-
-    params: Params = field(default_factory=Params)
-
-    def pack(self):
-        x = self
-        return [
-            x.user_id,
-            json.dumps([q.tolist() for q in x.qrep]),
-            json.dumps([q.tolist() for q in x.skill]),
-            x.category,
-            json.dumps({k: (str(v), r) for k, (v, r) in x.previous_study.items()}),
-            json.dumps(x.leitner_box),
-            json.dumps({k: str(v) for k, v in x.leitner_scheduled_date.items()}),
-            json.dumps(x.sm2_efactor),
-            json.dumps(x.sm2_interval),
-            json.dumps(x.sm2_repetition),
-            json.dumps({k: str(v) for k, v in x.sm2_scheduled_date.items()}),
-            json.dumps(x.results),
-            json.dumps(x.count_correct_before),
-            json.dumps(x.count_wrong_before),
-            json.dumps(x.params.__dict__),
-        ]
-
-    @classmethod
-    def unpack(cls, r):
-        fields = [
-            'user_id',
-            'qrep',
-            'skill',
-            'category',
-            'previous_study',
-            'leitner_box',
-            'leitner_scheduled_date',
-            'sm2_efactor',
-            'sm2_interval',
-            'sm2_repetition',
-            'sm2_scheduled_date',
-            'results',
-            'count_correct_before',
-            'count_wrong_before',
-            'params',
-        ]
-
-        if isinstance(r, str):
-            r = json.loads(r)
-
-        if isinstance(r, dict):
-            r = [r[f] for f in fields]
-
-        return User(
-            user_id=r[0],
-            qrep=[np.array(x) for x in json.loads(r[1])],
-            skill=[np.array(x) for x in json.loads(r[2])],
-            category=r[3],
-            previous_study={k: (parse_date(v), r) for k, (v, r) in json.loads(r[4]).items()},
-            leitner_box=json.loads(r[5]),
-            leitner_scheduled_date={k: parse_date(v) for k, v in json.loads(r[6]).items()},
-            sm2_efactor=json.loads(r[7]),
-            sm2_interval=json.loads(r[8]),
-            sm2_repetition=json.loads(r[9]),
-            sm2_scheduled_date={k: parse_date(v) for k, v in json.loads(r[10]).items()},
-            results=json.loads(r[11]),
-            count_correct_before=json.loads(r[12]),
-            count_wrong_before=json.loads(r[13]),
-            params=Params(**json.loads(r[14])),
-        )
 
 
 class theme_fs(theme_light):

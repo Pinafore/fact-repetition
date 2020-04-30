@@ -24,8 +24,7 @@ from pandas.api.types import CategoricalDtype
 from karl.db import SchedulerDB
 from karl.lda import process_question
 from karl.util import ScheduleRequest, Params, Fact, User, History
-from karl.util import leitner_params, sm2_params
-from karl.util import theme_fs
+from karl.util import parse_date, theme_fs
 from karl.retention.baseline import RetentionModel
 
 nlp = en_core_web_lg.load()
@@ -72,7 +71,7 @@ class MovingAvgScheduler:
         """
         :param db_filename: location of database store.
         :param precompute: on-off switch of precompute optimization.
-        :param lda_dir: gensim LDA model directory. 
+        :param lda_dir: gensim LDA model directory.
         :param whoosh_index: whoosh index for text matching.
         """
         self.db_filename = db_filename
@@ -398,7 +397,7 @@ class MovingAvgScheduler:
         """
         Penalize shift in predefined categories. 1 if fact category is different than the
         previous fact the user studied, 0 otherwise.
-        
+
         :param user:
         :param fact:
         :return: 0 if same category, 1 if otherwise.
@@ -489,7 +488,7 @@ class MovingAvgScheduler:
         Semantic similarity between user and fact.
         Cosine distance between the user's accumulated question representation and the fact's
         question representation.
-        
+
         :param user:
         :param fact:
         :return: one minus cosine similarity.
@@ -712,7 +711,7 @@ class MovingAvgScheduler:
         5. Return the schedule.
 
         Note that we assume the list of requests only contains that of one user.
-        
+
         :param requests: a list of scheduling requests containing both user and fact information.
         :param datetime: current study time.
         :param plot: on-off switch of visualizations.
@@ -741,6 +740,8 @@ class MovingAvgScheduler:
         user, indices = list(user_to_requests.items())[0]
         user = self.get_user(user)
         facts = [facts[i] for i in indices]
+
+        # TODO use special params for certain repetition_model
 
         t0 = datetime.now()
         if not self.precompute:
@@ -905,7 +906,7 @@ class MovingAvgScheduler:
     def update_user_fact(self, user: User, fact: Fact, date: datetime, response: str) -> None:
         """
         Update the user with a response on this fact.
-        
+
         :param user:
         :param fact:
         :param date: date on which user studied fact.
@@ -923,6 +924,23 @@ class MovingAvgScheduler:
                 # queue is full, remove oldest entry
                 user.skill.pop(0)
 
+        # update user_stats. this should happen before everything else
+        if fact.fact_id not in user.previous_study:
+            user.user_stats.results_new.append(response == 'correct')
+            user.user_stats.new_facts += 1
+            user.user_stats.new_known_rate = np.mean(user.user_stats.results_new)
+        else:
+            user.user_stats.results_review.append(response == 'correct')
+            user.user_stats.reviewed_facts += 1
+            user.user_stats.review_known_rate = np.mean(user.user_stats.results_review)
+        user.user_stats.total_seen += 1
+        if user.user_stats.previous_study_date is not None:
+            previous_study_date = parse_date(user.user_stats.previous_study_date)
+            new_seconds = (date - previous_study_date).total_seconds()
+            user.user_stats.total_seconds += new_seconds
+        user.user_stats.previous_study_date = str(date)
+
+        # update category and previous study (date and response)
         user.category = fact.category
         user.previous_study[fact.fact_id] = (date, response)
 
@@ -1003,7 +1021,7 @@ class MovingAvgScheduler:
         # for detail display, this need to happen before the `update_user_fact` below
         old_user = copy.deepcopy(user)
 
-        # commit 
+        # commit
         if not self.precompute:
             self.update_user_fact(user, fact, date, request.label)
         elif user.user_id not in self.precompute_future[request.label]:
@@ -1067,7 +1085,7 @@ class MovingAvgScheduler:
     def sm2_update(self, user: User, fact: Fact, response: str) -> None:
         """
         Update SM-2 e_factor, repetition, and interval.
-        
+
         :param user:
         :param fact:
         :param response:
@@ -1079,7 +1097,7 @@ class MovingAvgScheduler:
         inv = user.sm2_interval.get(fact.fact_id, 1)
         rep = user.sm2_repetition.get(fact.fact_id, 0) + 1
 
-        q = self.get_quality_from_response(response)
+        q = get_quality_from_response(response)
         e_f = max(1.3, e_f + 0.1 - (5.0 - q) * (0.08 + (5.0 - q) * 0.02))
 
         if response != 'correct':

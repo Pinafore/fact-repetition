@@ -75,6 +75,7 @@ class TestDB(unittest.TestCase):
         self.assertEqual(u1.count_correct_before, u2.count_correct_before)
         self.assertEqual(u1.count_wrong_before, u2.count_wrong_before)
         self.assertEqual(u1.params, u2.params)
+        self.assertEqual(u1.user_stats, u2.user_stats)
 
     def assert_fact_equal(self, c1, c2):
         self.assertEqual(c1.fact_id, c2.fact_id)
@@ -212,6 +213,7 @@ class TestScheduler(unittest.TestCase):
         self.assertEqual(u1.count_correct_before, u2.count_correct_before)
         self.assertEqual(u1.count_wrong_before, u2.count_wrong_before)
         self.assertEqual(u1.params, u2.params)
+        self.assertEqual(u1.user_stats, u2.user_stats)
 
     def assert_fact_equal(self, c1, c2):
         self.assertEqual(c1.fact_id, c2.fact_id)
