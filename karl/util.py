@@ -22,6 +22,7 @@ def parse_date(date: str):
 
 
 class Params(BaseModel):
+    user_id: str = None                 # make it easier to set params for user
     qrep: float = 1                     # cosine distance between qreps
     skill: float = 0                    # fact difficulty vs user skill level
     recall: float = 1                   # recall probability
@@ -233,15 +234,13 @@ class theme_fs(theme_light):
     A theme similar to :class:`theme_linedraw` but with light grey
     lines and axes to direct more attention towards the data.
     Parameters
-    ----------
-    base_size : int, optional
-        Base font size. All text sizes are a scaled versions of
-        the base font size. Default is 11.
-    base_family : str, optional
-        Base font family.
     """
 
     def __init__(self, base_size=11, base_family='DejaVu Sans'):
+        """
+        :param base_size: All text sizes are a scaled versions of the base font size.
+        :param base_family: Base font family.
+        """
         theme_light.__init__(self, base_size, base_family)
         self.add_theme(theme(
             axis_ticks=element_line(color='#DDDDDD', size=0.5),

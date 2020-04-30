@@ -13,8 +13,8 @@ from datetime import datetime, timedelta
 from karl.util import parse_date, ScheduleRequest, Fact, User, Params
 
 
-params = Params()
 USER_ID = 'test_web_dummy'
+params = Params(user_id=USER_ID)
 # from retention import RetentionModel
 # model = RetentionModel()
 
@@ -114,7 +114,7 @@ if __name__ == '__main__':
     for i, fact in enumerate(facts):
         fact['user_id'] = USER_ID
 
-    # requests.post('http://127.0.0.1:8000/api/karl/set_params', data=json.dumps(params))
+    requests.post('http://127.0.0.1:8000/api/karl/set_params', data=json.dumps(params.__dict__))
     requests.get('http://127.0.0.1:8000/api/karl/reset_user/{}'.format(USER_ID))
 
     fact_to_column = dict()

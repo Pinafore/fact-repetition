@@ -45,8 +45,7 @@ def update(requests: List[ScheduleRequest]):
 
 @app.post('/api/karl/set_params')
 def set_params(params: Params):
-    # TODO also pass a user_id
-    scheduler.set_params(params)
+    scheduler.set_user_params(params)
 
 @app.post('/api/karl/get_fact')
 def get_fact(request: ScheduleRequest):
