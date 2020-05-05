@@ -3,6 +3,7 @@
 
 import json
 import atexit
+import logging
 from fastapi import FastAPI
 from typing import List
 from datetime import datetime
@@ -13,9 +14,27 @@ from karl.scheduler import MovingAvgScheduler
 app = FastAPI()
 scheduler = MovingAvgScheduler()
 
+# create logger with 'scheduler'
+logger = logging.getLogger('scheduler')
+logger.setLevel(logging.DEBUG)
+# create file handler which logs even debug messages
+fh = logging.FileHandler('/fs/www-users/shifeng/scheduler.log')
+fh.setLevel(logging.DEBUG)
+# create console handler with a higher log level
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+# create formatter and add it to the handlers
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+fh.setFormatter(formatter)
+ch.setFormatter(formatter)
+# add the handlers to the logger
+logger.addHandler(fh)
+logger.addHandler(ch)
+
 @app.post('/api/karl/schedule')
 def schedule(requests: List[ScheduleRequest]):
     # NOTE assuming single user single date
+    logger.info('/karl/schedule with {} requests'.format(len(requests)))
     date = datetime.now()
     if len(requests) == 0:
         return {
@@ -38,6 +57,7 @@ def schedule(requests: List[ScheduleRequest]):
 @app.post('/api/karl/update')
 def update(requests: List[ScheduleRequest]):
     # NOTE assuming single user single date
+    logger.info('/karl/update with {} requests'.format(len(requests)))
     date = datetime.now()
     if requests[0].date is not None:
         date = parse_date(requests[0].date)

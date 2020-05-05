@@ -741,7 +741,6 @@ class MovingAvgScheduler:
 
         # load fact and user from db
         t0 = datetime.now()
-        logger.info('scheduling {} facts'.format(len(requests)))
         facts = self.get_facts(requests)
         t1 = datetime.now()
         schedule_profile['get_facts'] = (len(requests), t1 - t0)
@@ -868,6 +867,7 @@ class MovingAvgScheduler:
         #             date, fact_idx, WRONG, plot=plot)
 
         output_dict['profile'] = schedule_profile
+        logger.info('scheduled fact {}'.format(facts[fact_idx].answer))
         return output_dict
 
     def branch(
