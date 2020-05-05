@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 
 from karl.db import SchedulerDB
 from karl.util import User, Fact, History, Params, ScheduleRequest, parse_date
+from karl.util import CORRECT, WRONG
 from karl.scheduler import MovingAvgScheduler
 
 
@@ -32,7 +33,7 @@ class TestDB(unittest.TestCase):
             qrep=[np.array([0.1, 0.2, 0.3])],
             skill=[np.array([0.1, 0.2, 0.3])],
             category='History',
-            previous_study={'fact 1': (datetime.now(), 'correct')},
+            previous_study={'fact 1': (datetime.now(), CORRECT)},
             leitner_box={'fact 1': 2},
             leitner_scheduled_date={'fact 2': datetime.now()},
             sm2_efactor={'fact 1': 0.5},
@@ -121,7 +122,7 @@ class TestDB(unittest.TestCase):
             qrep=[np.array([0.1, 0.2, 0.3])],
             skill=[np.array([0.1, 0.2, 0.3])],
             category='History',
-            previous_study={'fact 1': (datetime.now(), 'correct')},
+            previous_study={'fact 1': (datetime.now(), CORRECT)},
             leitner_box={'fact 1': 2},
             leitner_scheduled_date={'fact 2': datetime.now()},
             sm2_efactor={'fact 1': 0.5},
@@ -148,7 +149,7 @@ class TestDB(unittest.TestCase):
             user_id=user.user_id,
             fact_id=fact.fact_id,
             response='User Guess',
-            judgement='wrong',
+            judgement=WRONG,
             user_snapshot=json.dumps(user.pack()),
             scheduler_snapshot=json.dumps(params.__dict__),
             fact_ids=json.dumps([1, 2, 3, 4, 5]),
@@ -264,7 +265,7 @@ class TestScheduler(unittest.TestCase):
             order = results_w['order']
             request = requests[order[0]]
             request.__dict__.update({
-                'label': 'correct',
+                'label': CORRECT,
                 'history_id': 'real_history_id_{}_{}'.format(user_id, request.fact_id)
             })
             self.scheduler_w.update([request], current_date)
@@ -273,7 +274,7 @@ class TestScheduler(unittest.TestCase):
             if user_id not in self.scheduler_w.preemptive_commit:
                 print('not in commit')
                 print(self.scheduler_w.preemptive_future.keys())
-                print(self.scheduler_w.preemptive_future['correct'].keys())
+                print(self.scheduler_w.preemptive_future[CORRECT].keys())
                 print(self.scheduler_w.preemptive_future['wrong'].keys())
             elif self.scheduler_w.preemptive_commit[user_id] != 'done':
                 facts_w = self.scheduler_w.preemptive_commit[user_id]['facts']

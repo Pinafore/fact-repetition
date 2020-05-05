@@ -4,7 +4,6 @@ Click
 numpy
 pandas
 requests
-allennlp
 dataclasses
 fastapi
 gensim
@@ -18,3 +17,4 @@ uvicorn
 spacy
 plotnine
 wget
+tables

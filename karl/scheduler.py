@@ -25,7 +25,9 @@ from karl.db import SchedulerDB
 from karl.lda import process_question
 from karl.util import ScheduleRequest, Params, Fact, User, History
 from karl.util import parse_date, theme_fs
+from karl.util import CORRECT, WRONG
 from karl.retention.baseline import RetentionModel
+
 
 nlp = en_core_web_lg.load()
 nlp.add_pipe(process_question, name='process', last=True)
@@ -92,11 +94,11 @@ class MovingAvgScheduler:
         # # augment question_df with record stats
         # logger.info('merging dfs...')
         # df = questions_df.set_index('question_id').join(records_df.set_index('question_id'))
-        # df = df[df['correct'].notna()]
-        # df['correct'] = df['correct'].apply(lambda x: 1 if x == 1 else 0)
-        # df_grouped = df.reset_index()[['question_id', 'correct']].groupby('question_id')
-        # dict_correct_mean = df_grouped.mean().to_dict()['correct']
-        # dict_records_cnt = df_grouped.count().to_dict()['correct']
+        # df = df[df[CORRECT].notna()]
+        # df[CORRECT] = df[CORRECT].apply(lambda x: 1 if x == 1 else 0)
+        # df_grouped = df.reset_index()[['question_id', CORRECT]].groupby('question_id')
+        # dict_correct_mean = df_grouped.mean().to_dict()[CORRECT]
+        # dict_records_cnt = df_grouped.count().to_dict()[CORRECT]
         # questions_df['prob'] = questions_df['question_id'].apply(lambda x: dict_correct_mean.get(x, None))
         # questions_df['count'] = questions_df['question_id'].apply(lambda x: dict_records_cnt.get(x, None))
         # self.questions_df = questions_df
@@ -141,7 +143,7 @@ class MovingAvgScheduler:
         # | | rationale
         # | | facts_info
         # | | (plot)
-        self.preemptive_future = {'correct': {}, 'wrong': {}}
+        self.preemptive_future = {CORRECT: {}, WRONG: {}}
         self.preemptive_commit = dict()
 
     def estimate_avg(self) -> np.ndarray:
@@ -193,10 +195,10 @@ class MovingAvgScheduler:
         self.db.delete_user(user_id=user_id)
         self.db.delete_history(user_id=user_id)
         if user_id is not None:
-            if user_id in self.preemptive_future['correct']:
-                self.preemptive_future['correct'].pop(user_id)
-            if user_id in self.preemptive_future['wrong']:
-                self.preemptive_future['wrong'].pop(user_id)
+            if user_id in self.preemptive_future[CORRECT]:
+                self.preemptive_future[CORRECT].pop(user_id)
+            if user_id in self.preemptive_future[WRONG]:
+                self.preemptive_future[WRONG].pop(user_id)
             if user_id in self.preemptive_commit:
                 self.preemptive_commit.pop(user_id)
 
@@ -392,7 +394,7 @@ class MovingAvgScheduler:
     def set_user_params(self, params: Params):
         """
         Set parameters for user.
-        
+
         :param params:
         """
         if params.user_id is not None:
@@ -463,7 +465,7 @@ class MovingAvgScheduler:
             prev_date = time.mktime(prev_date.timetuple())
             delta_minutes = max(float(current_date - prev_date) / 60, 0)
             # cool down is never negative
-            if prev_response == 'correct':
+            if prev_response == CORRECT:
                 return max(user.params.cool_down_time_correct - delta_minutes, 0)
             else:
                 return max(user.params.cool_down_time_wrong - delta_minutes, 0)
@@ -828,7 +830,7 @@ class MovingAvgScheduler:
             # necessary to remove 'done' marked by update if exists
             self.preemptive_commit.pop(user.user_id)
 
-        # 'correct' branch
+        # CORRECT branch
         thr_correct = threading.Thread(
             target=self.branch,
             args=(
@@ -836,7 +838,7 @@ class MovingAvgScheduler:
                 copy.deepcopy(facts),
                 date,
                 fact_idx,
-                'correct',
+                CORRECT,
                 plot,
             ),
             kwargs={}
@@ -844,7 +846,7 @@ class MovingAvgScheduler:
         thr_correct.start()
         # thr_correct.join()
 
-        # 'wrong' branch
+        # WRONG branch
         thr_wrong = threading.Thread(
             target=self.branch,
             args=(
@@ -852,7 +854,7 @@ class MovingAvgScheduler:
                 copy.deepcopy(facts),
                 date,
                 fact_idx,
-                'wrong',
+                WRONG,
                 plot,
             ),
             kwargs={}
@@ -861,9 +863,9 @@ class MovingAvgScheduler:
         # thr_wrong.join()
 
         # self.branch(copy.deepcopy(user), copy.deepcopy(facts),
-        #             date, fact_idx, 'correct', plot=plot)
+        #             date, fact_idx, CORRECT, plot=plot)
         # self.branch(copy.deepcopy(user), copy.deepcopy(facts),
-        #             date, fact_idx, 'wrong', plot=plot)
+        #             date, fact_idx, WRONG, plot=plot)
 
         output_dict['profile'] = schedule_profile
         return output_dict
@@ -937,11 +939,11 @@ class MovingAvgScheduler:
 
         # update user_stats. this should happen before everything else
         if fact.fact_id not in user.previous_study:
-            user.user_stats.results_new.append(response == 'correct')
+            user.user_stats.results_new.append(response == CORRECT)
             user.user_stats.new_facts += 1
             user.user_stats.new_known_rate = np.mean(user.user_stats.results_new)
         else:
-            user.user_stats.results_review.append(response == 'correct')
+            user.user_stats.results_review.append(response == CORRECT)
             user.user_stats.reviewed_facts += 1
             user.user_stats.review_known_rate = np.mean(user.user_stats.results_review)
         user.user_stats.total_seen += 1
@@ -957,8 +959,8 @@ class MovingAvgScheduler:
         user.previous_study[fact.fact_id] = (date, response)
 
         # update retention features
-        fact.results.append(response == 'correct')
-        user.results.append(response == 'correct')
+        fact.results.append(response == CORRECT)
+        user.results.append(response == CORRECT)
         if fact.fact_id not in user.count_correct_before:
             user.count_correct_before[fact.fact_id] = 0
         if fact.fact_id not in user.count_wrong_before:
@@ -1074,7 +1076,7 @@ class MovingAvgScheduler:
 
         :param user:
         :param fact:
-        :param response: 'correct' or 'wrong'.
+        :param response: CORRECT or WRONG.
         """
         # leitner boxes 1~10
         # days[0] = None as placeholder since we don't have box 0
@@ -1086,7 +1088,7 @@ class MovingAvgScheduler:
         cur_box = user.leitner_box.get(fact.fact_id, None)
         if cur_box is None:
             cur_box = 1
-        new_box = cur_box + (1 if response == 'correct' else -1)
+        new_box = cur_box + (1 if response == CORRECT else -1)
         new_box = max(min(new_box, 10), 1)
         user.leitner_box[fact.fact_id] = new_box
         interval = timedelta(days=increment_days[new_box])
@@ -1103,7 +1105,7 @@ class MovingAvgScheduler:
         :param response:
         """
         def get_quality_from_response(response: str) -> int:
-            return 4 if response == 'correct' else 1
+            return 4 if response == CORRECT else 1
 
         e_f = user.sm2_efactor.get(fact.fact_id, 2.5)
         inv = user.sm2_interval.get(fact.fact_id, 1)
@@ -1112,7 +1114,7 @@ class MovingAvgScheduler:
         q = get_quality_from_response(response)
         e_f = max(1.3, e_f + 0.1 - (5.0 - q) * (0.08 + (5.0 - q) * 0.02))
 
-        if response != 'correct':
+        if response != CORRECT:
             inv = 0
             rep = 0
         else:

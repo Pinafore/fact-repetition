@@ -11,6 +11,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 
 from karl.util import parse_date, ScheduleRequest, Fact, User, Params
+from karl.util import CORRECT, WRONG
 
 
 USER_ID = 'test_web_dummy'
@@ -40,7 +41,7 @@ def get_result(fact: dict, date: datetime):
 
     '''
     result = model.predict_one(user, fact)
-    return 'correct' if result > 0.5 else 'wrong'
+    return CORRECT if result > 0.5 else WRONG
     '''
 
     prob = 0.5  # default
@@ -51,7 +52,7 @@ def get_result(fact: dict, date: datetime):
         prob = np.exp2(- delta / h)
 
     result = np.random.binomial(1, prob)
-    return 'correct' if result else 'wrong'
+    return CORRECT if result else WRONG
 
 def schedule_and_update(facts, date):
     for fact in facts:
@@ -154,7 +155,7 @@ if __name__ == '__main__':
                 fact_id,
                 ith_fact,
                 ' ' * fact_to_column[fact_id],
-                'o' if update_outputs['response'] == 'correct' else 'x'
+                'o' if update_outputs['response'] == CORRECT else 'x'
             ), file=fret_file)
 
             time_offset += TURN_AROUND

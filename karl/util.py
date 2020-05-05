@@ -12,6 +12,12 @@ from plotnine import theme, theme_light, \
     element_text, element_blank, element_rect, element_line
 
 
+CORRECT = True
+WRONG = False
+# CORRECT = 'correct'
+# WRONG = 'wrong'
+
+
 def parse_date(date: str):
     if isinstance(date, datetime):
         return date
@@ -209,7 +215,7 @@ class ScheduleRequest(BaseModel):
     category: Optional[str]
     user_id: Optional[str]
     fact_id: Optional[str]
-    label: Optional[str]
+    label: Optional[bool]
     history_id: Optional[str]
     # TODO handle this
     repetition_model: Optional[str]
