@@ -4,6 +4,7 @@ output
 whoosh_index
 build_lda.sh
 *.sqlite*
+.pytype
 
 # Byte-compiled / optimized / DLL files
 */__pycache__/

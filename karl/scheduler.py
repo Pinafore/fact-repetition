@@ -25,8 +25,13 @@ from karl.db import SchedulerDB
 from karl.lda import process_question
 from karl.util import ScheduleRequest, Params, Fact, User, History
 from karl.util import parse_date, theme_fs
-from karl.util import CORRECT, WRONG
 from karl.retention.baseline import RetentionModel
+
+
+CORRECT = True
+WRONG = False
+# CORRECT = 'correct'
+# WRONG = 'wrong'
 
 
 nlp = en_core_web_lg.load()
@@ -82,7 +87,7 @@ class MovingAvgScheduler:
         self.whoosh_index = whoosh_index
 
         self.db = SchedulerDB(db_filename)
-        self.retention_model = RetentionModel()
+        # self.retention_model = RetentionModel()
 
         # logger.info('loading question and records...')
         # with open('data/jeopardy_310326_question_player_pairs_20190612.pkl', 'rb') as f:
@@ -164,13 +169,16 @@ class MovingAvgScheduler:
             facts = pickle.load(f)
 
         logger.info('estimate average user skill')
-        facts = [Fact(
-            fact_id=c['fact_id'],
-            text=c['text'],
-            answer=c['answer'],
-            category=c['category'],
-            qrep=None,
-            skill=None) for c in facts]
+        facts = [
+            Fact(
+                fact_id=c['fact_id'],
+                text=c['text'],
+                answer=c['answer'],
+                category=c['category'],
+                qrep=None,
+                skill=None)
+            for c in facts
+        ]
 
         self.embed(facts)
         qreps = [c.qrep for c in facts]
@@ -539,7 +547,7 @@ class MovingAvgScheduler:
             # NOTE distance in hours, can be negative
             return (scheduled_date - date).total_seconds() / (60 * 60)
 
-    def score(self, user: User, facts: List[Fact], date: datetime) -> List[float]:
+    def score(self, user: User, facts: List[Fact], date: datetime) -> List[Dict[str, float]]:
         """
         Compute the score between user and each fact, and compute the weighted sum distance.
 
@@ -547,11 +555,11 @@ class MovingAvgScheduler:
         :param fact:
         :return: distance in number of hours.
         """
-        recall_scores = self.dist_recall_batch(user, facts)
+        # recall_scores = self.dist_recall_batch(user, facts)
         scores = [{
             'qrep': self.dist_qrep(user, fact),
             'skill': self.dist_skill(user, fact),
-            'recall': recall_scores[i],
+            # 'recall': recall_scores[i],
             'category': self.dist_category(user, fact),
             'cool_down': self.dist_cool_down(user, fact, date),
             'leitner': self.dist_leitner(user, fact, date),
@@ -572,7 +580,7 @@ class MovingAvgScheduler:
             date: datetime,
             scores: List[Dict[str, float]],
             order: List[int],
-            top_n_facts=3
+            top_n_facts: int = 3
     ) -> str:
         """
         Create rationale HTML table for the top facts.
@@ -668,7 +676,7 @@ class MovingAvgScheduler:
             facts: List[Fact],
             date: datetime,
             plot=False
-    ) -> Dict[str, float]:
+    ) -> dict:
         """
         Score facts for user, rank them, and create rationale & card information.
 
@@ -727,7 +735,7 @@ class MovingAvgScheduler:
         :return: a dictionary of everything about the schedule.
         """
         if len(requests) == 0:
-            return [], [], ''
+            return {}
 
         schedule_profile = {}
 
@@ -876,7 +884,7 @@ class MovingAvgScheduler:
             facts: List[Fact],
             date: datetime,
             fact_idx: int,
-            response: str,
+            response: bool,
             plot=False
     ) -> None:
         """
@@ -916,7 +924,7 @@ class MovingAvgScheduler:
             # if done, user already responded, marked as done by update
             self.preemptive_future[response][user.user_id] = pre_schedule
 
-    def update_user_fact(self, user: User, fact: Fact, date: datetime, response: str) -> None:
+    def update_user_fact(self, user: User, fact: Fact, date: datetime, response: bool) -> None:
         """
         Update the user with a response on this fact.
 
@@ -1027,7 +1035,7 @@ class MovingAvgScheduler:
                 judgement=request.label,
                 user_snapshot=json.dumps(user.pack()),
                 scheduler_snapshot=json.dumps(user.params.__dict__),
-                fact_ids=json.dumps([x.fact_id for x in facts]),
+                fact_ids=[x.fact_id for x in facts],
                 scheduler_output='',
                 date=date)
             self.db.add_history(history)
@@ -1070,7 +1078,7 @@ class MovingAvgScheduler:
 
         return detail
 
-    def leitner_update(self, user: User, fact: Fact, response: str) -> None:
+    def leitner_update(self, user: User, fact: Fact, response: bool) -> None:
         """
         Update Leitner box and scheduled date of card.
 
@@ -1096,7 +1104,7 @@ class MovingAvgScheduler:
         prev_date, prev_response = user.previous_study[fact.fact_id]
         user.leitner_scheduled_date[fact.fact_id] = prev_date + interval
 
-    def sm2_update(self, user: User, fact: Fact, response: str) -> None:
+    def sm2_update(self, user: User, fact: Fact, response: bool) -> None:
         """
         Update SM-2 e_factor, repetition, and interval.
 
@@ -1104,7 +1112,7 @@ class MovingAvgScheduler:
         :param fact:
         :param response:
         """
-        def get_quality_from_response(response: str) -> int:
+        def get_quality_from_response(response: bool) -> int:
             return 4 if response == CORRECT else 1
 
         e_f = user.sm2_efactor.get(fact.fact_id, 2.5)

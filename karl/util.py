@@ -12,12 +12,6 @@ from plotnine import theme, theme_light, \
     element_text, element_blank, element_rect, element_line
 
 
-CORRECT = True
-WRONG = False
-# CORRECT = 'correct'
-# WRONG = 'wrong'
-
-
 def parse_date(date: str):
     if isinstance(date, datetime):
         return date
@@ -54,7 +48,7 @@ class UserStats:
     # helper
     results_new: List[bool] = field(default_factory=list)
     results_review: List[bool] = field(default_factory=list)
-    previous_study_date: str = None
+    previous_study_date: Optional[str] = None
 
 
 @dataclass
@@ -64,7 +58,7 @@ class User:
     qrep: List[np.ndarray]
     # skill of recently studied Facts
     skill: List[np.ndarray]
-    category: str
+    category: Optional[str]
     previous_study: dict = field(default_factory=dict)
 
     leitner_box: Dict[str, int] = field(default_factory=dict)
@@ -159,9 +153,9 @@ class Fact:
     text: str
     answer: str
     category: str
-    qrep: np.ndarray
+    qrep: Optional[np.ndarray]
     # skill estimate for each topic
-    skill: np.ndarray
+    skill: Optional[np.ndarray]
     # for computing question average accuracy
     # I originally thought we should store (uid, result, date)
     # but that can be quickly inferred from History table
@@ -219,6 +213,7 @@ class ScheduleRequest(BaseModel):
     history_id: Optional[str]
     # TODO handle this
     repetition_model: Optional[str]
+    deck_name: Optional[str]
 
 
 @dataclass

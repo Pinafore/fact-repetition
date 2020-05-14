@@ -19,8 +19,8 @@ params = Params(user_id=USER_ID)
 # from retention import RetentionModel
 # model = RetentionModel()
 
-fret_file = open('sim_fret.txt', 'w')
-detail_file = open('sim_detail.txt', 'w')
+fret_file = open('output/sim_fret.txt', 'w')
+detail_file = open('output/sim_detail.txt', 'w')
 
 
 def get_result(fact: dict, date: datetime):
@@ -53,6 +53,7 @@ def get_result(fact: dict, date: datetime):
 
     result = np.random.binomial(1, prob)
     return CORRECT if result else WRONG
+
 
 def schedule_and_update(facts, date):
     for fact in facts:
