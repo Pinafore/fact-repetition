@@ -219,6 +219,7 @@ class ScheduleRequest(BaseModel):
 @dataclass
 class History:
     history_id: str
+    debug_id: str
     user_id: str
     fact_id: str
     response: str

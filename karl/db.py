@@ -63,6 +63,7 @@ class SchedulerDB:
         # it with the history_id from the front end DB.
         cur.execute('CREATE TABLE history (\
                      history_id PRIMARY KEY, \
+                     debug_id TEXT, \
                      user_id TEXT, \
                      fact_id TEXT, \
                      response TEXT, \
@@ -207,9 +208,10 @@ class SchedulerDB:
     def add_history(self, h: History):
         cur = self.conn.cursor()
         try:
-            cur.execute('INSERT INTO history VALUES (?,?,?,?,?,?,?,?,?,?)',
+            cur.execute('INSERT INTO history VALUES (?,?,?,?,?,?,?,?,?,?,?)',
                         (
                             h.history_id,
+                            h.debug_id,
                             h.user_id,
                             h.fact_id,
                             h.response,
@@ -252,6 +254,7 @@ class SchedulerDB:
         if h.history_id == old_history_id:
             # inplace update with same id
             cur.execute("UPDATE history SET \
+                         debug_id=?, \
                          user_id=?, \
                          fact_id=?, \
                          response=?, \
@@ -262,6 +265,7 @@ class SchedulerDB:
                          scheduler_output=?, \
                          date=? \
                          WHERE history_id=?", (
+                h.debug_id,
                 h.user_id,
                 h.fact_id,
                 h.response,
@@ -275,6 +279,7 @@ class SchedulerDB:
         else:
             # replace update with new id
             cur.execute("UPDATE history SET \
+                         debug_id=?, \
                          history_id=?, \
                          user_id=?, \
                          fact_id=?, \
@@ -286,6 +291,7 @@ class SchedulerDB:
                          scheduler_output=?, \
                          date=? \
                          WHERE history_id=?", (
+                h.debug_id,
                 h.history_id,
                 h.user_id,
                 h.fact_id,

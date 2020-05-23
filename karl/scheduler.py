@@ -7,6 +7,7 @@ import time
 import copy
 import pickle
 import gensim
+import hashlib
 import logging
 import threading
 import numpy as np
@@ -150,6 +151,9 @@ class MovingAvgScheduler:
         # | | (plot)
         self.preemptive_future = {CORRECT: {}, WRONG: {}}
         self.preemptive_commit = dict()
+
+        # user_id -> random hash string that corresponds to the card being shown to the user
+        self.debug_id = dict()
 
     def estimate_avg(self) -> np.ndarray:
         """
@@ -608,7 +612,15 @@ class MovingAvgScheduler:
              </style>
              """
 
-        rr += '<h2>Top ranked facts</h2>'
+        dump_dict = {
+            'user_id': user.user_id,
+            'fact_id': facts[order[0]].fact_id,
+            'date': str(date),
+        }
+        debug_id = hashlib.md5(json.dumps(dump_dict).encode('utf8')).hexdigest()
+        self.debug_id[user.user_id] = debug_id
+
+        rr += '<h2>Debug ID: {}</h2>'.format(debug_id)
         row_template = '<tr><td><b>{}</b></td> <td>{}</td></tr>'
         row_template_3 = '<tr><td><b>{}</b></td> <td>{:.4f} x {:.2f}</td></tr>'
         for i in order[:top_n_facts]:
@@ -757,7 +769,11 @@ class MovingAvgScheduler:
         user, indices = list(user_to_requests.items())[0]
         user = self.get_user(user)
 
-        repetition_model_name = requests[0].__dict__.get('repetition_model', 'default').lower()
+        if requests[0].repetition_model is None:
+            repetition_model_name = 'default'
+        else:
+            repetition_model_name = requests[0].repetition_model.lower()
+        
         if repetition_model_name == 'sm2' or repetition_model_name == 'sm-2':
             user.params = Params(
                 qrep=0,
@@ -896,6 +912,12 @@ class MovingAvgScheduler:
 
         output_dict['profile'] = schedule_timing_profile
         logger.info('scheduled fact {}'.format(facts[fact_idx].answer))
+        profile_str = [
+            '{}: {} ({})'.format(k, v, c)
+            for k, (c, v) in schedule_timing_profile.items()
+        ]
+        logger.info('\n' + '\n'.join(profile_str))
+
         return output_dict
 
     def branch(
@@ -1049,6 +1071,7 @@ class MovingAvgScheduler:
         else:
             history = History(
                 history_id=request.history_id,
+                debug_id=self.debug_id.get(request.user_id, 'null'),
                 user_id=request.user_id,
                 fact_id=fact.fact_id,
                 response=request.label,
@@ -1076,6 +1099,9 @@ class MovingAvgScheduler:
             self.preemptive_commit[user.user_id] = results
             user = results['user']
             fact = results['fact']
+
+        if user.user_id in self.debug_id:
+            self.debug_id.pop(user.user_id)
 
         self.db.update_user(user)
         self.db.update_fact(fact)
