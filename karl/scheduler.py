@@ -189,8 +189,7 @@ class MovingAvgScheduler:
         estimates = [[] for _ in range(self.n_topics)]
         for fact, qrep in zip(facts, qreps):
             topic_idx = np.argmax(qrep)
-            prob = self.predict_one(fact)
-            estimates[topic_idx].append(prob)
+            estimates[topic_idx].append(self.get_skill_for_fact(fact))
         estimates = [np.mean(x) for x in estimates]
         with open(estimate_file_dir, 'w') as f:
             for e in estimates:
@@ -292,7 +291,7 @@ class MovingAvgScheduler:
         # indicating the average question accuracy
         fact.skill = np.zeros_like(fact.qrep)
         fact.skill[np.argmax(fact.qrep)] = 1
-        fact.skill *= self.predict_one(fact)
+        fact.skill *= self.get_skill_for_fact(fact)
 
         self.db.add_fact(fact)
         return fact
@@ -795,11 +794,9 @@ class MovingAvgScheduler:
 
         facts = [facts[i] for i in indices]
 
-        t0 = datetime.now()
         if not self.preemptive:
             return self.rank_facts_for_user(user, facts, date, plot=plot)
         t1 = datetime.now()
-        schedule_timing_profile['rank_facts_for_user (wo pre)'] = (len(facts), t1 - t0)
 
         # using preemptived schedules
         # read confirmed update & corresponding schedule

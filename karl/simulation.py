@@ -32,6 +32,9 @@ def get_result(fact: dict, date: datetime):
         category=fact['category'],
         user_id=USER_ID,
         fact_id=fact['fact_id'],
+        repetition_model='leitner',
+        deck_name='simulation',
+        env='simulation',
     )
     r = requests.post('http://127.0.0.1:8000/api/karl/get_fact',
                       data=json.dumps(request.__dict__))

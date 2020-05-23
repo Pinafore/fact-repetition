@@ -34,6 +34,13 @@ logger.addHandler(fh)
 logger.addHandler(ch)
 
 
+def update_fact_id_with_env(requests: List[ScheduleRequest]):
+    for request in requests:
+        if request.env is not None:
+            request.fact_id = '{}_{}'.format(request.env, request.fact_id)
+    return requests
+
+
 @app.post('/api/karl/schedule')
 def schedule(requests: List[ScheduleRequest]):
     # NOTE assuming single user single date
@@ -45,10 +52,9 @@ def schedule(requests: List[ScheduleRequest]):
             'rationale': '<p>no fact received</p>',
             'facts_info': '',
         }
-
     if requests[0].date is not None:
         date = parse_date(requests[0].date)
-
+    requests = update_fact_id_with_env(requests)
     results = scheduler.schedule(requests, date, plot=False)
     return {
         'order': results['order'],
@@ -65,6 +71,7 @@ def update(requests: List[ScheduleRequest]):
     date = datetime.now()
     if requests[0].date is not None:
         date = parse_date(requests[0].date)
+    requests = update_fact_id_with_env(requests)
     return scheduler.update(requests, date)
 
 
@@ -75,6 +82,8 @@ def set_params(params: Params):
 
 @app.post('/api/karl/get_fact')
 def get_fact(request: ScheduleRequest):
+    if request.env is not None:
+        request.fact_id = '{}_{}'.format(request.env, request.fact_id)
     return scheduler.get_fact(request).pack()
 
 
