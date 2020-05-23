@@ -211,9 +211,9 @@ class ScheduleRequest(BaseModel):
     fact_id: Optional[str]
     label: Optional[bool]
     history_id: Optional[str]
-    # TODO handle this
     repetition_model: Optional[str]
     deck_name: Optional[str]
+    env: Optional[str]
 
 
 @dataclass

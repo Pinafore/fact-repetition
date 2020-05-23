@@ -13,7 +13,6 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import StepLR
 
 from karl.util import User, Fact
-from karl.util import CORRECT
 from karl.retention.data import RetentionDataset, apply_parallel, get_split_dfs
 
 
@@ -209,7 +208,7 @@ def test_wrapper():
         qrep=[np.array([0.1, 0.2, 0.3])],
         skill=[np.array([0.1, 0.2, 0.3])],
         category='History',
-        previous_study={'fact 1': (datetime.now(), CORRECT)},
+        previous_study={'fact 1': (datetime.now(), True)},
         leitner_box={'fact 1': 2},
         leitner_scheduled_date={'fact 2': datetime.now()},
         sm2_efactor={'fact 1': 0.5},

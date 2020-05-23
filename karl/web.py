@@ -11,8 +11,10 @@ from datetime import datetime
 from karl.util import ScheduleRequest, Params, parse_date
 from karl.scheduler import MovingAvgScheduler
 
+
 app = FastAPI()
 scheduler = MovingAvgScheduler()
+
 
 # create logger with 'scheduler'
 logger = logging.getLogger('scheduler')
@@ -30,6 +32,7 @@ ch.setFormatter(formatter)
 # add the handlers to the logger
 logger.addHandler(fh)
 logger.addHandler(ch)
+
 
 @app.post('/api/karl/schedule')
 def schedule(requests: List[ScheduleRequest]):
@@ -54,6 +57,7 @@ def schedule(requests: List[ScheduleRequest]):
         'profile': results['profile'],
     }
 
+
 @app.post('/api/karl/update')
 def update(requests: List[ScheduleRequest]):
     # NOTE assuming single user single date
@@ -63,29 +67,36 @@ def update(requests: List[ScheduleRequest]):
         date = parse_date(requests[0].date)
     return scheduler.update(requests, date)
 
+
 @app.post('/api/karl/set_params')
 def set_params(params: Params):
     scheduler.set_user_params(params)
+
 
 @app.post('/api/karl/get_fact')
 def get_fact(request: ScheduleRequest):
     return scheduler.get_fact(request).pack()
 
+
 @app.get('/api/karl/reset_user/{user_id}')
 def reset_user(user_id: str = None):
     scheduler.reset_user(user_id=user_id)
+
 
 @app.get('/api/karl/reset_fact/{fact_id}')
 def reset_fact(fact_id: str = None):
     scheduler.reset_fact(fact_id=fact_id)
 
+
 @app.get('/api/karl/status')
 def status():
     return True
 
+
 @app.get('/api/karl/get_user/{user_id}')
 def get_user(user_id: str):
     return scheduler.get_user(user_id).pack()
+
 
 @app.get('/api/karl/get_user_stats/{user_id}')
 def get_user_stats(user_id: str):
@@ -99,6 +110,7 @@ def get_user_stats(user_id: str):
         'new_known_rate': stats['new_known_rate'],
         'review_known_rate': stats['review_known_rate'],
     })
+
 
 @atexit.register
 def finalize_db():

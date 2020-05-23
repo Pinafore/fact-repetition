@@ -737,7 +737,8 @@ class MovingAvgScheduler:
         if len(requests) == 0:
             return {}
 
-        schedule_profile = {}
+        # time the scheduler
+        schedule_timing_profile = {}
 
         # mapping from user to scheduling requests
         # not used since we assume only one user
@@ -751,19 +752,38 @@ class MovingAvgScheduler:
         t0 = datetime.now()
         facts = self.get_facts(requests)
         t1 = datetime.now()
-        schedule_profile['get_facts'] = (len(requests), t1 - t0)
+        schedule_timing_profile['get_facts'] = (len(requests), t1 - t0)
 
         user, indices = list(user_to_requests.items())[0]
         user = self.get_user(user)
-        facts = [facts[i] for i in indices]
 
-        # TODO use special params for certain repetition_model
+        repetition_model_name = requests[0].__dict__.get('repetition_model', 'default').lower()
+        if repetition_model_name == 'sm2' or repetition_model_name == 'sm-2':
+            user.params = Params(
+                qrep=0,
+                skill=0,
+                recall=0,
+                category=0,
+                leitner=0,
+                sm2=1,
+            )
+        elif repetition_model_name == 'leitner':
+            user.params = Params(
+                qrep=0,
+                skill=0,
+                recall=0,
+                category=0,
+                leitner=1,
+                sm2=0,
+            )
+
+        facts = [facts[i] for i in indices]
 
         t0 = datetime.now()
         if not self.preemptive:
             return self.rank_facts_for_user(user, facts, date, plot=plot)
         t1 = datetime.now()
-        schedule_profile['rank_facts_for_user (wo pre)'] = (len(facts), t1 - t0)
+        schedule_timing_profile['rank_facts_for_user (wo pre)'] = (len(facts), t1 - t0)
 
         # using preemptived schedules
         # read confirmed update & corresponding schedule
@@ -772,14 +792,14 @@ class MovingAvgScheduler:
             t0 = datetime.now()
             output_dict = self.rank_facts_for_user(user, facts, date, plot=plot)
             t1 = datetime.now()
-            schedule_profile['rank_facts_for_user (pre not found)'] = (len(facts), t1 - t0)
+            schedule_timing_profile['rank_facts_for_user (pre not found)'] = (len(facts), t1 - t0)
         elif self.preemptive_commit[user.user_id] == 'done':
             # preemptive threads didn't finish before user responded and is marked as done by update
             # TODO this might be too conservative
             t0 = datetime.now()
             output_dict = self.rank_facts_for_user(user, facts, date, plot=plot)
             t1 = datetime.now()
-            schedule_profile['rank_facts_for_user (pre marked done)'] = (len(facts), t1 - t0)
+            schedule_timing_profile['rank_facts_for_user (pre marked done)'] = (len(facts), t1 - t0)
         else:
             # read preemptived schedule, check if new facts are added
             # if so, compute score for new facts, re-sort facts
@@ -814,14 +834,14 @@ class MovingAvgScheduler:
             for i, idx in prev_fact_indices.items():
                 scores[idx] = prev_results['scores'][i]
             t1 = datetime.now()
-            schedule_profile['rank_facts_for_user (new facts)'] = (len(new_facts), t1 - t0)
+            schedule_timing_profile['rank_facts_for_user (new facts)'] = (len(new_facts), t1 - t0)
 
             t0 = datetime.now()
             order = np.argsort([s['sum'] for s in scores]).tolist()
             rationale = self.get_rationale(user, facts, date, scores, order)
             facts_info = self.get_facts_info(user, facts, date, scores, order)
             t1 = datetime.now()
-            schedule_profile['get rationale and facts info'] = (len(facts), t1 - t0)
+            schedule_timing_profile['get rationale and facts info'] = (len(facts), t1 - t0)
 
             output_dict = {
                 'order': order,
@@ -874,7 +894,7 @@ class MovingAvgScheduler:
         # self.branch(copy.deepcopy(user), copy.deepcopy(facts),
         #             date, fact_idx, WRONG, plot=plot)
 
-        output_dict['profile'] = schedule_profile
+        output_dict['profile'] = schedule_timing_profile
         logger.info('scheduled fact {}'.format(facts[fact_idx].answer))
         return output_dict
 
@@ -1107,6 +1127,7 @@ class MovingAvgScheduler:
     def sm2_update(self, user: User, fact: Fact, response: bool) -> None:
         """
         Update SM-2 e_factor, repetition, and interval.
+
 
         :param user:
         :param fact:

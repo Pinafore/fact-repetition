@@ -11,9 +11,10 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 
 from karl.util import parse_date, ScheduleRequest, Fact, User, Params
-from karl.util import CORRECT, WRONG
 
 
+CORRECT = True
+WRONG = False
 USER_ID = 'test_web_dummy'
 params = Params(user_id=USER_ID)
 # from retention import RetentionModel
@@ -40,6 +41,7 @@ def get_result(fact: dict, date: datetime):
     user = User.unpack(json.loads(r.text))
 
     '''
+    the outcome of the study should exactly follow our model
     result = model.predict_one(user, fact)
     return CORRECT if result > 0.5 else WRONG
     '''
@@ -47,7 +49,10 @@ def get_result(fact: dict, date: datetime):
     prob = 0.5  # default
     if fact.fact_id in user.previous_study:
         prev_date, prev_response = user.previous_study[fact.fact_id]
-        h = user.count_correct_before.get(fact.fact_id, 0) + user.count_wrong_before.get(fact.fact_id, 0)
+        h = (
+            user.count_correct_before.get(fact.fact_id, 0)
+            + user.count_wrong_before.get(fact.fact_id, 0)
+        )
         delta = (date - prev_date).days
         prob = np.exp2(- delta / h)
 
@@ -57,7 +62,12 @@ def get_result(fact: dict, date: datetime):
 
 def schedule_and_update(facts, date):
     for fact in facts:
-        fact['date'] = str(date)
+        fact.update({
+            'date': str(date),
+            'repetition_model': 'leitner',
+            'deck_name': 'simulation',
+            'env': 'simulation',
+        })
 
     r = requests.post('http://127.0.0.1:8000/api/karl/schedule', data=json.dumps(facts))
     schedule_outputs = json.loads(r.text)
