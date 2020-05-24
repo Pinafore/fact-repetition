@@ -107,6 +107,12 @@ def get_user(user_id: str):
     return scheduler.get_user(user_id).pack()
 
 
+@app.get('/api/karl/get_all_users')
+def get_all_users():
+    users = scheduler.db.get_user()
+    return [user.pack() for user in users]
+
+
 @app.get('/api/karl/get_user_stats/{user_id}')
 def get_user_stats(user_id: str):
     user = scheduler.get_user(user_id)
@@ -116,6 +122,8 @@ def get_user_stats(user_id: str):
         'reviewed_facts': stats['reviewed_facts'],
         'total_seen': stats['total_seen'],
         'total_seconds': stats['total_seconds'],
+        'last_week_seen': stats['last_week_seen'],
+        'last_week_new_facts': stats['last_week_new_facts'],
         'new_known_rate': stats['new_known_rate'],
         'review_known_rate': stats['review_known_rate'],
     })

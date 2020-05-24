@@ -984,22 +984,30 @@ class MovingAvgScheduler:
                 # queue is full, remove oldest entry
                 user.skill.pop(0)
 
-        # update user_stats. this should happen before everything else
-        if fact.fact_id not in user.previous_study:
-            user.user_stats.results_new.append(response == CORRECT)
-            user.user_stats.new_facts += 1
-            user.user_stats.new_known_rate = np.mean(user.user_stats.results_new)
-        else:
-            user.user_stats.results_review.append(response == CORRECT)
-            user.user_stats.reviewed_facts += 1
-            user.user_stats.review_known_rate = np.mean(user.user_stats.results_review)
-        user.user_stats.total_seen += 1
-        if user.user_stats.previous_study_date is not None:
-            # TODO this is probably wrong
-            previous_study_date = parse_date(user.user_stats.previous_study_date)
+        # update user_stats. this should happen before we change the state of the user
+        if len(user.user_stats.results) > 0:
+            # TODO inaccurate estimate of total seconds spent on the interface
+            previous_study_date = parse_date(user.user_stats.results[-1][2])
             new_seconds = int((date - previous_study_date).total_seconds())
             user.user_stats.total_seconds += new_seconds
-        user.user_stats.previous_study_date = str(date)
+
+        # user.user_stats.results is a list of (result, new / review, date)
+        is_new_fact = fact.fact_id not in user.previous_study
+        user.user_stats.results.append((
+            response == CORRECT,
+            is_new_fact,
+            str(date),
+        ))
+        user.user_stats.new_facts += is_new_fact
+        user.user_stats.reviewed_facts += not is_new_fact
+        user.user_stats.new_known_rate = np.mean([a[0] for a in user.user_stats.results if a[1]])
+        user.user_stats.review_known_rate = np.mean([a[0] for a in user.user_stats.results if not a[1]])
+        user.user_stats.total_seen += 1
+        last_week_datetime = date - timedelta(days=7)
+        last_week_results = [x for x in user.user_stats.results
+                             if parse_date(x[2]) >= last_week_datetime]
+        user.user_stats.last_week_seen = len(last_week_results)
+        user.user_stats.last_week_new_facts = len([x[1] for x in last_week_results])
 
         # update category and previous study (date and response)
         user.category = fact.category

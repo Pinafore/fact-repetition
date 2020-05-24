@@ -43,16 +43,17 @@ class UserStats:
     reviewed_facts: int = 0
     total_seen: int = 0
     total_seconds: int = 0
+    last_week_seen: int = 0
+    last_week_new_facts: int = 0
     new_known_rate: float = 0
     review_known_rate: float = 0
-    # helper
-    results_new: List[bool] = field(default_factory=list)
-    results_review: List[bool] = field(default_factory=list)
-    previous_study_date: Optional[str] = None
+    # correct / wrong, new card / review, datetime string
+    results: List[tuple] = field(default_factory=list)
 
 
 @dataclass
 class User:
+    # TODO omg so much bloat
     user_id: str
     # qrep of recently studied Facts
     qrep: List[np.ndarray]

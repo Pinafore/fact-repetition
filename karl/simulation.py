@@ -7,6 +7,7 @@ import pickle
 import requests
 import numpy as np
 from tqdm import tqdm
+from pprint import pprint
 from collections import defaultdict
 from datetime import datetime, timedelta
 
@@ -82,7 +83,7 @@ def schedule_and_update(facts, date):
     r = requests.post('http://127.0.0.1:8000/api/karl/update', data=json.dumps([fact]))
     update_outputs = json.loads(r.text)
 
-    print(current_date.strftime('%Y-%m-%d-%H-%M'), file=detail_file)
+    print(date.strftime('%Y-%m-%d-%H-%M'), file=detail_file)
     print('    {: <16} : {}'.format('fact_id', fact['fact_id']), file=detail_file)
     print('    {: <16} : {}'.format('result', fact['label']), file=detail_file)
     print('    {: <16} : {}'.format('text', fact['text']), file=detail_file)
@@ -116,7 +117,7 @@ def schedule_and_update(facts, date):
     return schedule_outputs, update_outputs,
 
 
-if __name__ == '__main__':
+def test_scheduling():
     N_DAYS = 1
     N_TOTAL_FACTS = 100
     MAX_FACTS_PER_DAY = 100
@@ -179,5 +180,27 @@ if __name__ == '__main__':
         count, time = list(zip(*value))
         print(key, np.mean(count), np.mean(time))
 
-    r = requests.get('http://127.0.0.1:8000/api/karl/get_user_stats/{}'.format(USER_ID))
-    print(json.loads(r.text))
+
+def test_for_leaderboard():
+    # r = requests.get('http://127.0.0.1:8000/api/karl/get_user_stats/{}'.format(USER_ID))
+    # print(json.loads(r.text))
+    # print()
+
+    r = requests.get('http://127.0.0.1:8000/api/karl/get_all_users')
+    users = [User.unpack(s) for s in json.loads(r.text)]
+    stats = users[0].user_stats.__dict__
+    pprint({
+        'new_facts': stats['new_facts'],
+        'reviewed_facts': stats['reviewed_facts'],
+        'total_seen': stats['total_seen'],
+        'total_seconds': stats['total_seconds'],
+        'last_week_seen': stats['last_week_seen'],
+        'last_week_new_facts': stats['last_week_new_facts'],
+        'new_known_rate': stats['new_known_rate'],
+        'review_known_rate': stats['review_known_rate'],
+    })
+
+
+if __name__ == '__main__':
+    # test_scheduling()
+    test_for_leaderboard()
