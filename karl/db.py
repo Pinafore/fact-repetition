@@ -29,9 +29,7 @@ class SchedulerDB:
         # including leitner and sm2 info
         cur.execute('CREATE TABLE users (\
                      user_id PRIMARY KEY, \
-                     qrep TEXT, \
-                     skill TEXT, \
-                     category TEXT, \
+                     recent_facts TEXT, \
                      previous_study TEXT, \
                      leitner_box TEXT, \
                      leitner_scheduled_date TEXT, \
@@ -81,7 +79,7 @@ class SchedulerDB:
     def add_user(self, u: User):
         cur = self.conn.cursor()
         try:
-            cur.execute('INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', u.pack())
+            cur.execute('INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)', u.pack())
         except sqlite3.IntegrityError:
             logger.info("user {} exists".format(u.user_id))
         # NOTE web.py will commit at exit
@@ -110,9 +108,7 @@ class SchedulerDB:
         u = u.pack()
         u = u[1:] + u[:1]  # move user_id to the end
         cur.execute("UPDATE users SET\
-                     qrep=?, \
-                     skill=?, \
-                     category=?, \
+                     recent_facts=?, \
                      previous_study=?, \
                      leitner_box=?, \
                      leitner_scheduled_date=?, \

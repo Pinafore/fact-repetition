@@ -349,14 +349,7 @@ class MovingAvgScheduler:
             return user
 
         # create new user and insert to db
-        k = self.n_topics
-        qrep = np.array([1 / k for _ in range(k)])
-        new_user = User(
-            user_id=user_id,
-            category=None,
-            qrep=[qrep],
-            skill=[self.avg_user_skill_estimate]
-        )
+        new_user = User(user_id=user_id)
         self.db.add_user(new_user)
         return new_user
 
@@ -422,24 +415,33 @@ class MovingAvgScheduler:
         :param fact:
         :return: 0 if same category, 1 if otherwise.
         """
-        if user.category is None or fact.category is None:
+        if (
+                len(user.recent_facts) == 0 
+                or user.recent_facts[-1].category is None
+                or fact.category is None
+        ):
             return 0
-        return float(fact.category.lower() != user.category.lower())
+        return float(fact.category != user.recent_facts[-1].category)
 
     def dist_skill(self, user: User, fact: Fact) -> float:
         """
         Difference in the skill level between the user and the fact.
         Fact skill is a n_topics dimensional one-hot vector where the non-zero entry is the average
         question accuracy.
-        User skill is the accumulated skill vectors of the max_queue previous facts.
+        User skill is the accumulated skill vectors of the max_recent_facts previous facts.
         We also additionally penalize easier questions by a factor of 10.
 
         :param user:
         :param fact:
         :return: different in skill estimate, multiplied by 10 if fact is easier.
         """
-        user_skill = self.get_discounted_average(user.skill, user.params.decay_qrep)
-        user_skill = np.clip(user_skill, a_min=0.0, a_max=1.0)
+        if len(user.recent_facts) == 0:
+            user_skill = copy.deepcopy(self.avg_user_skill_estimate)
+        else:
+            user_skill = self.get_discounted_average(
+                [fact.skill for fact in user.recent_facts],
+                user.params.decay_qrep)
+            user_skill = np.clip(user_skill, a_min=0.0, a_max=1.0)
         topic_idx = np.argmax(fact.qrep)
         d = fact.skill[topic_idx] - user_skill[topic_idx]
         # penalize easier questions by ten
@@ -515,7 +517,11 @@ class MovingAvgScheduler:
         """
         def cosine_distance(a, b):
             return 1 - (a @ b.T) / (np.linalg.norm(a) * np.linalg.norm(b))
-        user_qrep = self.get_discounted_average(user.qrep, user.params.decay_qrep)
+        if len(user.recent_facts) == 0:
+            user_qrep = np.array([1 / self.n_topics for _ in range(self.n_topics)])
+        else:
+            user_qrep = self.get_discounted_average([x.qrep for x in user.recent_facts],
+                                                    user.params.decay_qrep)
         return cosine_distance(user_qrep, fact.qrep)
 
     def dist_leitner(self, user: User, fact: Fact, date: datetime) -> float:
@@ -701,7 +707,11 @@ class MovingAvgScheduler:
         order = np.argsort([s['sum'] for s in scores]).tolist()
         fact = facts[order[0]]
 
-        user_qrep = self.get_discounted_average(user.qrep, user.params.decay_qrep)
+        if len(user.recent_facts) == 0:
+            user_qrep = np.array([1 / self.n_topics for _ in range(self.n_topics)])
+        else:
+            user_qrep = self.get_discounted_average([x.qrep for x in user.recent_facts],
+                                                    user.params.decay_qrep)
         # plot_polar(user_qrep, '/fs/www-users/shifeng/temp/user.jpg', fill='green')
         # plot_polar(fact.qrep, '/fs/www-users/shifeng/temp/fact.jpg', fill='yellow')
 
@@ -772,7 +782,7 @@ class MovingAvgScheduler:
             repetition_model_name = 'default'
         else:
             repetition_model_name = requests[0].repetition_model.lower()
-        
+
         if repetition_model_name == 'sm2' or repetition_model_name == 'sm-2':
             user.params = Params(
                 qrep=0,
@@ -972,18 +982,6 @@ class MovingAvgScheduler:
         :param date: date on which user studied fact.
         :param response: user's response on this fact.
         """
-        # update qrep
-        user.qrep.append(fact.qrep)
-        if len(user.qrep) >= user.params.max_queue:
-            user.qrep.pop(0)
-
-        # update skill
-        if response:
-            user.skill.append(fact.skill)
-            if len(user.skill) >= user.params.max_queue:
-                # queue is full, remove oldest entry
-                user.skill.pop(0)
-
         # update user_stats. this should happen before we change the state of the user
         if len(user.user_stats.results) > 0:
             # TODO inaccurate estimate of total seconds spent on the interface
@@ -1010,7 +1008,9 @@ class MovingAvgScheduler:
         user.user_stats.last_week_new_facts = len([x[1] for x in last_week_results])
 
         # update category and previous study (date and response)
-        user.category = fact.category
+        user.recent_facts.append(fact)
+        if len(user.recent_facts) >= user.params.max_recent_facts:
+            user.recent_facts.pop(0)
         user.previous_study[fact.fact_id] = (date, response)
 
         # update retention features
