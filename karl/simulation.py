@@ -12,14 +12,30 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 
 from karl.util import parse_date, ScheduleRequest, Fact, User, Params
+from karl.retention.baseline import RetentionModel
 
+model = RetentionModel()
 
 CORRECT = True
 WRONG = False
 USER_ID = 'test_web_dummy'
-params = Params(user_id=USER_ID)
-# from retention import RetentionModel
-# model = RetentionModel()
+
+params = Params(
+    user_id=USER_ID,
+    qrep=1,
+    skill=0,
+    recall=1,
+    category=1,
+    leitner=0,
+    sm2=0,
+    decay_qrep=0.9,
+    decay_skill=0.9,
+    cool_down=1,
+    cool_down_time_correct=20,
+    cool_down_time_wrong=4,
+    max_recent_facts=10,
+)
+
 
 fret_file = open('output/sim_fret.txt', 'w')
 detail_file = open('output/sim_detail.txt', 'w')
@@ -44,24 +60,22 @@ def get_result(fact: dict, date: datetime):
     r = requests.get('http://127.0.0.1:8000/api/karl/get_user/{}'.format(USER_ID))
     user = User.unpack(json.loads(r.text))
 
-    '''
-    the outcome of the study should exactly follow our model
-    result = model.predict_one(user, fact)
-    return CORRECT if result > 0.5 else WRONG
-    '''
+    if True:
+        result = model.predict_one(user, fact)
+        return CORRECT if result > 0.5 else WRONG
+    else:
+        prob = 0.5  # default
+        if fact.fact_id in user.previous_study:
+            prev_date, prev_response = user.previous_study[fact.fact_id]
+            h = (
+                user.count_correct_before.get(fact.fact_id, 0)
+                + user.count_wrong_before.get(fact.fact_id, 0)
+            )
+            delta = (date - prev_date).days
+            prob = np.exp2(- delta / h)
 
-    prob = 0.5  # default
-    if fact.fact_id in user.previous_study:
-        prev_date, prev_response = user.previous_study[fact.fact_id]
-        h = (
-            user.count_correct_before.get(fact.fact_id, 0)
-            + user.count_wrong_before.get(fact.fact_id, 0)
-        )
-        delta = (date - prev_date).days
-        prob = np.exp2(- delta / h)
-
-    result = np.random.binomial(1, prob)
-    return CORRECT if result else WRONG
+        result = np.random.binomial(1, prob)
+        return CORRECT if result else WRONG
 
 
 def schedule_and_update(facts, date):
@@ -118,7 +132,7 @@ def schedule_and_update(facts, date):
 
 
 def test_scheduling():
-    N_DAYS = 1
+    N_DAYS = 10
     N_TOTAL_FACTS = 100
     MAX_FACTS_PER_DAY = 100
     TURN_AROUND = 0.5 * 60  # seconds
@@ -188,6 +202,9 @@ def test_for_leaderboard():
 
     r = requests.get('http://127.0.0.1:8000/api/karl/get_all_users')
     users = [User.unpack(s) for s in json.loads(r.text)]
+    if len(users) == 0:
+        return
+
     stats = users[0].user_stats.__dict__
     pprint({
         'new_facts': stats['new_facts'],
@@ -202,5 +219,5 @@ def test_for_leaderboard():
 
 
 if __name__ == '__main__':
-    # test_scheduling()
-    test_for_leaderboard()
+    test_scheduling()
+    # test_for_leaderboard()

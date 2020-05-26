@@ -1,6 +1,7 @@
 data
 checkpoints
 output
+runs
 whoosh_index
 build_lda.sh
 *.sqlite*

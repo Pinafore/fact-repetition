@@ -88,7 +88,7 @@ class MovingAvgScheduler:
         self.whoosh_index = whoosh_index
 
         self.db = SchedulerDB(db_filename)
-        # self.retention_model = RetentionModel()
+        self.retention_model = RetentionModel()
 
         # logger.info('loading question and records...')
         # with open('data/jeopardy_310326_question_player_pairs_20190612.pkl', 'rb') as f:
@@ -416,7 +416,7 @@ class MovingAvgScheduler:
         :return: 0 if same category, 1 if otherwise.
         """
         if (
-                len(user.recent_facts) == 0 
+                len(user.recent_facts) == 0
                 or user.recent_facts[-1].category is None
                 or fact.category is None
         ):
@@ -438,9 +438,8 @@ class MovingAvgScheduler:
         if len(user.recent_facts) == 0:
             user_skill = copy.deepcopy(self.avg_user_skill_estimate)
         else:
-            user_skill = self.get_discounted_average(
-                [fact.skill for fact in user.recent_facts],
-                user.params.decay_qrep)
+            user_skill = self.get_discounted_average([fact.skill for fact in user.recent_facts],
+                                                     user.params.decay_skill)
             user_skill = np.clip(user_skill, a_min=0.0, a_max=1.0)
         topic_idx = np.argmax(fact.qrep)
         d = fact.skill[topic_idx] - user_skill[topic_idx]
@@ -564,11 +563,11 @@ class MovingAvgScheduler:
         :param fact:
         :return: distance in number of hours.
         """
-        # recall_scores = self.dist_recall_batch(user, facts)
+        recall_scores = self.dist_recall_batch(user, facts)
         scores = [{
             'qrep': self.dist_qrep(user, fact),
             'skill': self.dist_skill(user, fact),
-            # 'recall': recall_scores[i],
+            'recall': recall_scores[i],
             'category': self.dist_category(user, fact),
             'cool_down': self.dist_cool_down(user, fact, date),
             'leitner': self.dist_leitner(user, fact, date),
