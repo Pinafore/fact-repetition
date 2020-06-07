@@ -3,12 +3,12 @@
     "model_name_or_path": "bert-base-cased",
     "do_train": true,
     "do_eval": true,
-    "data_dir": "/fs/clip-quiz/shifeng/karl/data/protobowl",
+    "data_dir": "/fs/clip-scratch/shifeng/karl/data/protobowl",
     "max_seq_length": 128,
     "per_gpu_train_batch_size": 32,
     "retention_feature_size": 12,
     "learning_rate": 2e-05,
     "num_train_epochs": 3.0,
     "save_steps": 0,
-    "output_dir": "/fs/clip-quiz/shifeng/karl/output/new_retention"
+    "output_dir": "/fs/clip-scratch/shifeng/karl/output/retention"
 }

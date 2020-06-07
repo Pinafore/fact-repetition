@@ -17,6 +17,7 @@ from transformers import (
     PreTrainedTokenizer,
     BertPreTrainedModel,
     DataCollator,
+    BertConfig,
 )
 
 from karl.retention.data import get_split_numpy, get_split_dfs, get_questions
@@ -182,11 +183,18 @@ class RetentionDataCollator(DataCollator):
         return batch
 
 
+class RetentionBertConfig(BertConfig):
+
+    def __init__(self, retention_feature_size: int = 12, **kwargs):
+        super().__init__(**kwargs)
+        self.retention_feature_size = retention_feature_size
+
+
 class BertRetentionModel(BertPreTrainedModel):
 
     def __init__(self, config, **kwargs):
         super().__init__(config)
-        retention_feature_size = kwargs.pop('retention_feature_size')
+        retention_feature_size = config.retention_feature_size
         self.num_labels = config.num_labels
 
         self.bert = BertModel(config)

@@ -17,10 +17,13 @@
 import os
 import sys
 import logging
+from datetime import datetime
 from dataclasses import dataclass, field
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 
 import numpy as np
+import torch
+import torch.nn.functional as F
 
 from transformers.data.metrics import simple_accuracy
 from transformers import (
@@ -28,7 +31,6 @@ from transformers import (
     Trainer,
     TrainingArguments,
     set_seed,
-    BertConfig,
     BertTokenizer,
     EvalPrediction,
 )
@@ -37,8 +39,12 @@ from karl.retention_utils import (
     RetentionDataArguments,
     RetentionDataset,
     RetentionDataCollator,
+    RetentionBertConfig,
+    RetentionInputFeatures,
     BertRetentionModel,
 )
+
+from karl.util import User, Fact
 
 logger = logging.getLogger(__name__)
 
@@ -118,9 +124,10 @@ def main():
     # The .from_pretrained methods guarantee that only one local process can concurrently
     # download model & vocab.
 
-    config = BertConfig.from_pretrained(
+    config = RetentionBertConfig.from_pretrained(
         model_args.model_name_or_path,
         num_labels=2,
+        retention_feature_size=model_args.retention_feature_size,
         finetuning_task='retention',
         cache_dir=model_args.cache_dir,
     )
@@ -132,7 +139,6 @@ def main():
         model_args.model_name_or_path,
         config=config,
         cache_dir=model_args.cache_dir,
-        retention_feature_size=model_args.retention_feature_size,
     )
 
     # input_ids = torch.tensor(tokenizer.encode("Hello, my dog is cute", add_special_tokens=True)).unsqueeze(0)  # Batch size 1
@@ -199,6 +205,117 @@ def main():
                 logger.info("  %s = %s", key, value)
                 writer.write("%s = %s\n" % (key, value))
 
+class HFRetentionModel:
+
+    def __init__(self, config_dir: str = 'configs/hf_config.json'):
+        parser = HfArgumentParser((ModelArguments,
+                                   TrainingArguments,
+                                   RetentionDataArguments))
+
+        model_args, training_args, data_args = parser.parse_json_file(
+            json_file='configs/hf_config.json')
+
+        self.tokenizer = BertTokenizer.from_pretrained(training_args.output_dir)
+        self.model = BertRetentionModel.from_pretrained(training_args.output_dir)
+        self.model = self.model.to(training_args.device)
+        self.model.eval()
+
+    def predict(self, user: User, facts: List[Fact], date=None) -> np.ndarray:
+        if date is None:
+            date = datetime.now()
+        # user_count_correct
+        # user_count_wrong
+        # user_count_total
+        # user_average_overall_accuracy
+        # user_average_question_accuracy
+        # user_previous_result
+        # user_gap_from_previous
+        # question_average_overall_accuracy
+        # question_count_total
+        # question_count_correct
+        # question_count_wrong
+        # bias
+        retention_features_list = []
+        question_text_list = []
+        for fact in facts:
+            uq_correct = user.count_correct_before.get(fact.fact_id, 0)
+            uq_wrong = user.count_wrong_before.get(fact.fact_id, 0)
+            uq_total = uq_correct + uq_wrong
+            if fact.fact_id in user.previous_study:
+                prev_date, prev_response = user.previous_study[fact.fact_id]
+            else:
+                prev_date = date
+            retention_features_list.append([
+                uq_correct,  # user_count_correct
+                uq_wrong,  # user_count_wrong
+                uq_total,  # user_count_total
+                0 if len(user.results) == 0 else np.mean(user.results),  # user_average_oveuracy
+                0 if uq_total == 0 else uq_correct / uq_total,  # user_average_question_acc
+                0 if len(user.results) == 0 else user.results[-1],  # user_previous_result
+                (date - prev_date).seconds / (60 * 60),  # user_gap_from_previous
+                0 if len(fact.results) == 0 else np.mean(fact.results),  # question_average_accuracy
+                len(fact.results),  # question_count_total
+                sum(fact.results),  # question_count_correct
+                len(fact.results) - sum(fact.results),  # question_count_wrong
+                1  # bias
+            ])
+            question_text_list.append(fact.text)
+
+        batch_size = len(question_text_list)
+        batch_encoding = self.tokenizer.batch_encode_plus(
+            question_text_list,
+            # TODO max_length=max_length,
+            # TODO pad_to_max_length=True,
+        )
+
+        features = []
+        for i in range(batch_size):
+            inputs = {k: v[i] for k, v in batch_encoding.items()}
+            # x = ((xs[i] - mean) / std).astype(float)
+            # inputs['retention_features'] = x.tolist()
+            inputs['retention_features'] = retention_features_list[i]
+            features.append(RetentionInputFeatures(**inputs))
+
+        inputs = RetentionDataCollator().collate_batch(features)
+        inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
+        with torch.no_grad():
+            predictions = self.model(**inputs)
+        return F.softmax(predictions[0], dim=-1).detach().cpu().numpy()
+
+    def predict_one(self, user: User, fact: Fact) -> float:
+        return self.predict(user, [fact])[0]
+
+
+def test_wrapper():
+    model = HFRetentionModel('configs/hf_configs.json')
+    
+    user = User(
+        user_id='user 1',
+        previous_study={'fact 1': (datetime.now(), True)},
+        leitner_box={'fact 1': 2},
+        leitner_scheduled_date={'fact 2': datetime.now()},
+        sm2_efactor={'fact 1': 0.5},
+        sm2_interval={'fact 1': 6},
+        sm2_repetition={'fact 1': 10},
+        sm2_scheduled_date={'fact 2': datetime.now()},
+        results=[True, False, True],
+        count_correct_before={'fact 1': 1},
+        count_wrong_before={'fact 1': 3}
+    )
+
+    fact = Fact(
+        fact_id='fact 1',
+        text='This is the question text',
+        answer='Answer Text III',
+        category='WORLD',
+        qrep=np.array([1, 2, 3, 4]),
+        skill=np.array([0.1, 0.2, 0.3, 0.4]),
+        results=[True, False, True, True]
+    )
+
+    print(model.predict(user, [fact, fact, fact]))
+    print(model.predict_one(user, fact))
+
 
 if __name__ == "__main__":
-    main()
+    test_wrapper()
