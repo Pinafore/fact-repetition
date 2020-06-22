@@ -14,10 +14,12 @@ import torch.nn.functional as F
 
 from transformers import (
     BertModel,
+    DistilBertModel,
     PreTrainedTokenizer,
     BertPreTrainedModel,
-    DataCollator,
+    DistilBertPreTrainedModel,
     BertConfig,
+    DistilBertConfig,
 )
 
 from karl.retention.data import get_split_numpy, get_split_dfs, get_questions
@@ -63,7 +65,6 @@ class RetentionDataset(torch.utils.data.Dataset):
             args: RetentionDataArguments,
             fold: str,
             tokenizer: PreTrainedTokenizer,
-            limit_length: Optional[int] = None,
     ):
         cached_features_file = os.path.join(
             args.data_dir,
@@ -94,22 +95,20 @@ class RetentionDataset(torch.utils.data.Dataset):
             else:
                 raise ValueError("Data fold must be either train or test")
 
-            if limit_length is None:
-                limit_length = len(ys)
-
             if args.max_seq_length is None:
                 max_length = tokenizer.max_len
             else:
                 max_length = args.max_seq_length
 
             batch_encoding = tokenizer.batch_encode_plus(
-                [questions[row.qid] for row in df[:limit_length].itertuples()],
+                [questions[row.qid] for row in df.itertuples()],
                 max_length=max_length,
                 pad_to_max_length=True,
+                truncation=True,
             )
 
             features = []
-            for i in tqdm(range(limit_length)):
+            for i in tqdm(range(len(ys))):
                 inputs = {k: v[i] for k, v in batch_encoding.items()}
                 x = ((xs[i] - mean) / std).astype(float)
                 inputs['retention_features'] = x.tolist()
@@ -128,62 +127,54 @@ class RetentionDataset(torch.utils.data.Dataset):
             idx = idx.tolist()
         return self.features[idx]
 
+def retention_collate_batch(features: List[RetentionInputFeatures]) -> Dict[str, torch.Tensor]:
+    # In this method we'll make the assumption that all `features` in the batch
+    # have the same attributes.
+    # So we will look at the first element as a proxy for what attributes exist
+    # on the whole batch.
+    first = features[0]
 
-@dataclass
-class RetentionDataCollator(DataCollator):
-    """
-    Very simple data collator that:
-    - simply collates batches of dict-like objects
-    - Performs special handling for potential keys named:
-        - `label`: handles a single value (int or float) per object
-        - `label_ids`: handles a list of values per object
-    - does not do any additional preprocessing
-
-    i.e., Property names of the input object will be used as corresponding inputs to the model.
-    See glue and ner for example of how it's useful.
-    """
-
-    def collate_batch(self, features: List[RetentionInputFeatures]) -> Dict[str, torch.Tensor]:
-        # In this method we'll make the assumption that all `features` in the batch
-        # have the same attributes.
-        # So we will look at the first element as a proxy for what attributes exist
-        # on the whole batch.
-        first = features[0]
-
-        # Special handling for labels.
-        # Ensure that tensor is created with the correct type
-        # (it should be automatically the case, but let's make sure of it.)
-        if hasattr(first, "label") and first.label is not None:
-            if type(first.label) is int:
-                labels = torch.tensor([f.label for f in features], dtype=torch.long)
-            else:
-                labels = torch.tensor([f.label for f in features], dtype=torch.float)
-            batch = {"labels": labels}
-        elif hasattr(first, "label_ids") and first.label_ids is not None:
-            if type(first.label_ids[0]) is int:
-                labels = torch.tensor([f.label_ids for f in features], dtype=torch.long)
-            else:
-                labels = torch.tensor([f.label_ids for f in features], dtype=torch.float)
-            batch = {"labels": labels}
+    # Special handling for labels.
+    # Ensure that tensor is created with the correct type
+    # (it should be automatically the case, but let's make sure of it.)
+    if hasattr(first, "label") and first.label is not None:
+        if type(first.label) is int:
+            labels = torch.tensor([f.label for f in features], dtype=torch.long)
         else:
-            batch = {}
+            labels = torch.tensor([f.label for f in features], dtype=torch.float)
+        batch = {"labels": labels}
+    elif hasattr(first, "label_ids") and first.label_ids is not None:
+        if type(first.label_ids[0]) is int:
+            labels = torch.tensor([f.label_ids for f in features], dtype=torch.long)
+        else:
+            labels = torch.tensor([f.label_ids for f in features], dtype=torch.float)
+        batch = {"labels": labels}
+    else:
+        batch = {}
 
-        # Handling of all other possible attributes.
-        # Again, we will use the first element to figure out which key/values are not None for this model.
-        for k, v in vars(first).items():
-            if (
-                    k not in ('label', 'label_ids', 'retention_features')
-                    and v is not None
-                    and not isinstance(v, str)
-            ):
-                batch[k] = torch.tensor([getattr(f, k) for f in features], dtype=torch.long)
-            elif k == 'retention_features':
-                batch[k] = torch.tensor([getattr(f, k) for f in features], dtype=torch.float)
+    # Handling of all other possible attributes.
+    # Again, we will use the first element to figure out which key/values are not None for this model.
+    for k, v in vars(first).items():
+        if (
+                k not in ('label', 'label_ids', 'retention_features')
+                and v is not None
+                and not isinstance(v, str)
+        ):
+            batch[k] = torch.tensor([getattr(f, k) for f in features], dtype=torch.long)
+        elif k == 'retention_features':
+            batch[k] = torch.tensor([getattr(f, k) for f in features], dtype=torch.float)
 
-        return batch
+    return batch
 
 
 class RetentionBertConfig(BertConfig):
+
+    def __init__(self, retention_feature_size: int = 12, **kwargs):
+        super().__init__(**kwargs)
+        self.retention_feature_size = retention_feature_size
+
+
+class RetentionDistilBertConfig(DistilBertConfig):
 
     def __init__(self, retention_feature_size: int = 12, **kwargs):
         super().__init__(**kwargs)
@@ -199,6 +190,68 @@ class BertRetentionModel(BertPreTrainedModel):
 
         self.bert = BertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.linear1 = nn.Linear(config.hidden_size + retention_feature_size, config.hidden_size)
+        self.classifier = nn.Linear(config.hidden_size, config.num_labels)
+
+        self.init_weights()
+
+    @overrides
+    def forward(
+        self,
+        input_ids=None,
+        attention_mask=None,
+        token_type_ids=None,
+        position_ids=None,
+        head_mask=None,
+        inputs_embeds=None,
+        retention_features=None,
+        labels=None,
+    ):
+        outputs = self.bert(
+            input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            head_mask=head_mask,
+            inputs_embeds=inputs_embeds,
+        )
+
+        pooled_output = outputs[1]
+
+        pooled_output = self.dropout(pooled_output)
+        if retention_features is not None:
+            pooled_output = torch.cat((pooled_output, retention_features), axis=1)
+            pooled_output = self.dropout(
+                F.relu(
+                    self.linear1(pooled_output)
+                )
+            )
+        logits = self.classifier(pooled_output)
+
+        outputs = (logits,) + outputs[2:]  # add hidden states and attention if they are here
+
+        if labels is not None:
+            if self.num_labels == 1:
+                #  We are doing regression
+                loss_fct = nn.MSELoss()
+                loss = loss_fct(logits.view(-1), labels.view(-1))
+            else:
+                loss_fct = nn.CrossEntropyLoss()
+                loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
+            outputs = (loss,) + outputs
+
+        return outputs  # (loss), logits, (hidden_states), (attentions)
+
+
+class DistilBertRetentionModel(DistilBertPreTrainedModel):
+
+    def __init__(self, config, **kwargs):
+        super().__init__(config)
+        retention_feature_size = config.retention_feature_size
+        self.num_labels = config.num_labels
+
+        self.bert = DistilBertModel(config)
+        self.dropout = nn.Dropout(config.dropout)
         self.linear1 = nn.Linear(config.hidden_size + retention_feature_size, config.hidden_size)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 

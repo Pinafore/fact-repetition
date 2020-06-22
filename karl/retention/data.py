@@ -338,23 +338,23 @@ def get_split_dfs(data_dir=DATA_DIR):
     # train_df = df.loc[train_index]
     # test_df = df.loc[test_index]
 
-    # # split records by date
-    # df = df.sort_values('date')
-    # train_df = df.head(int(len(df) * 0.7))
-    # test_df = df.tail(int(len(df) * 0.3))
+    # split records by date
+    df = df.sort_values('date')
+    train_df = df.head(int(len(df) * 0.7))
+    test_df = df.tail(int(len(df) * 0.3))
 
-    # randomly split users
-    uids = list(set(df['uid']))
-    random.shuffle(uids)
-    df_by_uid = df.groupby('uid')
-    train_uids = uids[:int(len(uids) * 0.7)]
-    test_uids = uids[int(len(uids) * 0.7):]
-    train_index = list(itertools.chain(*[
-        df_by_uid.get_group(uid).index.tolist() for uid in train_uids]))
-    test_index = list(itertools.chain(*[
-        df_by_uid.get_group(uid).index.tolist() for uid in test_uids]))
-    train_df = df.loc[train_index]
-    test_df = df.loc[test_index]
+    # # randomly split users
+    # uids = list(set(df['uid']))
+    # random.shuffle(uids)
+    # df_by_uid = df.groupby('uid')
+    # train_uids = uids[:int(len(uids) * 0.7)]
+    # test_uids = uids[int(len(uids) * 0.7):]
+    # train_index = list(itertools.chain(*[
+    #     df_by_uid.get_group(uid).index.tolist() for uid in train_uids]))
+    # test_index = list(itertools.chain(*[
+    #     df_by_uid.get_group(uid).index.tolist() for uid in test_uids]))
+    # train_df = df.loc[train_index]
+    # test_df = df.loc[test_index]
 
     train_df.to_hdf(train_df_dir, 'data')
     test_df.to_hdf(test_df_dir, 'data')

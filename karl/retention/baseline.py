@@ -193,13 +193,14 @@ class RetentionModel:
             x = xs[i: i + batch_size]
             x = torch.from_numpy(x).to(self.device)
             logits = self.model.forward(x)
-            # return the probability of positive
+            # return the probability of positive (1)
             y = F.softmax(logits, dim=1).detach().cpu().numpy()[:, 1]
             ys.append(y)
         return np.concatenate(ys)
 
     def predict_one(self, user: User, fact: Fact) -> float:
-        return self.predict(user, [fact])[0]
+        '''recall probability of a single fact'''
+        return self.predict(user, [fact])[0]  # batch size is 1
 
 
 def test_wrapper():

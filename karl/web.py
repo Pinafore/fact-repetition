@@ -44,7 +44,6 @@ def update_fact_id_with_env(requests: List[ScheduleRequest]):
 @app.post('/api/karl/schedule')
 def schedule(requests: List[ScheduleRequest]):
     # NOTE assuming single user single date
-    logger.info('/karl/schedule with {} requests'.format(len(requests)))
     date = datetime.now()
     if len(requests) == 0:
         return {
@@ -52,6 +51,8 @@ def schedule(requests: List[ScheduleRequest]):
             'rationale': '<p>no fact received</p>',
             'facts_info': '',
         }
+
+    logger.info('/karl/schedule with {} requests in {}'.format(len(requests), requests[0].env))
     if requests[0].date is not None:
         date = parse_date(requests[0].date)
     requests = update_fact_id_with_env(requests)

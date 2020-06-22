@@ -32,16 +32,19 @@ from transformers import (
     TrainingArguments,
     set_seed,
     BertTokenizer,
+    DistilBertTokenizer,
     EvalPrediction,
 )
 
 from karl.retention_utils import (
     RetentionDataArguments,
     RetentionDataset,
-    RetentionDataCollator,
+    retention_collate_batch,
     RetentionBertConfig,
+    RetentionDistilBertConfig,
     RetentionInputFeatures,
     BertRetentionModel,
+    DistilBertRetentionModel,
 )
 
 from karl.util import User, Fact
@@ -72,7 +75,12 @@ class ModelArguments:
     )
 
 
-def main():
+def compute_metrics(p: EvalPrediction) -> Dict:
+    preds = np.argmax(p.predictions, axis=1)
+    return {"acc": simple_accuracy(preds, p.label_ids)}
+
+
+def train():
     # See all possible arguments in src/transformers/training_args.py
     # or by passing the --help flag to this script.
     # We now keep distinct sets of args, for a cleaner separation of concerns.
@@ -124,18 +132,18 @@ def main():
     # The .from_pretrained methods guarantee that only one local process can concurrently
     # download model & vocab.
 
-    config = RetentionBertConfig.from_pretrained(
+    config = RetentionDistilBertConfig.from_pretrained(
         model_args.model_name_or_path,
         num_labels=2,
         retention_feature_size=model_args.retention_feature_size,
         finetuning_task='retention',
         cache_dir=model_args.cache_dir,
     )
-    tokenizer = BertTokenizer.from_pretrained(
+    tokenizer = DistilBertTokenizer.from_pretrained(
         model_args.model_name_or_path,
         cache_dir=model_args.cache_dir,
     )
-    model = BertRetentionModel.from_pretrained(
+    model = DistilBertRetentionModel.from_pretrained(
         model_args.model_name_or_path,
         config=config,
         cache_dir=model_args.cache_dir,
@@ -149,30 +157,24 @@ def main():
     train_dataset = (
         RetentionDataset(data_args,
                          fold='train',
-                         tokenizer=tokenizer,
-                         limit_length=None)
+                         tokenizer=tokenizer)
         if training_args.do_train
         else None
     )
     eval_dataset = (
         RetentionDataset(data_args,
                          fold='test',
-                         tokenizer=tokenizer,
-                         limit_length=None)
+                         tokenizer=tokenizer)
         if training_args.do_eval
         else None
     )
-
-    def compute_metrics(p: EvalPrediction) -> Dict:
-        preds = np.argmax(p.predictions, axis=1)
-        return {"acc": simple_accuracy(preds, p.label_ids)}
 
     # Initialize our Trainer
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
-        data_collator=RetentionDataCollator(),
+        data_collator=retention_collate_batch,
         eval_dataset=eval_dataset,
         compute_metrics=compute_metrics,
     )
@@ -215,10 +217,13 @@ class HFRetentionModel:
         model_args, training_args, data_args = parser.parse_json_file(
             json_file='configs/hf_config.json')
 
-        self.tokenizer = BertTokenizer.from_pretrained(training_args.output_dir)
-        self.model = BertRetentionModel.from_pretrained(training_args.output_dir)
+        self.tokenizer = DistilBertTokenizer.from_pretrained(training_args.output_dir)
+        self.model = DistilBertRetentionModel.from_pretrained(training_args.output_dir)
         self.model = self.model.to(training_args.device)
         self.model.eval()
+
+        self.data_args = data_args
+        self.collate_fn = retention_collate_batch
 
     def predict(self, user: User, facts: List[Fact], date=None) -> np.ndarray:
         if date is None:
@@ -261,11 +266,17 @@ class HFRetentionModel:
             ])
             question_text_list.append(fact.text)
 
+        if self.data_args.max_seq_length is None:
+            max_length = self.tokenizer.max_len
+        else:
+            max_length = self.data_args.max_seq_length
+
         batch_size = len(question_text_list)
         batch_encoding = self.tokenizer.batch_encode_plus(
             question_text_list,
-            # TODO max_length=max_length,
-            # TODO pad_to_max_length=True,
+            max_length=max_length,
+            pad_to_max_length=True,
+            truncation=True,
         )
 
         features = []
@@ -276,19 +287,22 @@ class HFRetentionModel:
             inputs['retention_features'] = retention_features_list[i]
             features.append(RetentionInputFeatures(**inputs))
 
-        inputs = RetentionDataCollator().collate_batch(features)
+        inputs = self.collate_fn(features)
         inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
         with torch.no_grad():
             predictions = self.model(**inputs)
-        return F.softmax(predictions[0], dim=-1).detach().cpu().numpy()
+        scores = F.softmax(predictions[0], dim=-1).detach().cpu().numpy()
+        scores = scores[:, 1]  # take the probability of recall
+        return scores
 
     def predict_one(self, user: User, fact: Fact) -> float:
-        return self.predict(user, [fact])[0]
+        '''recall probability'''
+        return self.predict(user, [fact])[0]  # batch size is 1
 
 
 def test_wrapper():
     model = HFRetentionModel('configs/hf_configs.json')
-    
+
     user = User(
         user_id='user 1',
         previous_study={'fact 1': (datetime.now(), True)},
@@ -318,4 +332,4 @@ def test_wrapper():
 
 
 if __name__ == "__main__":
-    test_wrapper()
+    train()

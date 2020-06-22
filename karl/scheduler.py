@@ -26,7 +26,8 @@ from karl.db import SchedulerDB
 from karl.lda import process_question
 from karl.util import ScheduleRequest, Params, Fact, User, History
 from karl.util import parse_date, theme_fs
-from karl.retention.baseline import RetentionModel
+# from karl.retention.baseline import RetentionModel
+from karl.new_retention import HFRetentionModel as RetentionModel
 
 
 CORRECT = True
@@ -71,7 +72,7 @@ class MovingAvgScheduler:
 
     def __init__(
             self,
-            db_filename='db.sqlite',
+            db_filename='db.sqlite.prod',
             preemptive=True,
             lda_dir='checkpoints/gensim_quizbowl_10_1585102364.5221019',
             whoosh_index='whoosh_index',
