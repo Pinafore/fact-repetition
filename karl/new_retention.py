@@ -39,12 +39,12 @@ from transformers import (
 from karl.retention_utils import (
     RetentionDataArguments,
     RetentionDataset,
-    retention_collate_batch,
     RetentionBertConfig,
     RetentionDistilBertConfig,
     RetentionInputFeatures,
     BertRetentionModel,
     DistilBertRetentionModel,
+    retention_data_collator,
 )
 
 from karl.util import User, Fact
@@ -174,7 +174,7 @@ def train():
         model=model,
         args=training_args,
         train_dataset=train_dataset,
-        data_collator=retention_collate_batch,
+        data_collator=retention_data_collator,
         eval_dataset=eval_dataset,
         compute_metrics=compute_metrics,
     )
@@ -223,7 +223,6 @@ class HFRetentionModel:
         self.model.eval()
 
         self.data_args = data_args
-        self.collate_fn = retention_collate_batch
 
     def predict(self, user: User, facts: List[Fact], date=None) -> np.ndarray:
         if date is None:
@@ -287,7 +286,7 @@ class HFRetentionModel:
             inputs['retention_features'] = retention_features_list[i]
             features.append(RetentionInputFeatures(**inputs))
 
-        inputs = self.collate_fn(features)
+        inputs = retention_data_collator(features)
         inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
         with torch.no_grad():
             predictions = self.model(**inputs)

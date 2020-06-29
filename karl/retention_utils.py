@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 class RetentionInputFeatures:
     input_ids: List[int]
     attention_mask: Optional[List[int]] = None
-    token_type_ids: Optional[List[int]] = None
+    # token_type_ids: Optional[List[int]] = None
     retention_features: Optional[List[float]] = None
     label: Optional[Union[int, float]] = None
 
@@ -127,7 +127,7 @@ class RetentionDataset(torch.utils.data.Dataset):
             idx = idx.tolist()
         return self.features[idx]
 
-def retention_collate_batch(features: List[RetentionInputFeatures]) -> Dict[str, torch.Tensor]:
+def retention_data_collator(features: List[RetentionInputFeatures]) -> Dict[str, torch.Tensor]:
     # In this method we'll make the assumption that all `features` in the batch
     # have the same attributes.
     # So we will look at the first element as a proxy for what attributes exist
@@ -250,10 +250,10 @@ class DistilBertRetentionModel(DistilBertPreTrainedModel):
         retention_feature_size = config.retention_feature_size
         self.num_labels = config.num_labels
 
-        self.bert = DistilBertModel(config)
-        self.dropout = nn.Dropout(config.dropout)
-        self.linear1 = nn.Linear(config.hidden_size + retention_feature_size, config.hidden_size)
-        self.classifier = nn.Linear(config.hidden_size, config.num_labels)
+        self.distilbert = DistilBertModel(config)
+        self.dropout = nn.Dropout(config.seq_classif_dropout)
+        self.pre_classifier = nn.Linear(config.dim + retention_feature_size, config.dim)
+        self.classifier = nn.Linear(config.dim, config.num_labels)
 
         self.init_weights()
 
@@ -262,39 +262,31 @@ class DistilBertRetentionModel(DistilBertPreTrainedModel):
         self,
         input_ids=None,
         attention_mask=None,
-        token_type_ids=None,
-        position_ids=None,
         head_mask=None,
         inputs_embeds=None,
         retention_features=None,
+        output_attentions=None,
         labels=None,
     ):
-        outputs = self.bert(
-            input_ids,
+        distilbert_output = self.distilbert(
+            input_ids=input_ids,
             attention_mask=attention_mask,
-            token_type_ids=token_type_ids,
-            position_ids=position_ids,
             head_mask=head_mask,
             inputs_embeds=inputs_embeds,
+            output_attentions=output_attentions,
         )
-
-        pooled_output = outputs[1]
-
-        pooled_output = self.dropout(pooled_output)
+        hidden_state = distilbert_output[0]  # (bs, seq_len, dim)
+        pooled_output = hidden_state[:, 0]  # (bs, dim)
         if retention_features is not None:
             pooled_output = torch.cat((pooled_output, retention_features), axis=1)
-            pooled_output = self.dropout(
-                F.relu(
-                    self.linear1(pooled_output)
-                )
-            )
-        logits = self.classifier(pooled_output)
+            pooled_output = self.pre_classifier(pooled_output)  # (bs, dim)
+        pooled_output = nn.ReLU()(pooled_output)  # (bs, dim)
+        pooled_output = self.dropout(pooled_output)  # (bs, dim)
+        logits = self.classifier(pooled_output)  # (bs, dim)
 
-        outputs = (logits,) + outputs[2:]  # add hidden states and attention if they are here
-
+        outputs = (logits,) + distilbert_output[1:]
         if labels is not None:
             if self.num_labels == 1:
-                #  We are doing regression
                 loss_fct = nn.MSELoss()
                 loss = loss_fct(logits.view(-1), labels.view(-1))
             else:

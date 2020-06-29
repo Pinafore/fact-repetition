@@ -1,19 +1,19 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-import json
 import atexit
 import logging
+import numpy as np
 from fastapi import FastAPI
 from typing import List
 from datetime import datetime
 
-from karl.util import ScheduleRequest, Params, parse_date
+from karl.util import ScheduleRequest, Params, User, parse_date
 from karl.scheduler import MovingAvgScheduler
 
 
 app = FastAPI()
-scheduler = MovingAvgScheduler()
+scheduler = MovingAvgScheduler(db_filename='db.sqlite.dev')
 
 
 # create logger with 'scheduler'
@@ -37,7 +37,10 @@ logger.addHandler(ch)
 def update_fact_id_with_env(requests: List[ScheduleRequest]):
     for request in requests:
         if request.env is not None:
-            request.fact_id = '{}_{}'.format(request.env, request.fact_id)
+            if request.env == 'dev':
+                request.fact_id = f'dev_{request.fact_id}'
+            else:
+                request.fact_id = f'prod_{request.fact_id}'
     return requests
 
 
@@ -114,20 +117,48 @@ def get_all_users():
     return [user.pack() for user in users]
 
 
-@app.get('/api/karl/get_user_stats/{user_id}')
-def get_user_stats(user_id: str):
-    user = scheduler.get_user(user_id)
-    stats = user.user_stats.__dict__
-    return json.dumps({
-        'new_facts': stats['new_facts'],
-        'reviewed_facts': stats['reviewed_facts'],
-        'total_seen': stats['total_seen'],
-        'total_seconds': stats['total_seconds'],
-        'last_week_seen': stats['last_week_seen'],
-        'last_week_new_facts': stats['last_week_new_facts'],
-        'new_known_rate': stats['new_known_rate'],
-        'review_known_rate': stats['review_known_rate'],
-    })
+@app.get('/api/karl/get_user_stats/')
+def get_user_stats(user_id: str, date_start: str = None, date_end: str = None):
+    '''
+    Retrieve user stats within given date span.
+    new_facts: int
+    reviewed_facts: int
+    total_seen: int
+    total_seconds: int
+    new_known_rate: float
+    review_known_rate: float
+    '''
+    history_records = scheduler.db.get_user_history(user_id, date_start, date_end)
+
+    new_facts = 0
+    reviewed_facts = 0
+    total_seen = 0
+    total_seconds = 0
+    new_known_rate = 0
+    review_known_rate = 0
+    new_known, review_known = [], []
+    for h in history_records:
+        user_snapshot = User.unpack(h.user_snapshot)
+        if h.fact_id not in user_snapshot.previous_study:
+            new_facts += 1
+            new_known.append(int(h.response))
+        else:
+            reviewed_facts += 1
+            review_known.append(int(h.response))
+        total_seen = len(user_snapshot.previous_study)
+        total_seconds += h.elapsed_seconds_text
+
+    new_known_rate = 0 if len(new_known) == 0 else np.mean(new_known)
+    review_known_rate = 0 if len(review_known) == 0 else np.mean(review_known)
+
+    return {
+        'new_facts': new_facts,
+        'reviewed_facts': reviewed_facts,
+        'total_seen': total_seen,
+        'total_seconds': total_seconds,
+        'new_known_rate': new_known_rate,
+        'review_known_rate': review_known_rate,
+    }
 
 
 @atexit.register

@@ -208,6 +208,8 @@ class ScheduleRequest(BaseModel):
     repetition_model: Optional[str]
     deck_name: Optional[str]
     env: Optional[str]
+    elapsed_seconds_text: Optional[int]
+    elapsed_seconds_answer: Optional[int]
 
 
 @dataclass
@@ -223,6 +225,8 @@ class History:
     fact_ids: List[str]
     scheduler_output: str
     date: datetime
+    elapsed_seconds_text: int = 0
+    elapsed_seconds_answer: int = 0
 
 
 class theme_fs(theme_light):

@@ -70,6 +70,8 @@ class SchedulerDB:
                      scheduler_snapshot TEXT, \
                      fact_ids TEXT, \
                      scheduler_output TEXT, \
+                     elapsed_seconds_text INT, \
+                     elapsed_seconds_answer INT, \
                      date timestamp)'
                     )
 
@@ -86,17 +88,14 @@ class SchedulerDB:
         # self.conn.commit()
 
     def get_user(self, user_id=None):
-        def row_to_dict(r):
-            return User.unpack(r)
-
         cur = self.conn.cursor()
         if user_id is None:
             cur.execute("SELECT * FROM users")
-            return [row_to_dict(r) for r in cur.fetchall()]
+            return [User.unpack(r) for r in cur.fetchall()]
         else:
             cur.execute("SELECT * FROM users WHERE user_id=?", (user_id,))
             r = cur.fetchone()
-            return row_to_dict(r) if r else None
+            return User.unpack(r) if r else None
 
     def check_user(self, user_id: str) -> bool:
         cur = self.conn.cursor()
@@ -162,17 +161,14 @@ class SchedulerDB:
         # self.conn.commit()
 
     def get_fact(self, fact_id=None):
-        def row_to_dict(r):
-            return Fact.unpack(r)
-
         cur = self.conn.cursor()
         if fact_id is None:
             cur.execute("SELECT * FROM facts")
-            return [row_to_dict(r) for r in cur.fetchall()]
+            return [Fact.unpack(r) for r in cur.fetchall()]
         else:
             cur.execute("SELECT * FROM facts WHERE fact_id=?", (fact_id,))
             r = cur.fetchone()
-            return row_to_dict(r) if r else None
+            return Fact.unpack(r) if r else None
 
     def update_fact(self, c: Fact):
         cur = self.conn.cursor()
@@ -204,7 +200,7 @@ class SchedulerDB:
     def add_history(self, h: History):
         cur = self.conn.cursor()
         try:
-            cur.execute('INSERT INTO history VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+            cur.execute('INSERT INTO history VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
                         (
                             h.history_id,
                             h.debug_id,
@@ -216,6 +212,8 @@ class SchedulerDB:
                             h.scheduler_snapshot,
                             json.dumps(h.fact_ids),
                             h.scheduler_output,
+                            h.elapsed_seconds_text,
+                            h.elapsed_seconds_answer,
                             h.date
                         ))
         except sqlite3.IntegrityError:
@@ -228,16 +226,24 @@ class SchedulerDB:
         # self.conn.commit()
 
     def get_history(self, history_id=None):
-        def row_to_dict(r):
-            return History(*r)
         cur = self.conn.cursor()
         if history_id is None:
             cur.execute("SELECT * FROM history")
-            return [row_to_dict(r) for r in cur.fetchall()]
+            return [History(*r) for r in cur.fetchall()]
         else:
             cur.execute("SELECT * FROM history WHERE history_id=?", (history_id,))
             r = cur.fetchone()
-            return row_to_dict(r) if r else None
+            return History(*r) if r else None
+
+    def get_user_history(self, user_id: str, date_start: str = None, date_end: str = None):
+        cur = self.conn.cursor()
+        if date_start is None:
+            date_start = '2008-06-11 08:00:00'
+        if date_end is None:
+            date_end = '2028-06-11 08:00:00'
+        cur.execute("SELECT * FROM history WHERE user_id=? AND date BETWEEN ? AND ?",
+                    (user_id, date_start, date_end,))
+        return [History(*r) for r in cur.fetchall()]
 
     def check_history(self, history_id: str) -> bool:
         cur = self.conn.cursor()
@@ -259,6 +265,8 @@ class SchedulerDB:
                          scheduler_snapshot=?, \
                          fact_ids=?, \
                          scheduler_output=?, \
+                         elapsed_seconds_text=?, \
+                         elapsed_seconds_answer=?, \
                          date=? \
                          WHERE history_id=?", (
                 h.debug_id,
@@ -271,6 +279,8 @@ class SchedulerDB:
                 json.dumps(h.fact_ids),
                 h.scheduler_output,
                 h.date,
+                h.elapsed_seconds_text,
+                h.elapsed_seconds_answer,
                 h.history_id))
         else:
             # replace update with new id
@@ -285,6 +295,8 @@ class SchedulerDB:
                          scheduler_snapshot=?, \
                          fact_ids=?, \
                          scheduler_output=?, \
+                         elapsed_seconds_text=?, \
+                         elapsed_seconds_answer=?, \
                          date=? \
                          WHERE history_id=?", (
                 h.debug_id,
@@ -297,6 +309,8 @@ class SchedulerDB:
                 h.scheduler_snapshot,
                 json.dumps(h.fact_ids),
                 h.scheduler_output,
+                h.elapsed_seconds_text,
+                h.elapsed_seconds_answer,
                 h.date,
                 old_history_id))
         # NOTE web.py will commit at exit

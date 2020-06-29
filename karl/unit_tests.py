@@ -6,7 +6,9 @@ import json
 import copy
 import pickle
 import unittest
+import requests
 import numpy as np
+from pprint import pprint
 from datetime import datetime, timedelta
 
 from karl.db import SchedulerDB
@@ -294,6 +296,17 @@ class TestScheduler(unittest.TestCase):
             user_wo = self.scheduler_wo.get_user(user_id)
             print('users_wo', user_wo.results)
             print()
+
+
+class TestWeb(unittest.TestCase):
+
+    def test_user_stats(self):
+        user_id = 'test_web_dummy'
+        date_start = '2028-06-01'
+        date_end = '2028-06-04'
+        r = requests.get(f'http://127.0.0.1:8000/api/karl/get_user_stats?user_id={user_id}&date_start={date_start}&date_end={date_end}')
+        stats = json.loads(r.text)
+        pprint(stats)
 
 
 if __name__ == '__main__':

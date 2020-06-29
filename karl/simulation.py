@@ -8,13 +8,12 @@ import requests
 import numpy as np
 from tqdm import tqdm
 from typing import List, Tuple
-from pprint import pprint
 from collections import defaultdict
 from datetime import datetime, timedelta
 
 from karl.util import parse_date, ScheduleRequest, Fact, User, Params
-# from karl.retention.baseline import RetentionModel
-from karl.new_retention import HFRetentionModel as RetentionModel
+from karl.retention.baseline import RetentionModel
+# from karl.new_retention import HFRetentionModel as RetentionModel
 
 model = RetentionModel()
 
@@ -60,10 +59,10 @@ def get_result(fact: dict, date: datetime) -> bool:
     fact = Fact.unpack(json.loads(r.text))
 
     # retrieve user
-    r = requests.get('http://127.0.0.1:8000/api/karl/get_user/{}'.format(USER_ID))
+    r = requests.get(f'http://127.0.0.1:8000/api/karl/get_user/{USER_ID}')
     user = User.unpack(json.loads(r.text))
 
-    if True:
+    if False:
         # use retention model to predict a binary outcome
         result = model.predict_one(user, fact)
         return CORRECT if result > 0.5 else WRONG
@@ -108,7 +107,9 @@ def schedule_and_update(facts: List[dict], date: datetime) -> Tuple[dict, dict]:
     fact['label'] = get_result(fact, date)
 
     # update scheduler with binary outcome
-    fact['history_id'] = 'dummy_{}_{}'.format(fact['fact_id'], str(date))
+    fact['history_id'] = f'dummy_{fact["fact_id"]}_{str(date)}'
+    fact['elapsed_seconds_text'] = 2
+    fact['elapsed_seconds_answer'] = 2
     r = requests.post('http://127.0.0.1:8000/api/karl/update', data=json.dumps([fact]))
     update_outputs = json.loads(r.text)
 
@@ -152,7 +153,7 @@ def test_scheduling():
     N_TOTAL_FACTS = 100
     MAX_FACTS_PER_DAY = 100
     TURN_AROUND = 0.5 * 60  # how long it takes to study a fact, in seconds
-    MAX_REVIEW_WINDOW = 2 * 60 * 60  # seconds
+    # MAX_REVIEW_WINDOW = 2 * 60 * 60  # seconds
 
     with open('data/diagnostic_questions.pkl', 'rb') as f:
         diagnostic_facts = pickle.load(f)
@@ -163,15 +164,15 @@ def test_scheduling():
 
     # prepare scheduler
     requests.post('http://127.0.0.1:8000/api/karl/set_params', data=json.dumps(params.__dict__))
-    requests.get('http://127.0.0.1:8000/api/karl/reset_user/{}'.format(USER_ID))
+    requests.get(f'http://127.0.0.1:8000/api/karl/reset_user/{USER_ID}')
 
     fact_to_column = dict()  # fact -> ith column in the fret plot
-    start_date = parse_date('2028-06-1 08:00:00.000001')
+    start_date = parse_date('2028-06-01 08:00:00.000001')
     profile = defaultdict(list)  # performance profiling
 
     for days in range(N_DAYS):
-        print('day {}'.format(days), file=fret_file)
-        print('day {}'.format(days))
+        print(f'day {days}', file=fret_file)
+        print(f'day {days}')
         time_offset = 0  # offset from the the first fact of today, in seconds
         for ith_fact in tqdm(range(MAX_FACTS_PER_DAY)):
             current_date = start_date + timedelta(days=days) + timedelta(seconds=time_offset)
@@ -180,7 +181,7 @@ def test_scheduling():
             # # stop if both True
             # #   1) no reivew scheduled within MAX_REVIEW_WINDOW by Leitner
             # #   2) already studied 10 new facts
-            # r = requests.get('http://127.0.0.1:8000/api/karl/get_user/{}'.format(USER_ID))
+            # r = requests.get(f'http://127.0.0.1:8000/api/karl/get_user/{USDR_ID}')
             # user = User.unpack(json.loads(r.text))
             # leitner_scheduled_dates = list(user.leitner_scheduled_date.values())
             # if len(leitner_scheduled_dates) == 0:
@@ -222,30 +223,6 @@ def test_scheduling():
     for key, value in profile.items():
         count, time = list(zip(*value))
         print(key, np.mean(count), np.mean(time))
-
-
-def test_for_leaderboard():
-    # TODO this should go to unit tests
-    # r = requests.get('http://127.0.0.1:8000/api/karl/get_user_stats/{}'.format(USER_ID))
-    # print(json.loads(r.text))
-    # print()
-
-    r = requests.get('http://127.0.0.1:8000/api/karl/get_all_users')
-    users = [User.unpack(s) for s in json.loads(r.text)]
-    if len(users) == 0:
-        return
-
-    stats = users[0].user_stats.__dict__
-    pprint({
-        'new_facts': stats['new_facts'],
-        'reviewed_facts': stats['reviewed_facts'],
-        'total_seen': stats['total_seen'],
-        'total_seconds': stats['total_seconds'],
-        'last_week_seen': stats['last_week_seen'],
-        'last_week_new_facts': stats['last_week_new_facts'],
-        'new_known_rate': stats['new_known_rate'],
-        'review_known_rate': stats['review_known_rate'],
-    })
 
 
 if __name__ == '__main__':

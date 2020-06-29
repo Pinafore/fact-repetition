@@ -72,7 +72,7 @@ class MovingAvgScheduler:
 
     def __init__(
             self,
-            db_filename='db.sqlite.prod',
+            db_filename='db.sqlite.dev',
             preemptive=True,
             lda_dir='checkpoints/gensim_quizbowl_10_1585102364.5221019',
             whoosh_index='whoosh_index',
@@ -89,7 +89,7 @@ class MovingAvgScheduler:
         self.whoosh_index = whoosh_index
 
         self.db = SchedulerDB(db_filename)
-        self.retention_model = RetentionModel()
+        # self.retention_model = RetentionModel()
 
         # logger.info('loading question and records...')
         # with open('data/jeopardy_310326_question_player_pairs_20190612.pkl', 'rb') as f:
@@ -564,11 +564,11 @@ class MovingAvgScheduler:
         :param fact:
         :return: distance in number of hours.
         """
-        recall_scores = self.dist_recall_batch(user, facts)
+        # recall_scores = self.dist_recall_batch(user, facts)
         scores = [{
             'qrep': self.dist_qrep(user, fact),
             'skill': self.dist_skill(user, fact),
-            'recall': recall_scores[i],
+            # 'recall': recall_scores[i],
             'category': self.dist_category(user, fact),
             'cool_down': self.dist_cool_down(user, fact, date),
             'leitner': self.dist_leitner(user, fact, date),
@@ -1085,7 +1085,10 @@ class MovingAvgScheduler:
                 scheduler_snapshot=json.dumps(user.params.__dict__),
                 fact_ids=[x.fact_id for x in facts],
                 scheduler_output='',
-                date=date)
+                elapsed_seconds_text=request.elapsed_seconds_text,
+                elapsed_seconds_answer=request.elapsed_seconds_answer,
+                date=date
+            )
             self.db.add_history(history)
 
         # for detail display, this need to happen before the `update_user_fact` below
