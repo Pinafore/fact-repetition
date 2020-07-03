@@ -55,7 +55,7 @@ def schedule(requests: List[ScheduleRequest]):
             'facts_info': '',
         }
 
-    logger.info('/karl/schedule with {} requests in {}'.format(len(requests), requests[0].env))
+    logger.info(f'/karl/schedule with {len(requests)} facts and env={requests[0].env}')
     if requests[0].date is not None:
         date = parse_date(requests[0].date)
     requests = update_fact_id_with_env(requests)
@@ -71,7 +71,7 @@ def schedule(requests: List[ScheduleRequest]):
 @app.post('/api/karl/update')
 def update(requests: List[ScheduleRequest]):
     # NOTE assuming single user single date
-    logger.info('/karl/update with {} requests'.format(len(requests)))
+    logger.info(f'/karl/update with {len(requests)} facts and env={requests[0].env}')
     date = datetime.now()
     if requests[0].date is not None:
         date = parse_date(requests[0].date)
@@ -118,9 +118,11 @@ def get_all_users():
 
 
 @app.get('/api/karl/get_user_stats/')
-def get_user_stats(user_id: str, date_start: str = None, date_end: str = None):
+def get_user_stats(user_id: str, deck_id: str = None,
+                   date_start: str = None, date_end: str = None):
     '''
-    Retrieve user stats within given date span.
+    Return in a dictionary the following user stats within given date range.
+
     new_facts: int
     reviewed_facts: int
     total_seen: int
@@ -128,7 +130,7 @@ def get_user_stats(user_id: str, date_start: str = None, date_end: str = None):
     new_known_rate: float
     review_known_rate: float
     '''
-    history_records = scheduler.db.get_user_history(user_id, date_start, date_end)
+    history_records = scheduler.db.get_user_history(user_id, deck_id, date_start, date_end)
 
     new_facts = 0
     reviewed_facts = 0
@@ -159,6 +161,33 @@ def get_user_stats(user_id: str, date_start: str = None, date_end: str = None):
         'new_known_rate': new_known_rate,
         'review_known_rate': review_known_rate,
     }
+
+@app.get('/api/karl/leaderboard/')
+def leaderboard(
+        skip: int = 0,
+        limit: int = 10,
+        rank_type: str = 'total_seen',
+        min_studied: int = 50,
+        deck_id: str = None,
+        date_start: str = None,
+        date_end: str = None,
+):
+    '''
+    return [(user_id: str, rank_type: 'total_seen', value: 'value')]
+    that ranks [skip + 1: skip + 1 + limit)
+    '''
+    users = scheduler.db.get_user()
+    stats = {}
+    for user in users:
+        stats[user.user_id] = get_user_stats(user.user_id, deck_id, date_start, date_end)
+    stats = sorted(stats.items(), key=lambda x: x[1][rank_type])[::-1]  # from high value to low
+    return [
+        {
+            'user_id': user.user_id,
+            'rank_type': rank_type,
+            'value': v[rank_type],
+        } for k, v in stats[skip: skip + limit + 1]
+    ]
 
 
 @atexit.register

@@ -38,6 +38,8 @@ class TestDB(unittest.TestCase):
             text='This is the question text',
             answer='Answer Text III',
             category='WORLD',
+            deck_name='deck_name_test',
+            deck_id='deck_id_test',
             qrep=np.array([1, 2, 3, 4]),
             skill=np.array([0.1, 0.2, 0.3, 0.4]),
             results=[True, False, True, True]
@@ -91,6 +93,8 @@ class TestDB(unittest.TestCase):
         self.assertEqual(c1.text, c2.text)
         self.assertEqual(c1.answer, c2.answer)
         self.assertEqual(c1.category, c2.category)
+        self.assertEqual(c1.deck_name, c2.deck_name)
+        self.assertEqual(c1.deck_id, c2.deck_id)
         np.testing.assert_array_equal(c1.qrep, c2.qrep)
         np.testing.assert_array_equal(c1.skill, c2.skill)
         self.assertEqual(c1.results, c2.results)
@@ -101,6 +105,8 @@ class TestDB(unittest.TestCase):
             text='This is the question text',
             answer='Answer Text III',
             category='WORLD',
+            deck_name='deck_name_test',
+            deck_id='deck_id_test',
             qrep=np.array([1, 2, 3, 4]),
             skill=np.array([0.1, 0.2, 0.3, 0.4]),
             results=[True, False, True, True]
@@ -130,6 +136,8 @@ class TestDB(unittest.TestCase):
             text='This is the question text',
             answer='Answer Text III',
             category='WORLD',
+            deck_name='deck_name_test',
+            deck_id='deck_id_test',
             qrep=np.array([1, 2, 3, 4]),
             skill=np.array([0.1, 0.2, 0.3, 0.4]),
             results=[True, False, True, True]
@@ -155,6 +163,7 @@ class TestDB(unittest.TestCase):
             debug_id='random_debug_id',
             user_id=user.user_id,
             fact_id=fact.fact_id,
+            deck_id=fact.deck_id,
             response='User Guess',
             judgement=WRONG,
             user_snapshot=json.dumps(user.pack()),
@@ -249,6 +258,8 @@ class TestScheduler(unittest.TestCase):
                     text=c['text'],
                     answer=c['answer'],
                     category=c['category'],
+                    deck_name='deck_name_test',
+                    deck_id='deck_id_test',
                 )
             )
 
@@ -307,6 +318,15 @@ class TestWeb(unittest.TestCase):
         r = requests.get(f'http://127.0.0.1:8000/api/karl/get_user_stats?user_id={user_id}&date_start={date_start}&date_end={date_end}')
         stats = json.loads(r.text)
         pprint(stats)
+        print()
+        print()
+
+        t0 = datetime.now()
+        r = requests.get(f'http://127.0.0.1:8000/api/karl/leaderboard?date_start={date_start}&date_end={date_end}')
+        leaderboard = json.loads(r.text)
+        t1 = datetime.now()
+        pprint(leaderboard)
+        print(t1 - t0)
 
 
 if __name__ == '__main__':

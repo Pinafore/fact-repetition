@@ -50,6 +50,8 @@ class SchedulerDB:
                      text TEXT, \
                      answer TEXT, \
                      category TEXT, \
+                     deck_name TEXT, \
+                     deck_id TEXT, \
                      qrep TEXT, \
                      skill TEXT, \
                      results TEXT)'
@@ -64,6 +66,7 @@ class SchedulerDB:
                      debug_id TEXT, \
                      user_id TEXT, \
                      fact_id TEXT, \
+                     deck_id TEXT, \
                      response TEXT, \
                      judgement TEXT, \
                      user_snapshot TEXT, \
@@ -144,7 +147,7 @@ class SchedulerDB:
     def add_fact(self, c: Fact):
         cur = self.conn.cursor()
         try:
-            cur.execute('INSERT INTO facts VALUES (?,?,?,?,?,?,?)', c.pack())
+            cur.execute('INSERT INTO facts VALUES (?,?,?,?,?,?,?,?,?)', c.pack())
         except sqlite3.IntegrityError:
             logger.info("fact {} exists".format(c.fact_id))
         # NOTE web.py will commit at exit
@@ -154,7 +157,7 @@ class SchedulerDB:
         cur = self.conn.cursor()
         for c in facts:
             try:
-                cur.execute('INSERT INTO facts VALUES (?,?,?,?,?,?,?)', c.pack())
+                cur.execute('INSERT INTO facts VALUES (?,?,?,?,?,?,?,?,?)', c.pack())
             except sqlite3.IntegrityError:
                 logger.info("fact {} exists".format(c.fact_id))
         # NOTE web.py will commit at exit
@@ -178,6 +181,8 @@ class SchedulerDB:
                      text=?, \
                      answer=?, \
                      category=?, \
+                     deck_name=?, \
+                     deck_id=?, \
                      qrep=?, \
                      skill=?, \
                      results=? \
@@ -200,12 +205,13 @@ class SchedulerDB:
     def add_history(self, h: History):
         cur = self.conn.cursor()
         try:
-            cur.execute('INSERT INTO history VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            cur.execute('INSERT INTO history VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                         (
                             h.history_id,
                             h.debug_id,
                             h.user_id,
                             h.fact_id,
+                            h.deck_id,
                             h.response,
                             h.judgement,
                             h.user_snapshot,
@@ -235,14 +241,19 @@ class SchedulerDB:
             r = cur.fetchone()
             return History(*r) if r else None
 
-    def get_user_history(self, user_id: str, date_start: str = None, date_end: str = None):
+    def get_user_history(self, user_id: str, deck_id: str = None,
+                         date_start: str = None, date_end: str = None):
         cur = self.conn.cursor()
         if date_start is None:
             date_start = '2008-06-11 08:00:00'
         if date_end is None:
             date_end = '2028-06-11 08:00:00'
-        cur.execute("SELECT * FROM history WHERE user_id=? AND date BETWEEN ? AND ?",
-                    (user_id, date_start, date_end,))
+        if deck_id is not None:
+            cur.execute("SELECT * FROM history WHERE user_id=? AND deck_id=? AND date BETWEEN ? AND ?",
+                        (user_id, deck_id, date_start, date_end,))
+        else:
+            cur.execute("SELECT * FROM history WHERE user_id=? AND date BETWEEN ? AND ?",
+                        (user_id, date_start, date_end,))
         return [History(*r) for r in cur.fetchall()]
 
     def check_history(self, history_id: str) -> bool:
@@ -259,6 +270,7 @@ class SchedulerDB:
                          debug_id=?, \
                          user_id=?, \
                          fact_id=?, \
+                         deck_id=?, \
                          response=?, \
                          judgement=?, \
                          user_snapshot=?, \
@@ -272,6 +284,7 @@ class SchedulerDB:
                 h.debug_id,
                 h.user_id,
                 h.fact_id,
+                h.deck_id,
                 h.response,
                 h.judgement,
                 h.user_snapshot,
@@ -289,6 +302,7 @@ class SchedulerDB:
                          history_id=?, \
                          user_id=?, \
                          fact_id=?, \
+                         deck_id=?, \
                          response=?, \
                          judgement=?, \
                          user_snapshot=?, \
@@ -303,6 +317,7 @@ class SchedulerDB:
                 h.history_id,
                 h.user_id,
                 h.fact_id,
+                h.deck_id,
                 h.response,
                 h.judgement,
                 h.user_snapshot,

@@ -27,6 +27,7 @@ class Params(BaseModel):
     skill: float = 0                    # fact difficulty vs user skill level
     recall: float = 1                   # recall probability
     category: float = 1                 # change in category from prev
+    answer: float = 1                   # reptition of the same category
     leitner: float = 0                  # hours till leitner scheduled date
     sm2: float = 1                      # hours till sm2 scheduled date
     decay_qrep: float = 0.9             # discount factor
@@ -43,6 +44,8 @@ class Fact:
     text: str
     answer: str
     category: str
+    deck_name: Optional[str]
+    deck_id: Optional[str]
     qrep: Optional[np.ndarray]
     # skill estimate for each topic
     skill: Optional[np.ndarray]
@@ -58,6 +61,8 @@ class Fact:
             'text',
             'answer',
             'category',
+            'deck_name',
+            'deck_id',
             'qrep',
             'skill',
             'results'
@@ -74,9 +79,11 @@ class Fact:
             text=r[1],
             answer=r[2],
             category=r[3],
-            qrep=np.array(json.loads(r[4])),
-            skill=np.array(json.loads(r[5])),
-            results=json.loads(r[6])
+            deck_name=r[4],
+            deck_id=r[5],
+            qrep=np.array(json.loads(r[6])),
+            skill=np.array(json.loads(r[7])),
+            results=json.loads(r[8])
         )
 
     def pack(self):
@@ -86,6 +93,8 @@ class Fact:
             x.text,
             x.answer,
             x.category,
+            x.deck_name,
+            x.deck_id,
             json.dumps(x.qrep.tolist()),
             json.dumps(x.skill.tolist()),
             json.dumps(x.results)
@@ -207,6 +216,7 @@ class ScheduleRequest(BaseModel):
     history_id: Optional[str]
     repetition_model: Optional[str]
     deck_name: Optional[str]
+    deck_id: Optional[str]
     env: Optional[str]
     elapsed_seconds_text: Optional[int]
     elapsed_seconds_answer: Optional[int]
@@ -218,6 +228,7 @@ class History:
     debug_id: str
     user_id: str
     fact_id: str
+    deck_id: str
     response: str
     judgement: str
     user_snapshot: str

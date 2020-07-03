@@ -26,8 +26,8 @@ from karl.db import SchedulerDB
 from karl.lda import process_question
 from karl.util import ScheduleRequest, Params, Fact, User, History
 from karl.util import parse_date, theme_fs
-# from karl.retention.baseline import RetentionModel
-from karl.new_retention import HFRetentionModel as RetentionModel
+from karl.retention.baseline import RetentionModel
+# from karl.new_retention import HFRetentionModel as RetentionModel
 
 
 CORRECT = True
@@ -89,7 +89,7 @@ class MovingAvgScheduler:
         self.whoosh_index = whoosh_index
 
         self.db = SchedulerDB(db_filename)
-        # self.retention_model = RetentionModel()
+        self.retention_model = RetentionModel()
 
         # logger.info('loading question and records...')
         # with open('data/jeopardy_310326_question_player_pairs_20190612.pkl', 'rb') as f:
@@ -282,6 +282,8 @@ class MovingAvgScheduler:
             text=request.text,
             answer=request.answer,
             category=request.category,
+            deck_name=request.deck_name,
+            deck_id=request.deck_id,
             qrep=None,
             skill=None,
         )
@@ -316,6 +318,8 @@ class MovingAvgScheduler:
                     text=r.text,
                     answer=r.answer,
                     category=r.category,
+                    deck_name=r.deck_name,
+                    deck_id=r.deck_id,
                     qrep=None,  # placeholder
                     skill=None  # placeholder
                 )
@@ -423,6 +427,31 @@ class MovingAvgScheduler:
         ):
             return 0
         return float(fact.category != user.recent_facts[-1].category)
+
+    def dist_answer(self, user: User, fact: Fact) -> float:
+        """
+        Penalize repetition of the same answer.
+        If the same answer appeared T cards ago, penalize by 1 / T
+
+        :param user:
+        :param fact:
+        :return: 1 if same answer, 0 if otherwise.
+        """
+        if (
+                len(user.recent_facts) == 0
+                or fact.answer is None
+        ):
+            return 0
+        T = 0
+        for i, recent_fact in enumerate(user.recent_facts[::-1]):
+            # from most recent to least recent
+            if recent_fact.answer == fact.answer:
+                T = i + 1
+                break
+        if T == 0:
+            return 0
+        else:
+            return 1 / T
 
     def dist_skill(self, user: User, fact: Fact) -> float:
         """
@@ -564,12 +593,13 @@ class MovingAvgScheduler:
         :param fact:
         :return: distance in number of hours.
         """
-        # recall_scores = self.dist_recall_batch(user, facts)
+        recall_scores = self.dist_recall_batch(user, facts)
         scores = [{
             'qrep': self.dist_qrep(user, fact),
-            'skill': self.dist_skill(user, fact),
-            # 'recall': recall_scores[i],
+            # 'skill': self.dist_skill(user, fact),
+            'recall': recall_scores[i],
             'category': self.dist_category(user, fact),
+            'answer': self.dist_answer(user, fact),
             'cool_down': self.dist_cool_down(user, fact, date),
             'leitner': self.dist_leitner(user, fact, date),
             'sm2': self.dist_sm2(user, fact, date),
@@ -1079,6 +1109,7 @@ class MovingAvgScheduler:
                 debug_id=self.debug_id.get(request.user_id, 'null'),
                 user_id=request.user_id,
                 fact_id=fact.fact_id,
+                deck_id=fact.deck_id,
                 response=request.label,
                 judgement=request.label,
                 user_snapshot=json.dumps(user.pack()),

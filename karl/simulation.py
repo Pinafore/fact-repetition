@@ -220,9 +220,10 @@ def test_scheduling():
         print('', file=fret_file)
 
     # summarize performance profile
+    print('===== performance profile =====')
     for key, value in profile.items():
         count, time = list(zip(*value))
-        print(key, np.mean(count), np.mean(time))
+        print(f'{key} {np.mean(time)} per call with on average {np.mean(count)} facts')
 
 
 if __name__ == '__main__':
