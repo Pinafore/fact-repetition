@@ -322,21 +322,27 @@ class TestWeb(unittest.TestCase):
         # print()
         # print()
 
-        date_start = '2028-06-01'
-        date_end = '2028-06-04'
+        # date_start = '2028-06-01'
+        # date_end = '2028-06-04'
 
-        r = requests.get(f'{URL}/get_user_stats?user_id={user_id}&env={env}&date_start={date_start}&date_end={date_end}')
-        stats = json.loads(r.text)
-        pprint(stats)
-        print()
-        print()
+        # r = requests.get(f'{URL}/get_user_stats?user_id={user_id}&env={env}&date_start={date_start}&date_end={date_end}')
+        # stats = json.loads(r.text)
+        # pprint(stats)
+        # print()
+        # print()
 
-        t0 = datetime.now()
-        r = requests.get(f'{URL}/leaderboard?env={env}&date_start={date_start}&date_end={date_end}')
+        # t0 = datetime.now()
+        # r = requests.get(f'{URL}/leaderboard?env={env}&date_start={date_start}&date_end={date_end}')
+        # leaderboard = json.loads(r.text)
+        # t1 = datetime.now()
+        # pprint(leaderboard)
+        # print(t1 - t0)
+        # print()
+        # print()
+
+        r = requests.get(f'{URL}/leaderboard?rank_type=total_seen&limit=10&min_studied=10&env=dev&date_start=2020-07-06+04%3A00%3A00%2B00%3A00')
         leaderboard = json.loads(r.text)
-        t1 = datetime.now()
         pprint(leaderboard)
-        print(t1 - t0)
 
 
 if __name__ == '__main__':

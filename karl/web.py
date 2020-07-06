@@ -225,7 +225,7 @@ def leaderboard(
     stats = sorted(stats.items(), key=lambda x: x[1][rank_type])[::-1]  # from high value to low
     return [
         {
-            'user_id': user.user_id,
+            'user_id': k,
             'rank_type': rank_type,
             'value': v[rank_type],
         } for k, v in stats[skip: skip + limit + 1]
