@@ -151,6 +151,9 @@ def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
     total_seconds = 0
     new_known_rate = 0
     review_known_rate = 0
+    elapsed_seconds_text = 0
+    elapsed_seconds_answer = 0
+
     new_known, review_known, overall_known = [], [], []
     for h in history_records:
         user_snapshot = User.unpack(h.user_snapshot)
@@ -162,7 +165,10 @@ def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
             review_known.append(int(h.response))
         total_seen += 1
         overall_known.append(int(h.response))
+
         total_seconds += h.elapsed_seconds_text
+        elapsed_seconds_text += h.elapsed_seconds_text
+        elapsed_seconds_answer += h.elapsed_seconds_answer
 
     new_known_rate = 0 if len(new_known) == 0 else np.mean(new_known)
     review_known_rate = 0 if len(review_known) == 0 else np.mean(review_known)
@@ -173,6 +179,11 @@ def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
         'reviewed_facts': reviewed_facts,
         'total_seen': total_seen,
         'total_seconds': total_seconds,
+        'total_minutes': total_seconds // 60,
+        'elapsed_seconds_text': elapsed_seconds_text,
+        'elapsed_seconds_answer': elapsed_seconds_answer,
+        'elapsed_minutes_text': elapsed_seconds_text // 60,
+        'elapsed_minutes_answer': elapsed_seconds_answer // 60,
         'known_rate': known_rate,
         'new_known_rate': new_known_rate,
         'review_known_rate': review_known_rate,

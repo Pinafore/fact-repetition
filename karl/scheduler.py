@@ -32,8 +32,6 @@ from karl.retention.baseline import RetentionModel
 
 CORRECT = True
 WRONG = False
-# CORRECT = 'correct'
-# WRONG = 'wrong'
 
 
 nlp = en_core_web_lg.load()
@@ -387,13 +385,13 @@ class MovingAvgScheduler:
     #     return [], []
 
     def get_skill_for_fact(self, fact: Fact) -> float:
+        # NOTE this is not in use
         # # 1. find same or similar fact in records
         # facts, scores = self.retrieve(fact)
         # if len(facts) > 0:
         #     return np.dot([x['prob'] for x in facts], scores)
         # # 2. use model to predict
         # return self.retention_model.predict_one(user, fact)
-        # NOTE this is not in use
         return 0.5
 
     def get_skill_for_facts(self, facts: List[Fact]) -> List[float]:

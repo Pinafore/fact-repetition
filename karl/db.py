@@ -207,7 +207,7 @@ class SchedulerDB:
         try:
             cur.execute('INSERT INTO history VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                         (
-                            h.history_id,
+                            h.history_id,               
                             h.debug_id,
                             h.user_id,
                             h.fact_id,
@@ -220,7 +220,7 @@ class SchedulerDB:
                             h.scheduler_output,
                             h.elapsed_seconds_text,
                             h.elapsed_seconds_answer,
-                            h.date
+                            h.date,
                         ))
         except sqlite3.IntegrityError:
             # this means the fact was shown to user but we didn't receive a
@@ -291,9 +291,9 @@ class SchedulerDB:
                 h.scheduler_snapshot,
                 json.dumps(h.fact_ids),
                 h.scheduler_output,
-                h.date,
                 h.elapsed_seconds_text,
                 h.elapsed_seconds_answer,
+                h.date,
                 h.history_id))
         else:
             # replace update with new id

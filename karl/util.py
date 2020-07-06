@@ -253,9 +253,9 @@ class History:
     scheduler_snapshot: str
     fact_ids: List[str]
     scheduler_output: str
-    date: datetime
     elapsed_seconds_text: int = 0
     elapsed_seconds_answer: int = 0
+    date: datetime = None
 
 
 class theme_fs(theme_light):
