@@ -312,17 +312,27 @@ class TestScheduler(unittest.TestCase):
 class TestWeb(unittest.TestCase):
 
     def test_user_stats(self):
-        user_id = 'test_web_dummy'
+        env = 'dev'
+        user_id = 'dummy_1'
+        URL = 'http://127.0.0.1:8000/api/karl'
+
+        # r = requests.get(f'{URL}/get_all_users?env={env}')
+        # users = json.loads(r.text)
+        # print(users)
+        # print()
+        # print()
+
         date_start = '2028-06-01'
         date_end = '2028-06-04'
-        r = requests.get(f'http://127.0.0.1:8000/api/karl/get_user_stats?user_id={user_id}&date_start={date_start}&date_end={date_end}')
+
+        r = requests.get(f'{URL}/get_user_stats?user_id={user_id}&env={env}&date_start={date_start}&date_end={date_end}')
         stats = json.loads(r.text)
         pprint(stats)
         print()
         print()
 
         t0 = datetime.now()
-        r = requests.get(f'http://127.0.0.1:8000/api/karl/leaderboard?date_start={date_start}&date_end={date_end}')
+        r = requests.get(f'{URL}/leaderboard?env={env}&date_start={date_start}&date_end={date_end}')
         leaderboard = json.loads(r.text)
         t1 = datetime.now()
         pprint(leaderboard)

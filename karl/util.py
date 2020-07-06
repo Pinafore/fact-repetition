@@ -21,8 +21,26 @@ def parse_date(date: str):
         raise TypeError("unrecognized type for parse_date")
 
 
-class Params(BaseModel):
+class SetParams(BaseModel):
     user_id: str = None                 # make it easier to set params for user
+    env: str = None                     # make it easier to set params for user
+    qrep: float = 1                     # cosine distance between qreps
+    skill: float = 0                    # fact difficulty vs user skill level
+    recall: float = 1                   # recall probability
+    category: float = 1                 # change in category from prev
+    answer: float = 1                   # reptition of the same category
+    leitner: float = 0                  # hours till leitner scheduled date
+    sm2: float = 1                      # hours till sm2 scheduled date
+    decay_qrep: float = 0.9             # discount factor
+    decay_skill: float = 0.9            # discount factor
+    cool_down: float = 1                # weight for cool down
+    cool_down_time_correct: float = 20  # minutes to cool down
+    cool_down_time_wrong: float = 4     # minutes to cool down
+    max_recent_facts: int = 10          # num of recent facts to keep record of
+
+
+@dataclass
+class Params:
     qrep: float = 1                     # cosine distance between qreps
     skill: float = 0                    # fact difficulty vs user skill level
     recall: float = 1                   # recall probability

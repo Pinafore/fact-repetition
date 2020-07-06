@@ -400,16 +400,15 @@ class MovingAvgScheduler:
         # NOTE this is not in use
         return [self.get_skill_for_fact(fact) for fact in facts]
 
-    def set_user_params(self, params: Params):
+    def set_user_params(self, user_id: str, params: Params):
         """
         Set parameters for user.
 
         :param params:
         """
-        if params.user_id is not None:
-            user = self.get_user(params.user_id)
-            user.params = params
-            self.db.update_user(user)
+        user = self.get_user(user_id)
+        user.params = params
+        self.db.update_user(user)
 
     def dist_category(self, user: User, fact: Fact) -> float:
         """

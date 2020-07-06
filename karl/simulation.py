@@ -11,7 +11,7 @@ from typing import List, Tuple
 from collections import defaultdict
 from datetime import datetime, timedelta
 
-from karl.util import parse_date, ScheduleRequest, Fact, User, Params
+from karl.util import parse_date, ScheduleRequest, SetParams, Fact, User, Params
 from karl.retention.baseline import RetentionModel
 # from karl.new_retention import HFRetentionModel as RetentionModel
 
@@ -19,47 +19,31 @@ model = RetentionModel()
 
 CORRECT = True
 WRONG = False
-USER_ID = 'test_web_dummy'
+URL = 'http://127.0.0.1:8000/api/karl'
 
 fret_file = open('output/sim_fret.txt', 'w')
 detail_file = open('output/sim_detail.txt', 'w')
 
-params = Params(
-    user_id=USER_ID,
-    qrep=0,
-    skill=0,
-    recall=1,  # NOTE make sure this is turned on so the scheduler is consistent with simulation
-    category=0,
-    leitner=0,
-    sm2=0,
-    decay_qrep=0.9,
-    decay_skill=0.9,
-    cool_down=0,
-    cool_down_time_correct=20,
-    cool_down_time_wrong=4,
-    max_recent_facts=10,
-)
 
-
-def get_result(fact: dict, date: datetime) -> bool:
+def get_result(user_id: str, fact: dict, date: datetime) -> bool:
     '''the core of simulated user that determines the binary outcome '''
     request = ScheduleRequest(
+        user_id=user_id,
+        env='dev',
+        fact_id=fact['fact_id'],
         text=fact['text'],
+        deck_name='simulation',
         date=str(date),
         answer=fact['answer'],
         category=fact['category'],
-        user_id=USER_ID,
-        fact_id=fact['fact_id'],
         repetition_model='leitner',
-        deck_name='simulation',
-        env='simulation',
     )
     # retrieve fact
-    r = requests.post('http://127.0.0.1:8000/api/karl/get_fact', data=json.dumps(request.__dict__))
+    r = requests.post(f'{URL}/get_fact', data=json.dumps(request.__dict__))
     fact = Fact.unpack(json.loads(r.text))
 
     # retrieve user
-    r = requests.get(f'http://127.0.0.1:8000/api/karl/get_user/{USER_ID}')
+    r = requests.get(f'{URL}/get_user?user_id={user_id}&env=dev')
     user = User.unpack(json.loads(r.text))
 
     if False:
@@ -82,7 +66,7 @@ def get_result(fact: dict, date: datetime) -> bool:
         return CORRECT if result else WRONG
 
 
-def schedule_and_update(facts: List[dict], date: datetime) -> Tuple[dict, dict]:
+def schedule_and_update(user_id: str, facts: List[dict], date: datetime, params: Params) -> Tuple[dict, dict]:
     '''
     schedule facts
     use simulated user to obtain binary outcome of the top card
@@ -95,22 +79,22 @@ def schedule_and_update(facts: List[dict], date: datetime) -> Tuple[dict, dict]:
             'date': str(date),
             'repetition_model': 'leitner',
             'deck_name': 'simulation',
-            'env': 'simulation',
+            'env': 'dev',
         })
 
     # schedule, get the ordering of facts
-    r = requests.post('http://127.0.0.1:8000/api/karl/schedule', data=json.dumps(facts))
+    r = requests.post(f'{URL}/schedule', data=json.dumps(facts))
     schedule_outputs = json.loads(r.text)
 
     # get the top card, get a binary outcome from the simulated user
     fact = facts[schedule_outputs['order'][0]]
-    fact['label'] = get_result(fact, date)
+    fact['label'] = get_result(user_id, fact, date)
 
     # update scheduler with binary outcome
-    fact['history_id'] = f'dummy_{fact["fact_id"]}_{str(date)}'
+    fact['history_id'] = f'{user_id}_{fact["fact_id"]}_{str(date)}'
     fact['elapsed_seconds_text'] = 2
     fact['elapsed_seconds_answer'] = 2
-    r = requests.post('http://127.0.0.1:8000/api/karl/update', data=json.dumps([fact]))
+    r = requests.post(f'{URL}/update', data=json.dumps([fact]))
     update_outputs = json.loads(r.text)
 
     # record scheduling details
@@ -148,40 +132,60 @@ def schedule_and_update(facts: List[dict], date: datetime) -> Tuple[dict, dict]:
     return schedule_outputs, update_outputs
 
 
-def test_scheduling():
-    N_DAYS = 10
-    N_TOTAL_FACTS = 100
-    MAX_FACTS_PER_DAY = 100
+def test_scheduling(
+        user_id: str = 'dummy',
+        n_days: int = 10,
+        n_total_facts: int = 100,
+        max_facts_per_day: int = 100,
+):
+
+    params = SetParams(
+        user_id=user_id,
+        env='dev',
+        qrep=0,
+        skill=0,
+        recall=1,  # NOTE make sure this is turned on so the scheduler is consistent with simulation
+        category=0,
+        leitner=0,
+        sm2=0,
+        decay_qrep=0.9,
+        decay_skill=0.9,
+        cool_down=0,
+        cool_down_time_correct=20,
+        cool_down_time_wrong=4,
+        max_recent_facts=10,
+    )
+
     TURN_AROUND = 0.5 * 60  # how long it takes to study a fact, in seconds
     # MAX_REVIEW_WINDOW = 2 * 60 * 60  # seconds
 
     with open('data/diagnostic_questions.pkl', 'rb') as f:
         diagnostic_facts = pickle.load(f)
-    facts = copy.deepcopy(diagnostic_facts[:N_TOTAL_FACTS])
+    facts = copy.deepcopy(diagnostic_facts[:n_total_facts])
 
     for i, fact in enumerate(facts):
-        fact['user_id'] = USER_ID
+        fact['user_id'] = user_id
 
     # prepare scheduler
-    requests.post('http://127.0.0.1:8000/api/karl/set_params', data=json.dumps(params.__dict__))
-    requests.get(f'http://127.0.0.1:8000/api/karl/reset_user/{USER_ID}')
+    requests.post(f'{URL}/set_params', data=json.dumps(params.__dict__))
+    requests.get(f'{URL}/reset_user?user_id={user_id}&env=dev')
 
     fact_to_column = dict()  # fact -> ith column in the fret plot
     start_date = parse_date('2028-06-01 08:00:00.000001')
     profile = defaultdict(list)  # performance profiling
 
-    for days in range(N_DAYS):
+    for days in range(n_days):
         print(f'day {days}', file=fret_file)
         print(f'day {days}')
         time_offset = 0  # offset from the the first fact of today, in seconds
-        for ith_fact in tqdm(range(MAX_FACTS_PER_DAY)):
+        for ith_fact in tqdm(range(max_facts_per_day)):
             current_date = start_date + timedelta(days=days) + timedelta(seconds=time_offset)
 
             # NOTE exhaust MAX_FACTS_PER_DAY
             # # stop if both True
             # #   1) no reivew scheduled within MAX_REVIEW_WINDOW by Leitner
             # #   2) already studied 10 new facts
-            # r = requests.get(f'http://127.0.0.1:8000/api/karl/get_user/{USDR_ID}')
+            # r = requests.get(f'{URL}/get_user?user_id={usdr_id}&env=dev')
             # user = User.unpack(json.loads(r.text))
             # leitner_scheduled_dates = list(user.leitner_scheduled_date.values())
             # if len(leitner_scheduled_dates) == 0:
@@ -193,7 +197,7 @@ def test_scheduling():
             #     break
 
             # schedule, study, update
-            schedule_outputs, update_outputs = schedule_and_update(facts, current_date)
+            schedule_outputs, update_outputs = schedule_and_update(user_id, facts, current_date, params)
 
             # find the proper column in the fret file for the scheduled fact
             # new column if new fact, otherwise look it up
@@ -227,5 +231,7 @@ def test_scheduling():
 
 
 if __name__ == '__main__':
-    test_scheduling()
+    test_scheduling(user_id='dummy_1', n_days=3, n_total_facts=30, max_facts_per_day=30)
+    test_scheduling(user_id='dummy_2', n_days=6, n_total_facts=30, max_facts_per_day=40)
+    test_scheduling(user_id='dummy_3', n_days=4, n_total_facts=50, max_facts_per_day=20)
     # test_for_leaderboard()
