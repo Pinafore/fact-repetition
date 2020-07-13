@@ -10,9 +10,10 @@ import requests
 import numpy as np
 from pprint import pprint
 from datetime import datetime, timedelta
+from dateutil.parser import parse as parse_date
 
 from karl.db import SchedulerDB
-from karl.util import User, Fact, History, Params, ScheduleRequest, parse_date
+from karl.util import User, Fact, History, Params, ScheduleRequest
 from karl.scheduler import MovingAvgScheduler
 
 
@@ -86,7 +87,6 @@ class TestDB(unittest.TestCase):
         self.assertEqual(u1.count_correct_before, u2.count_correct_before)
         self.assertEqual(u1.count_wrong_before, u2.count_wrong_before)
         self.assertEqual(u1.params, u2.params)
-        self.assertEqual(u1.user_stats, u2.user_stats)
 
     def assert_fact_equal(self, c1, c2):
         self.assertEqual(c1.fact_id, c2.fact_id)
@@ -228,7 +228,6 @@ class TestScheduler(unittest.TestCase):
         self.assertEqual(u1.count_correct_before, u2.count_correct_before)
         self.assertEqual(u1.count_wrong_before, u2.count_wrong_before)
         self.assertEqual(u1.params, u2.params)
-        self.assertEqual(u1.user_stats, u2.user_stats)
 
     def assert_fact_equal(self, c1, c2):
         self.assertEqual(c1.fact_id, c2.fact_id)
@@ -313,36 +312,57 @@ class TestWeb(unittest.TestCase):
 
     def test_user_stats(self):
         env = 'dev'
-        user_id = 'dummy_1'
+        user_id = 'unit_test'
         URL = 'http://127.0.0.1:8000/api/karl'
+        deck_id = 'unit_test_deck'
 
-        # r = requests.get(f'{URL}/get_all_users?env={env}')
-        # users = json.loads(r.text)
-        # print(users)
-        # print()
-        # print()
+        date_start = '2028-06-03T03:41:14.779779-0400'
 
-        # date_start = '2028-06-01'
-        # date_end = '2028-06-04'
+        with open('data/diagnostic_questions.pkl', 'rb') as f:
+            diagnostic_facts = pickle.load(f)
 
-        # r = requests.get(f'{URL}/get_user_stats?user_id={user_id}&env={env}&date_start={date_start}&date_end={date_end}')
-        # stats = json.loads(r.text)
-        # pprint(stats)
-        # print()
-        # print()
+        facts = copy.deepcopy(diagnostic_facts[:10])
+        for fact in facts:
+            fact.update({
+                'env': env,
+                'deck_id': deck_id,
+                'user_id': user_id,
+            })
 
-        # t0 = datetime.now()
-        # r = requests.get(f'{URL}/leaderboard?env={env}&date_start={date_start}&date_end={date_end}')
+        # prepare simulated user
+        requests.get(f'{URL}/reset_user?user_id={user_id}&env={env}')
+
+        for day in range(10):
+            for i in range(10):
+                date = parse_date(date_start) + timedelta(days=day, seconds=i)
+
+                fact = facts[i]
+                fact['label'] = True
+                fact['date'] = date.strftime('%Y-%m-%dT%H:%M:%S%z')
+
+                # update scheduler with binary outcome
+                fact['history_id'] = f'{user_id}_{fact["fact_id"]}_{fact["date"]}'
+                fact['elapsed_seconds_text'] = 2
+                fact['elapsed_seconds_answer'] = 2
+                requests.post(f'{URL}/update', data=json.dumps([fact]))
+
+        req = f'{URL}/get_user_stats?user_id={user_id}&env={env}&deck_id={deck_id}'
+        print(req)
+        stats = json.loads(requests.get(req).text)
+        pprint(stats)
+        print()
+        print()
+
+        req = f'{URL}/get_user_stats?user_id={user_id}&env={env}&date_start={date_start}'
+        print(req)
+        stats = json.loads(requests.get(req).text)
+        pprint(stats)
+        print()
+        print()
+
+        # r = requests.get(f'{URL}/leaderboard?rank_type=total_seen&limit=10&min_studied=10&env=dev&date_start=2020-07-06+04%3A00%3A00%2B00%3A00')
         # leaderboard = json.loads(r.text)
-        # t1 = datetime.now()
         # pprint(leaderboard)
-        # print(t1 - t0)
-        # print()
-        # print()
-
-        r = requests.get(f'{URL}/leaderboard?rank_type=total_seen&limit=10&min_studied=10&env=dev&date_start=2020-07-06+04%3A00%3A00%2B00%3A00')
-        leaderboard = json.loads(r.text)
-        pprint(leaderboard)
 
 
 if __name__ == '__main__':

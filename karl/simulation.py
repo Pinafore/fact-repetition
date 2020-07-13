@@ -10,8 +10,9 @@ from tqdm import tqdm
 from typing import List, Tuple
 from collections import defaultdict
 from datetime import datetime, timedelta
+from dateutil.parser import parse as parse_date
 
-from karl.util import parse_date, ScheduleRequest, SetParams, Fact, User, Params
+from karl.util import ScheduleRequest, SetParams, Fact, User, Params
 from karl.retention.baseline import RetentionModel
 # from karl.new_retention import HFRetentionModel as RetentionModel
 
@@ -171,7 +172,7 @@ def test_scheduling(
     requests.get(f'{URL}/reset_user?user_id={user_id}&env=dev')
 
     fact_to_column = dict()  # fact -> ith column in the fret plot
-    start_date = parse_date('2028-06-01 08:00:00.000001')
+    start_date = parse_date('2028-06-01 08:00:00.000001 -0400')
     profile = defaultdict(list)  # performance profiling
 
     for days in range(n_days):

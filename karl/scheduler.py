@@ -16,6 +16,7 @@ import en_core_web_lg
 from tqdm import tqdm
 from collections import defaultdict
 from datetime import datetime, timedelta
+from dateutil.parser import parse as parse_date
 from typing import List, Dict
 # from whoosh.qparser import QueryParser
 
@@ -25,7 +26,7 @@ from pandas.api.types import CategoricalDtype
 from karl.db import SchedulerDB
 from karl.lda import process_question
 from karl.util import ScheduleRequest, Params, Fact, User, History
-from karl.util import parse_date, theme_fs
+from karl.util import theme_fs
 from karl.retention.baseline import RetentionModel
 # from karl.new_retention import HFRetentionModel as RetentionModel
 
@@ -647,7 +648,7 @@ class MovingAvgScheduler:
         dump_dict = {
             'user_id': user.user_id,
             'fact_id': facts[order[0]].fact_id,
-            'date': str(date),
+            'date': date.strftime('%Y-%m-%dT%H:%M:%S%z'),
         }
         debug_id = hashlib.md5(json.dumps(dump_dict).encode('utf8')).hexdigest()
         self.debug_id[user.user_id] = debug_id
@@ -1009,30 +1010,30 @@ class MovingAvgScheduler:
         :param date: date on which user studied fact.
         :param response: user's response on this fact.
         """
-        # update user_stats. this should happen before we change the state of the user
-        if len(user.user_stats.results) > 0:
-            # TODO inaccurate estimate of total seconds spent on the interface
-            previous_study_date = parse_date(user.user_stats.results[-1][2])
-            new_seconds = int((date - previous_study_date).total_seconds())
-            user.user_stats.total_seconds += new_seconds
+        # NOTE user_stats is no longer used
+        # # update user_stats. this should happen before we change the state of the user
+        # if len(user.user_stats.results) > 0:
+        #     # TODO inaccurate estimate of total seconds spent on the interface
+        #     previous_study_date = parse_date(user.user_stats.results[-1][2])
+        #     new_seconds = int((date - previous_study_date).total_seconds())
+        #     user.user_stats.total_seconds += new_seconds
 
-        # user.user_stats.results is a list of (result, new / review, date)
-        is_new_fact = fact.fact_id not in user.previous_study
-        user.user_stats.results.append((
-            response == CORRECT,
-            is_new_fact,
-            str(date),
-        ))
-        user.user_stats.new_facts += is_new_fact
-        user.user_stats.reviewed_facts += not is_new_fact
-        user.user_stats.new_known_rate = np.mean([a[0] for a in user.user_stats.results if a[1]])
-        user.user_stats.review_known_rate = np.mean([a[0] for a in user.user_stats.results if not a[1]])
-        user.user_stats.total_seen += 1
-        last_week_datetime = date - timedelta(days=7)
-        last_week_results = [x for x in user.user_stats.results
-                             if parse_date(x[2]) >= last_week_datetime]
-        user.user_stats.last_week_seen = len(last_week_results)
-        user.user_stats.last_week_new_facts = len([x[1] for x in last_week_results])
+        # # user.user_stats.results is a list of (result, new / review, date)
+        # is_new_fact = fact.fact_id not in user.previous_study
+        # user.user_stats.results.append((
+        #     response == CORRECT,
+        #     is_new_fact,
+        #     date.strftime('%Y-%m-%dT%H:%M:%S%z'),
+        # ))
+        # user.user_stats.new_facts += is_new_fact
+        # user.user_stats.reviewed_facts += not is_new_fact
+        # user.user_stats.new_known_rate = np.mean([a[0] for a in user.user_stats.results if a[1]])
+        # user.user_stats.review_known_rate = np.mean([a[0] for a in user.user_stats.results if not a[1]])
+        # user.user_stats.total_seen += 1
+        # last_week_datetime = date - timedelta(days=7)
+        # last_week_results = [x for x in user.user_stats.results if parse_date(x[2]) >= last_week_datetime]
+        # user.user_stats.last_week_seen = len(last_week_results)
+        # user.user_stats.last_week_new_facts = len([x[1] for x in last_week_results])
 
         # update category and previous study (date and response)
         user.recent_facts.append(fact)
@@ -1115,7 +1116,7 @@ class MovingAvgScheduler:
                 scheduler_output='',
                 elapsed_seconds_text=request.elapsed_seconds_text,
                 elapsed_seconds_answer=request.elapsed_seconds_answer,
-                date=date
+                date=date,
             )
             self.db.add_history(history)
 

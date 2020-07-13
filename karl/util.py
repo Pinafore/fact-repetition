@@ -7,18 +7,10 @@ from datetime import datetime
 from pydantic import BaseModel
 from typing import Optional, Dict, List
 from dataclasses import dataclass, field
+from dateutil.parser import parse as parse_date
 
 from plotnine import theme, theme_light, \
     element_text, element_blank, element_rect, element_line
-
-
-def parse_date(date: str):
-    if isinstance(date, datetime):
-        return date
-    if isinstance(date, str):
-        return datetime.strptime(date, "%Y-%m-%d %H:%M:%S.%f")
-    else:
-        raise TypeError("unrecognized type for parse_date")
 
 
 class SetParams(BaseModel):
@@ -156,25 +148,25 @@ class User:
     count_wrong_before: Dict[str, int] = field(default_factory=dict)
 
     params: Params = field(default_factory=Params)
-    user_stats: UserStats = field(default_factory=UserStats)
+    # user_stats: UserStats = field(default_factory=UserStats)
 
     def pack(self):
         x = self
         return [
             x.user_id,
             json.dumps([f.pack() for f in x.recent_facts]),
-            json.dumps({k: (str(v), r) for k, (v, r) in x.previous_study.items()}),
+            json.dumps({k: (v.strftime('%Y-%m-%dT%H:%M:%S%z'), r) for k, (v, r) in x.previous_study.items()}),
             json.dumps(x.leitner_box),
-            json.dumps({k: str(v) for k, v in x.leitner_scheduled_date.items()}),
+            json.dumps({k: v.strftime('%Y-%m-%dT%H:%M:%S%z') for k, v in x.leitner_scheduled_date.items()}),
             json.dumps(x.sm2_efactor),
             json.dumps(x.sm2_interval),
             json.dumps(x.sm2_repetition),
-            json.dumps({k: str(v) for k, v in x.sm2_scheduled_date.items()}),
+            json.dumps({k: v.strftime('%Y-%m-%dT%H:%M:%S%z') for k, v in x.sm2_scheduled_date.items()}),
             json.dumps(x.results),
             json.dumps(x.count_correct_before),
             json.dumps(x.count_wrong_before),
             json.dumps(x.params.__dict__),
-            json.dumps(x.user_stats.__dict__),
+            # json.dumps(x.user_stats.__dict__),
         ]
 
     @classmethod
@@ -193,7 +185,7 @@ class User:
             'count_correct_before',
             'count_wrong_before',
             'params',
-            'user_stats',
+            # 'user_stats',
         ]
 
         if isinstance(r, str):
@@ -219,7 +211,7 @@ class User:
             count_correct_before=json.loads(r[10]),
             count_wrong_before=json.loads(r[11]),
             params=Params(**json.loads(r[12])),
-            user_stats=UserStats(**json.loads(r[13])),
+            # user_stats=UserStats(**json.loads(r[13])),
         )
 
 

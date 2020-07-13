@@ -5,7 +5,9 @@ import os
 import json
 import sqlite3
 import logging
+import pytz
 from typing import List
+from dateutil.parser import parse as parse_date
 
 from karl.util import User, Fact, History
 
@@ -40,8 +42,7 @@ class SchedulerDB:
                      results TEXT, \
                      count_correct_before TEXT, \
                      count_wrong_before TEXT, \
-                     params TEXT, \
-                     user_stats TEXT)'
+                     params TEXT)'
                     )
 
         # *current* cache of facts
@@ -84,7 +85,7 @@ class SchedulerDB:
     def add_user(self, u: User):
         cur = self.conn.cursor()
         try:
-            cur.execute('INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)', u.pack())
+            cur.execute('INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)', u.pack())
         except sqlite3.IntegrityError:
             logger.info("user {} exists".format(u.user_id))
         # NOTE web.py will commit at exit
@@ -121,8 +122,7 @@ class SchedulerDB:
                      results=?, \
                      count_correct_before=?, \
                      count_wrong_before=?, \
-                     params=?, \
-                     user_stats=? \
+                     params=? \
                      WHERE user_id=?",
                     u)
         # NOTE web.py will commit at exit
@@ -203,6 +203,8 @@ class SchedulerDB:
         # self.conn.commit()
 
     def add_history(self, h: History):
+        # convert all date to UTC
+        date = h.date.astimezone(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
         cur = self.conn.cursor()
         try:
             cur.execute('INSERT INTO history VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
@@ -220,7 +222,7 @@ class SchedulerDB:
                             h.scheduler_output,
                             h.elapsed_seconds_text,
                             h.elapsed_seconds_answer,
-                            h.date,
+                            date,
                         ))
         except sqlite3.IntegrityError:
             # this means the fact was shown to user but we didn't receive a
@@ -245,9 +247,24 @@ class SchedulerDB:
                          date_start: str = None, date_end: str = None):
         cur = self.conn.cursor()
         if date_start is None:
-            date_start = '2008-06-11 08:00:00'
+            date_start = '2008-06-11T08:00:00Z'
         if date_end is None:
-            date_end = '2028-06-11 08:00:00'
+            date_end = '2038-06-11T08:00:00Z'
+        # convert all date to UTC
+
+        print('*******')
+        print(f'original date_start {date_start}')
+        print(f'original date_end {date_end}')
+        date_start = parse_date(date_start)
+        date_end = parse_date(date_end)
+        print('parsed date_start', date_start.strftime('%Y-%m-%d %H:%M:%S'))
+        print('parsed date_end', date_end.strftime('%Y-%m-%d %H:%M:%S'))
+        date_start = date_start.astimezone(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
+        date_end = date_end.astimezone(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
+        print(f'converted date_start {date_start}')
+        print(f'converted date_end {date_end}')
+        print('*******')
+
         if deck_id is not None:
             cur.execute("SELECT * FROM history WHERE user_id=? AND deck_id=? AND date BETWEEN ? AND ?",
                         (user_id, deck_id, date_start, date_end,))
@@ -263,6 +280,8 @@ class SchedulerDB:
 
     def update_history(self, old_history_id: str, h: History):
         '''This is different, `history_id` might get updated'''
+        # convert all date to UTC
+        date = h.date.astimezone(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
         cur = self.conn.cursor()
         if h.history_id == old_history_id:
             # inplace update with same id
@@ -293,7 +312,7 @@ class SchedulerDB:
                 h.scheduler_output,
                 h.elapsed_seconds_text,
                 h.elapsed_seconds_answer,
-                h.date,
+                date,
                 h.history_id))
         else:
             # replace update with new id
@@ -326,7 +345,7 @@ class SchedulerDB:
                 h.scheduler_output,
                 h.elapsed_seconds_text,
                 h.elapsed_seconds_answer,
-                h.date,
+                date,
                 old_history_id))
         # NOTE web.py will commit at exit
         # self.conn.commit()

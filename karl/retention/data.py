@@ -6,7 +6,6 @@ import sys
 import json
 import pickle
 import codecs
-import random
 import logging
 import itertools
 import numpy as np
@@ -14,6 +13,7 @@ import pandas as pd
 import multiprocessing
 from tqdm import tqdm
 from datetime import datetime
+from dateutil.parser import parse as parse_date
 from collections import defaultdict
 from joblib import Parallel, delayed
 from typing import Iterator, Dict, Optional
@@ -38,15 +38,6 @@ def apply_parallel(f, groupby):
     log.info('    apply parallel {}'.format(f.__name__))
     return Parallel(n_jobs=multiprocessing.cpu_count())(
         delayed(f)(group) for name, group in tqdm(groupby))
-
-
-def parse_date(date: str):
-    if isinstance(date, datetime):
-        return date
-    if isinstance(date, str):
-        return datetime.strptime(date, "%Y-%m-%d %H:%M:%S.%f")
-    else:
-        raise TypeError("unrecognized type for parse_date")
 
 
 def get_questions(data_dir=DATA_DIR):

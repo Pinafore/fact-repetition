@@ -7,8 +7,9 @@ import numpy as np
 from fastapi import FastAPI
 from typing import List
 from datetime import datetime
+from dateutil.parser import parse as parse_date
 
-from karl.util import ScheduleRequest, SetParams, Params, User, parse_date
+from karl.util import ScheduleRequest, SetParams, Params, User
 from karl.scheduler import MovingAvgScheduler
 
 
@@ -39,8 +40,6 @@ logger.addHandler(ch)
 
 @app.post('/api/karl/schedule')
 def schedule(requests: List[ScheduleRequest]):
-    # NOTE assuming single user single date
-    date = datetime.now()
     if len(requests) == 0:
         return {
             'order': [],
@@ -50,6 +49,8 @@ def schedule(requests: List[ScheduleRequest]):
 
     logger.info(f'/karl/schedule with {len(requests)} facts and env={requests[0].env}')
 
+    # NOTE assuming single user single date
+    date = datetime.now()
     if requests[0].date is not None:
         date = parse_date(requests[0].date)
 
@@ -67,13 +68,13 @@ def schedule(requests: List[ScheduleRequest]):
 
 @app.post('/api/karl/update')
 def update(requests: List[ScheduleRequest]):
-    # NOTE assuming single user single date
     logger.info(f'/karl/update with {len(requests)} facts and env={requests[0].env}')
 
+    # NOTE assuming single user single date
     date = datetime.now()
     if requests[0].date is not None:
         date = parse_date(requests[0].date)
-
+    
     env = 'dev' if requests[0].env == 'dev' else 'prod'
     scheduler = schedulers[env]
 
@@ -125,6 +126,13 @@ def get_all_users(env: str = None):
     users = schedulers[env].db.get_user()
     return [user.pack() for user in users]
 
+@app.get('/api/karl/get_user_history')
+def get_user_history(user_id: str, env: str = None, deck_id: str = None,
+                     date_start: str = None, date_end: str = None):
+    env = 'dev' if env == 'dev' else 'prod'
+    scheduler = schedulers[env]
+    history_records = scheduler.db.get_user_history(user_id, deck_id, date_start, date_end)
+    return history_records
 
 @app.get('/api/karl/get_user_stats')
 def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
@@ -142,6 +150,11 @@ def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
     '''
     env = 'dev' if env == 'dev' else 'prod'
     scheduler = schedulers[env]
+
+    print('=======')
+    print(date_start)
+    print(date_end)
+    print('=======')
 
     history_records = scheduler.db.get_user_history(user_id, deck_id, date_start, date_end)
 
@@ -184,9 +197,9 @@ def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
         'elapsed_seconds_answer': elapsed_seconds_answer,
         'elapsed_minutes_text': elapsed_seconds_text // 60,
         'elapsed_minutes_answer': elapsed_seconds_answer // 60,
-        'known_rate': known_rate,
-        'new_known_rate': new_known_rate,
-        'review_known_rate': review_known_rate,
+        'known_rate': round(known_rate * 100, 2),
+        'new_known_rate': round(new_known_rate * 100, 2),
+        'review_known_rate': round(review_known_rate * 100, 2),
     }
 
 
@@ -211,10 +224,10 @@ def leaderboard(
     users = scheduler.db.get_user()
     stats = {}
     for user in users:
-        if len(user.previous_study) < min_studied:
+        if not user.user_id.isdigit():
             continue
 
-        stats[user.user_id] = get_user_stats(
+        stats[int(user.user_id)] = get_user_stats(
             user_id=user.user_id,
             env=env,
             deck_id=deck_id,
@@ -223,6 +236,7 @@ def leaderboard(
         )
 
     stats = sorted(stats.items(), key=lambda x: x[1][rank_type])[::-1]  # from high value to low
+    stats = {k: v for k, v in stats if v['total_seen'] > min_studied}
     return [
         {
             'user_id': k,
