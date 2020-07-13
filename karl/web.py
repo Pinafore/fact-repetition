@@ -5,7 +5,8 @@ import atexit
 import logging
 import numpy as np
 from fastapi import FastAPI
-from typing import List
+from typing import Optional, List, Union
+from pydantic import BaseModel
 from datetime import datetime
 from dateutil.parser import parse as parse_date
 
@@ -198,8 +199,24 @@ def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
     }
 
 
+class Ranking(BaseModel):
+    user_id: int
+    value: Union[int, float]
+
+
+class Leaderboard(BaseModel):
+    leaderboard: List[Ranking]
+    total: int
+    rank_type: str
+    user_place: Optional[int] = None
+    user_id: Optional[str] = None
+    skip: Optional[int] = 0
+    limit: Optional[int] = None
+
+
 @app.get('/api/karl/leaderboard')
 def leaderboard(
+        user_id: str = None,
         env: str = None,
         skip: int = 0,
         limit: int = 10,
@@ -222,7 +239,7 @@ def leaderboard(
         if not user.user_id.isdigit():
             continue
 
-        stats[int(user.user_id)] = get_user_stats(
+        stats[user.user_id] = get_user_stats(
             user_id=user.user_id,
             env=env,
             deck_id=deck_id,
@@ -230,15 +247,27 @@ def leaderboard(
             date_end=date_end
         )
 
-    stats = sorted(stats.items(), key=lambda x: x[1][rank_type])[::-1]  # from high value to low
+    # from high value to low
+    stats = sorted(stats.items(), key=lambda x: x[1][rank_type])[::-1]
     stats = [(k, v) for k, v in stats if v['total_seen'] > min_studied]
-    return [
-        {
-            'user_id': k,
-            'rank_type': rank_type,
-            'value': v[rank_type],
-        } for k, v in stats[skip: skip + limit + 1]
-    ]
+
+    rankings = []
+    user_place = None
+    for i, (k, v) in enumerate(stats):
+        print('***', k, type(k))
+        if user_id == k:
+            user_place = i
+        rankings.append(Ranking(user_id=k, value=v[rank_type]))
+
+    return Leaderboard(
+        leaderboard=rankings[skip: skip + limit + 1],
+        total=len(rankings),
+        rank_type=rank_type,
+        user_place=user_place,
+        user_id=user_id,
+        skip=skip,
+        limit=limit,
+    )
 
 
 @atexit.register

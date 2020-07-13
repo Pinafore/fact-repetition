@@ -356,7 +356,7 @@ class TestWeb(unittest.TestCase):
         date_end = parse_date(date_start) + timedelta(days=1)
         date_end = date_end.strftime('%Y-%m-%dT%H:%M:%S%z')
         min_studied = 10
-        r = requests.get(f'{URL}/leaderboard?env={env}&min_studied={min_studied}&date_start={date_start}&date_end={date_end}')
+        r = requests.get(f'{URL}/leaderboard?user_id={user_id}&env={env}&min_studied={min_studied}&date_start={date_start}&date_end={date_end}')
         leaderboard = json.loads(r.text)
         pprint(leaderboard)
 
