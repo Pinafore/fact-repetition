@@ -251,19 +251,8 @@ class SchedulerDB:
         if date_end is None:
             date_end = '2038-06-11T08:00:00Z'
         # convert all date to UTC
-
-        print('*******')
-        print(f'original date_start {date_start}')
-        print(f'original date_end {date_end}')
-        date_start = parse_date(date_start)
-        date_end = parse_date(date_end)
-        print('parsed date_start', date_start.strftime('%Y-%m-%d %H:%M:%S'))
-        print('parsed date_end', date_end.strftime('%Y-%m-%d %H:%M:%S'))
-        date_start = date_start.astimezone(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
-        date_end = date_end.astimezone(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
-        print(f'converted date_start {date_start}')
-        print(f'converted date_end {date_end}')
-        print('*******')
+        date_start = parse_date(date_start).astimezone(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
+        date_end = parse_date(date_end).astimezone(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
 
         if deck_id is not None:
             cur.execute("SELECT * FROM history WHERE user_id=? AND deck_id=? AND date BETWEEN ? AND ?",

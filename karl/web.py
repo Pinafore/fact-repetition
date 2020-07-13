@@ -151,11 +151,6 @@ def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
     env = 'dev' if env == 'dev' else 'prod'
     scheduler = schedulers[env]
 
-    print('=======')
-    print(date_start)
-    print(date_end)
-    print('=======')
-
     history_records = scheduler.db.get_user_history(user_id, deck_id, date_start, date_end)
 
     new_facts = 0
@@ -236,7 +231,7 @@ def leaderboard(
         )
 
     stats = sorted(stats.items(), key=lambda x: x[1][rank_type])[::-1]  # from high value to low
-    stats = {k: v for k, v in stats if v['total_seen'] > min_studied}
+    stats = [(k, v) for k, v in stats if v['total_seen'] > min_studied]
     return [
         {
             'user_id': k,

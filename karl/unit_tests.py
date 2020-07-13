@@ -312,7 +312,7 @@ class TestWeb(unittest.TestCase):
 
     def test_user_stats(self):
         env = 'dev'
-        user_id = 'unit_test'
+        user_id = '2580'
         URL = 'http://127.0.0.1:8000/api/karl'
         deck_id = 'unit_test_deck'
 
@@ -346,23 +346,19 @@ class TestWeb(unittest.TestCase):
                 fact['elapsed_seconds_answer'] = 2
                 requests.post(f'{URL}/update', data=json.dumps([fact]))
 
-        req = f'{URL}/get_user_stats?user_id={user_id}&env={env}&deck_id={deck_id}'
-        print(req)
-        stats = json.loads(requests.get(req).text)
-        pprint(stats)
-        print()
-        print()
+        # req = f'{URL}/get_user_stats?user_id={user_id}&env={env}&date_start={date_start}'
+        # print(req)
+        # stats = json.loads(requests.get(req).text)
+        # pprint(stats)
+        # print()
+        # print()
 
-        req = f'{URL}/get_user_stats?user_id={user_id}&env={env}&date_start={date_start}'
-        print(req)
-        stats = json.loads(requests.get(req).text)
-        pprint(stats)
-        print()
-        print()
-
-        # r = requests.get(f'{URL}/leaderboard?rank_type=total_seen&limit=10&min_studied=10&env=dev&date_start=2020-07-06+04%3A00%3A00%2B00%3A00')
-        # leaderboard = json.loads(r.text)
-        # pprint(leaderboard)
+        date_end = parse_date(date_start) + timedelta(days=1)
+        date_end = date_end.strftime('%Y-%m-%dT%H:%M:%S%z')
+        min_studied = 10
+        r = requests.get(f'{URL}/leaderboard?env={env}&min_studied={min_studied}&date_start={date_start}&date_end={date_end}')
+        leaderboard = json.loads(r.text)
+        pprint(leaderboard)
 
 
 if __name__ == '__main__':
