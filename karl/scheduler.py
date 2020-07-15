@@ -1116,6 +1116,7 @@ class MovingAvgScheduler:
                 scheduler_output='',
                 elapsed_seconds_text=request.elapsed_seconds_text,
                 elapsed_seconds_answer=request.elapsed_seconds_answer,
+                is_new_fact=int(fact.fact_id in user.previous_study),
                 date=date,
             )
             self.db.add_history(history)

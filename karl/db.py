@@ -76,6 +76,7 @@ class SchedulerDB:
                      scheduler_output TEXT, \
                      elapsed_seconds_text INT, \
                      elapsed_seconds_answer INT, \
+                     is_new_fact INT, \
                      date timestamp)'
                     )
 
@@ -207,7 +208,7 @@ class SchedulerDB:
         date = h.date.astimezone(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
         cur = self.conn.cursor()
         try:
-            cur.execute('INSERT INTO history VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            cur.execute('INSERT INTO history VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                         (
                             h.history_id,               
                             h.debug_id,
@@ -222,6 +223,7 @@ class SchedulerDB:
                             h.scheduler_output,
                             h.elapsed_seconds_text,
                             h.elapsed_seconds_answer,
+                            h.is_new_fact,
                             date,
                         ))
         except sqlite3.IntegrityError:
@@ -287,6 +289,7 @@ class SchedulerDB:
                          scheduler_output=?, \
                          elapsed_seconds_text=?, \
                          elapsed_seconds_answer=?, \
+                         is_new_fact=?, \
                          date=? \
                          WHERE history_id=?", (
                 h.debug_id,
@@ -301,6 +304,7 @@ class SchedulerDB:
                 h.scheduler_output,
                 h.elapsed_seconds_text,
                 h.elapsed_seconds_answer,
+                h.is_new_fact,
                 date,
                 h.history_id))
         else:
@@ -319,6 +323,7 @@ class SchedulerDB:
                          scheduler_output=?, \
                          elapsed_seconds_text=?, \
                          elapsed_seconds_answer=?, \
+                         is_new_fact=?, \
                          date=? \
                          WHERE history_id=?", (
                 h.debug_id,
@@ -334,6 +339,7 @@ class SchedulerDB:
                 h.scheduler_output,
                 h.elapsed_seconds_text,
                 h.elapsed_seconds_answer,
+                h.is_new_fact,
                 date,
                 old_history_id))
         # NOTE web.py will commit at exit

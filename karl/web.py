@@ -4,6 +4,7 @@
 import atexit
 import logging
 import numpy as np
+from pprint import pprint
 from fastapi import FastAPI
 from typing import Optional, List, Union
 from pydantic import BaseModel
@@ -51,7 +52,7 @@ def schedule(requests: List[ScheduleRequest]):
     logger.info(f'/karl/schedule with {len(requests)} facts and env={requests[0].env}')
 
     # NOTE assuming single user single date
-    date = datetime.now()
+    date = parse_date(datetime.now().strftime('%Y-%m-%dT%H:%M:%S%z'))
     if requests[0].date is not None:
         date = parse_date(requests[0].date)
 
@@ -72,7 +73,7 @@ def update(requests: List[ScheduleRequest]):
     logger.info(f'/karl/update with {len(requests)} facts and env={requests[0].env}')
 
     # NOTE assuming single user single date
-    date = datetime.now()
+    date = parse_date(datetime.now().strftime('%Y-%m-%dT%H:%M:%S%z'))
     if requests[0].date is not None:
         date = parse_date(requests[0].date)
     
@@ -152,7 +153,9 @@ def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
     env = 'dev' if env == 'dev' else 'prod'
     scheduler = schedulers[env]
 
+    t0 = datetime.now()
     history_records = scheduler.db.get_user_history(user_id, deck_id, date_start, date_end)
+    t1 = datetime.now()
 
     new_facts = 0
     reviewed_facts = 0
@@ -165,8 +168,9 @@ def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
 
     new_known, review_known, overall_known = [], [], []
     for h in history_records:
-        user_snapshot = User.unpack(h.user_snapshot)
-        if h.fact_id not in user_snapshot.previous_study:
+        # user_snapshot = User.unpack(h.user_snapshot)
+        # if h.fact_id not in user_snapshot.previous_study:
+        if False:
             new_facts += 1
             new_known.append(int(h.response))
         else:
@@ -183,6 +187,8 @@ def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
     review_known_rate = 0 if len(review_known) == 0 else np.mean(review_known)
     known_rate = 0 if len(overall_known) == 0 else np.mean(overall_known)
 
+    t2 = datetime.now()
+
     return {
         'new_facts': new_facts,
         'reviewed_facts': reviewed_facts,
@@ -196,11 +202,15 @@ def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
         'known_rate': round(known_rate * 100, 2),
         'new_known_rate': round(new_known_rate * 100, 2),
         'review_known_rate': round(review_known_rate * 100, 2),
+        'profile_get_history_records': (t1 - t0).total_seconds(),
+        'profile_compute_stats': (t2 - t1).total_seconds(),
+        'profile_n_history_records': len(history_records),
     }
 
 
 class Ranking(BaseModel):
     user_id: int
+    rank: int
     value: Union[int, float]
 
 
@@ -247,6 +257,16 @@ def leaderboard(
             date_end=date_end
         )
 
+    profile_keys = [
+        'profile_get_history_records',
+        'profile_compute_stats',
+        'profile_n_history_records',
+    ]
+    profile = {
+        key: np.mean([v[key] for v in stats.values()])
+        for key in profile_keys
+    }
+
     # from high value to low
     stats = sorted(stats.items(), key=lambda x: x[1][rank_type])[::-1]
     stats = [(k, v) for k, v in stats if v['total_seen'] > min_studied]
@@ -254,12 +274,11 @@ def leaderboard(
     rankings = []
     user_place = None
     for i, (k, v) in enumerate(stats):
-        print('***', k, type(k))
         if user_id == k:
             user_place = i
-        rankings.append(Ranking(user_id=k, value=v[rank_type]))
+        rankings.append(Ranking(user_id=k, rank=i + 1, value=v[rank_type]))
 
-    return Leaderboard(
+    leaderboard = Leaderboard(
         leaderboard=rankings[skip: skip + limit + 1],
         total=len(rankings),
         rank_type=rank_type,
@@ -268,6 +287,9 @@ def leaderboard(
         skip=skip,
         limit=limit,
     )
+
+    pprint(profile)
+    return leaderboard
 
 
 @atexit.register

@@ -45,16 +45,18 @@ class TestDB(unittest.TestCase):
             skill=np.array([0.1, 0.2, 0.3, 0.4]),
             results=[True, False, True, True]
         )
+        first_date = datetime.now().strftime('%Y-%m-%dT%H:%M:%S%z')
+        first_date = parse_date(first_date)
         user = User(
             user_id='user 1',
             recent_facts=[fact],
-            previous_study={'fact 1': (datetime.now(), CORRECT)},
+            previous_study={'fact 1': (first_date, CORRECT)},
             leitner_box={'fact 1': 2},
-            leitner_scheduled_date={'fact 2': datetime.now()},
+            leitner_scheduled_date={'fact 2': first_date},
             sm2_efactor={'fact 1': 0.5},
             sm2_interval={'fact 1': 6},
             sm2_repetition={'fact 1': 10},
-            sm2_scheduled_date={'fact 2': datetime.now()},
+            sm2_scheduled_date={'fact 2': first_date},
             results=[True, False, True],
             count_correct_before={'fact 1': 1},
             count_wrong_before={'fact 1': 3}
@@ -68,7 +70,9 @@ class TestDB(unittest.TestCase):
 
         user.results.append(False)
         user.count_correct_before['fact 1'] = 2
-        user.date = datetime.now()
+        second_date = datetime.now().strftime('%Y-%m-%dT%H:%M:%S%z')
+        second_date = parse_date(second_date)
+        user.date = second_date
         self.db.update_user(user)
         returned_user = self.db.get_user(user.user_id)
         self.assert_user_equal(user, returned_user)
@@ -142,16 +146,19 @@ class TestDB(unittest.TestCase):
             skill=np.array([0.1, 0.2, 0.3, 0.4]),
             results=[True, False, True, True]
         )
+
+        first_date = datetime.now().strftime('%Y-%m-%dT%H:%M:%S%z')
+        first_date = parse_date(first_date)
         user = User(
             user_id='user 1',
             recent_facts=[fact],
-            previous_study={'fact 1': (datetime.now(), CORRECT)},
+            previous_study={'fact 1': (first_date, CORRECT)},
             leitner_box={'fact 1': 2},
-            leitner_scheduled_date={'fact 2': datetime.now()},
+            leitner_scheduled_date={'fact 2': first_date},
             sm2_efactor={'fact 1': 0.5},
             sm2_interval={'fact 1': 6},
             sm2_repetition={'fact 1': 10},
-            sm2_scheduled_date={'fact 2': datetime.now()},
+            sm2_scheduled_date={'fact 2': first_date},
             results=[True, False, True],
             count_correct_before={'fact 1': 1},
             count_wrong_before={'fact 1': 3}
@@ -170,15 +177,19 @@ class TestDB(unittest.TestCase):
             scheduler_snapshot=json.dumps(params.__dict__),
             fact_ids=json.dumps([1, 2, 3, 4, 5]),
             scheduler_output='(awd, awd, awd)',
-            date=datetime.now())
+            is_new_fact=True,
+            date=first_date,
+        )
         self.db.add_history(history)
         returned_history = self.db.get_history(old_history_id)
         returned_user = User.unpack(returned_history.user_snapshot)
         self.assert_user_equal(user, returned_user)
         new_history_id = 'real_history_id'
+        second_date = datetime.now().strftime('%Y-%m-%dT%H:%M:%S%z')
+        second_date = parse_date(second_date)
         history.__dict__.update({
             'history_id': new_history_id,
-            'date': datetime.now()
+            'date': second_date,
         })
         self.db.update_history(old_history_id, history)
         returned_history = self.db.get_history(new_history_id)
@@ -356,9 +367,22 @@ class TestWeb(unittest.TestCase):
         date_end = parse_date(date_start) + timedelta(days=1)
         date_end = date_end.strftime('%Y-%m-%dT%H:%M:%S%z')
         min_studied = 10
-        r = requests.get(f'{URL}/leaderboard?user_id={user_id}&env={env}&min_studied={min_studied}&date_start={date_start}&date_end={date_end}')
-        leaderboard = json.loads(r.text)
+        req = f'{URL}/leaderboard?user_id={user_id}&env={env}&min_studied={min_studied}&date_start={date_start}&date_end={date_end}'
+        print(req)
+        leaderboard = json.loads(requests.get(req).text)
         pprint(leaderboard)
+
+
+class TestLeaderboard(unittest.TestCase):
+
+    def test_leaderboard(self):
+        URL = 'http://127.0.0.1:8000/api/karl'
+        req = f'{URL}/leaderboard?rank_type=total_seen'
+        t0 = datetime.now()
+        leaderboard = json.loads(requests.get(req).text)
+        pprint(leaderboard)
+        t1 = datetime.now()
+        print(t1 - t0)
 
 
 if __name__ == '__main__':

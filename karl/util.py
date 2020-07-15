@@ -247,6 +247,7 @@ class History:
     scheduler_output: str
     elapsed_seconds_text: int = 0
     elapsed_seconds_answer: int = 0
+    is_new_fact: int = 0
     date: datetime = None
 
 
