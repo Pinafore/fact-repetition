@@ -323,7 +323,7 @@ class TestWeb(unittest.TestCase):
 
     def test_user_stats(self):
         env = 'dev'
-        user_id = '2580'
+        user_id = 'unit_test_user'
         URL = 'http://127.0.0.1:8000/api/karl'
         deck_id = 'unit_test_deck'
 

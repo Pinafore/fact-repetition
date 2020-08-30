@@ -160,17 +160,14 @@ def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
     new_facts = 0
     reviewed_facts = 0
     total_seen = 0
-    total_seconds = 0
     new_known_rate = 0
     review_known_rate = 0
-    elapsed_seconds_text = 0
-    elapsed_seconds_answer = 0
+    elapsed_milliseconds_text = 0
+    elapsed_milliseconds_answer = 0
 
     new_known, review_known, overall_known = [], [], []
     for h in history_records:
-        # user_snapshot = User.unpack(h.user_snapshot)
-        # if h.fact_id not in user_snapshot.previous_study:
-        if False:
+        if h.is_new_fact:
             new_facts += 1
             new_known.append(int(h.response))
         else:
@@ -179,13 +176,21 @@ def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
         total_seen += 1
         overall_known.append(int(h.response))
 
-        total_seconds += h.elapsed_seconds_text
-        elapsed_seconds_text += h.elapsed_seconds_text
-        elapsed_seconds_answer += h.elapsed_seconds_answer
+        if h.elapsed_milliseconds_text is None:
+            if h.elapsed_seconds_text is not None:
+                elapsed_milliseconds_text += 1000 * h.elapsed_seconds_text
+        else:
+            elapsed_milliseconds_text += h.elapsed_milliseconds_text
+        if h.elapsed_milliseconds_answer is None:
+            if h.elapsed_seconds_answer is not None:
+                elapsed_milliseconds_answer += 1000 * h.elapsed_seconds_answer
+        else:
+            elapsed_milliseconds_answer += h.elapsed_milliseconds_answer
 
     new_known_rate = 0 if len(new_known) == 0 else np.mean(new_known)
     review_known_rate = 0 if len(review_known) == 0 else np.mean(review_known)
     known_rate = 0 if len(overall_known) == 0 else np.mean(overall_known)
+    total_milliseconds = elapsed_milliseconds_text + elapsed_milliseconds_answer
 
     t2 = datetime.now()
 
@@ -193,12 +198,15 @@ def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
         'new_facts': new_facts,
         'reviewed_facts': reviewed_facts,
         'total_seen': total_seen,
-        'total_seconds': total_seconds,
-        'total_minutes': total_seconds // 60,
-        'elapsed_seconds_text': elapsed_seconds_text,
-        'elapsed_seconds_answer': elapsed_seconds_answer,
-        'elapsed_minutes_text': elapsed_seconds_text // 60,
-        'elapsed_minutes_answer': elapsed_seconds_answer // 60,
+        'total_milliseconds': total_milliseconds,
+        'total_seconds': total_milliseconds // 1000,
+        'total_minutes': total_milliseconds // 60000,
+        'elapsed_milliseconds_text': elapsed_milliseconds_text,
+        'elapsed_milliseconds_answer': elapsed_milliseconds_answer,
+        'elapsed_seconds_text': elapsed_milliseconds_text // 1000,
+        'elapsed_seconds_answer': elapsed_milliseconds_answer // 1000,
+        'elapsed_minutes_text': elapsed_milliseconds_text // 60000,
+        'elapsed_minutes_answer': elapsed_milliseconds_answer // 60000,
         'known_rate': round(known_rate * 100, 2),
         'new_known_rate': round(new_known_rate * 100, 2),
         'review_known_rate': round(review_known_rate * 100, 2),
@@ -238,7 +246,7 @@ def leaderboard(
 ):
     '''
     return [(user_id: str, rank_type: 'total_seen', value: 'value')]
-    that ranks [skip + 1: skip + 1 + limit)
+    that ranks [skip: skip + limit)
     '''
     env = 'dev' if env == 'dev' else 'prod'
     scheduler = schedulers[env]
@@ -263,13 +271,13 @@ def leaderboard(
         'profile_n_history_records',
     ]
     profile = {
-        key: np.mean([v[key] for v in stats.values()])
+        key: np.sum([v[key] for v in stats.values()])
         for key in profile_keys
     }
 
     # from high value to low
     stats = sorted(stats.items(), key=lambda x: x[1][rank_type])[::-1]
-    stats = [(k, v) for k, v in stats if v['total_seen'] > min_studied]
+    stats = [(k, v) for k, v in stats if v['total_seen'] >= min_studied]
 
     rankings = []
     user_place = None
@@ -279,7 +287,7 @@ def leaderboard(
         rankings.append(Ranking(user_id=k, rank=i + 1, value=v[rank_type]))
 
     leaderboard = Leaderboard(
-        leaderboard=rankings[skip: skip + limit + 1],
+        leaderboard=rankings[skip: skip + limit],
         total=len(rankings),
         rank_type=rank_type,
         user_place=user_place,

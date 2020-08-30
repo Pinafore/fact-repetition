@@ -19,6 +19,7 @@ class SetParams(BaseModel):
     qrep: float = 1                     # cosine distance between qreps
     skill: float = 0                    # fact difficulty vs user skill level
     recall: float = 1                   # recall probability
+    recall_target: float = 1            # recall target probability
     category: float = 1                 # change in category from prev
     answer: float = 1                   # reptition of the same category
     leitner: float = 0                  # hours till leitner scheduled date
@@ -36,6 +37,7 @@ class Params:
     qrep: float = 1                     # cosine distance between qreps
     skill: float = 0                    # fact difficulty vs user skill level
     recall: float = 1                   # recall probability
+    recall_target: float = 1            # target of recall probability
     category: float = 1                 # change in category from prev
     answer: float = 1                   # reptition of the same category
     leitner: float = 0                  # hours till leitner scheduled date
@@ -230,6 +232,8 @@ class ScheduleRequest(BaseModel):
     env: Optional[str]
     elapsed_seconds_text: Optional[int]
     elapsed_seconds_answer: Optional[int]
+    elapsed_milliseconds_text: Optional[int]
+    elapsed_milliseconds_answer: Optional[int]
 
 
 @dataclass
@@ -247,6 +251,8 @@ class History:
     scheduler_output: str
     elapsed_seconds_text: int = 0
     elapsed_seconds_answer: int = 0
+    elapsed_milliseconds_text: int = 0
+    elapsed_milliseconds_answer: int = 0
     is_new_fact: int = 0
     date: datetime = None
 

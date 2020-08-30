@@ -477,15 +477,21 @@ class MovingAvgScheduler:
 
     def dist_recall_batch(self, user: User, facts: List[Fact]) -> List[float]:
         """
-        Penalize facts that we think the user cannot recall.
+        With recall_target = 1, we basically penalize facts that the user
+        likely cannot cannot recall.
+        With recall_target < 1, we look for facts whose recall probability is
+        close to the designated target.
+        
         Returns one minus the recall probability of each fact.
         This functions calls the retention model for all facts in one batch.
 
         :param user:
         :param facts:
-        :return: the (1 - recall probablity) of each fact.
+        :return: the (recall_target - recall probablity) of each fact.
         """
-        return (1 - self.retention_model.predict(user, facts)).tolist()
+        target = user.params.recall_target
+        p_of_recall = self.retention_model.predict(user, facts)
+        return np.abs(target - p_of_recall).tolist()
 
     def dist_cool_down(self, user: User, fact: Fact, date: datetime) -> float:
         """
@@ -499,6 +505,7 @@ class MovingAvgScheduler:
         """
         prev_date, prev_response = user.previous_study.get(fact.fact_id, (None, None))
         if prev_date is None:
+            # TODO handle correct on first try
             return 0
         else:
             current_date = time.mktime(date.timetuple())
@@ -829,6 +836,24 @@ class MovingAvgScheduler:
                 leitner=1,
                 sm2=0,
             )
+        elif repetition_model_name == 'karl':
+            if user.params.qrep == 0:
+                # user might have specified some of the params
+                # only reset to karl parameters if currently using non-karl scheduler
+                # in which case params.qrep should be 0
+                user.params = Params()
+        elif repetition_model_name == 'karl50':
+            if user.params.qrep == 0:
+                # user might have specified some of the params
+                # only reset to karl parameters if currently using non-karl scheduler
+                # in which case params.qrep should be 0
+                user.params = Params(recall_target=0.5)
+        elif repetition_model_name == 'karl85':
+            if user.params.qrep == 0:
+                # user might have specified some of the params
+                # only reset to karl parameters if currently using non-karl scheduler
+                # in which case params.qrep should be 0
+                user.params = Params(recall_target=0.85)
 
         facts = [facts[i] for i in indices]
 
@@ -1116,7 +1141,9 @@ class MovingAvgScheduler:
                 scheduler_output='',
                 elapsed_seconds_text=request.elapsed_seconds_text,
                 elapsed_seconds_answer=request.elapsed_seconds_answer,
-                is_new_fact=int(fact.fact_id in user.previous_study),
+                elapsed_milliseconds_text=request.elapsed_milliseconds_text,
+                elapsed_milliseconds_answer=request.elapsed_milliseconds_answer,
+                is_new_fact=int(fact.fact_id not in user.previous_study),
                 date=date,
             )
             self.db.add_history(history)
@@ -1170,6 +1197,8 @@ class MovingAvgScheduler:
         :param fact:
         :param response: CORRECT or WRONG.
         """
+        # TODO handle correct on first try
+
         # leitner boxes 1~10
         # days[0] = None as placeholder since we don't have box 0
         # days[9] and days[10] = 9999 to make it never repeat
@@ -1199,6 +1228,8 @@ class MovingAvgScheduler:
         """
         def get_quality_from_response(response: bool) -> int:
             return 4 if response == CORRECT else 1
+
+        # TODO handle correct on first try
 
         e_f = user.sm2_efactor.get(fact.fact_id, 2.5)
         inv = user.sm2_interval.get(fact.fact_id, 1)
