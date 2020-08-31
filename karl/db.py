@@ -8,7 +8,6 @@ import logging
 import pytz
 from datetime import datetime
 from typing import List
-from contextlib import closing
 from dateutil.parser import parse as parse_date
 
 from karl.util import User, Fact, History
@@ -238,7 +237,7 @@ class SchedulerDB:
         try:
             cur.execute('INSERT INTO history VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                         (
-                            h.history_id,               
+                            h.history_id,
                             h.debug_id,
                             h.user_id,
                             h.fact_id,
@@ -399,7 +398,7 @@ class SchedulerDB:
 
     def finalize(self):
         self.conn.commit()
-        new_filename = '{}_{}'.format(self.filename, datetime.now())
-        copy_database(self.conn, new_filename).close()
+        # new_filename = '{}_{}'.format(self.filename, datetime.now())
+        # copy_database(self.conn, new_filename).close()
         self.conn.close()
         logger.info('db commit')

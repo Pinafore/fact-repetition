@@ -16,7 +16,6 @@ import en_core_web_lg
 from tqdm import tqdm
 from collections import defaultdict
 from datetime import datetime, timedelta
-from dateutil.parser import parse as parse_date
 from typing import List, Dict
 # from whoosh.qparser import QueryParser
 
@@ -481,7 +480,7 @@ class MovingAvgScheduler:
         likely cannot cannot recall.
         With recall_target < 1, we look for facts whose recall probability is
         close to the designated target.
-        
+
         Returns one minus the recall probability of each fact.
         This functions calls the retention model for all facts in one batch.
 
@@ -1039,7 +1038,6 @@ class MovingAvgScheduler:
         # # update user_stats. this should happen before we change the state of the user
         # if len(user.user_stats.results) > 0:
         #     # TODO inaccurate estimate of total seconds spent on the interface
-        #     previous_study_date = parse_date(user.user_stats.results[-1][2])
         #     new_seconds = int((date - previous_study_date).total_seconds())
         #     user.user_stats.total_seconds += new_seconds
 

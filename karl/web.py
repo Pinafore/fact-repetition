@@ -10,8 +10,9 @@ from typing import Optional, List, Union
 from pydantic import BaseModel
 from datetime import datetime
 from dateutil.parser import parse as parse_date
+from cachetools import cached, TTLCache
 
-from karl.util import ScheduleRequest, SetParams, Params, User
+from karl.util import ScheduleRequest, SetParams, Params
 from karl.scheduler import MovingAvgScheduler
 
 
@@ -76,7 +77,7 @@ def update(requests: List[ScheduleRequest]):
     date = parse_date(datetime.now().strftime('%Y-%m-%dT%H:%M:%S%z'))
     if requests[0].date is not None:
         date = parse_date(requests[0].date)
-    
+
     env = 'dev' if requests[0].env == 'dev' else 'prod'
     scheduler = schedulers[env]
 
@@ -137,6 +138,7 @@ def get_user_history(user_id: str, env: str = None, deck_id: str = None,
     return history_records
 
 @app.get('/api/karl/get_user_stats')
+@cached(cache=TTLCache(maxsize=1024, ttl=600))
 def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
                    date_start: str = None, date_end: str = None):
     '''
