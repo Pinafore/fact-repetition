@@ -6,12 +6,25 @@ import json
 import sqlite3
 import logging
 import pytz
+from datetime import datetime
 from typing import List
+from contextlib import closing
 from dateutil.parser import parse as parse_date
 
 from karl.util import User, Fact, History
 
 logger = logging.getLogger('scheduler')
+
+def copy_database(source_connection, dest_dbname=':memory:'):
+    '''Return a connection to a new copy of an existing database.
+       Raises an sqlite3.OperationalError if the destination already exists.
+    '''
+    script = ''.join(source_connection.iterdump())
+    dest_conn = sqlite3.connect(dest_dbname,
+                                detect_types=sqlite3.PARSE_DECLTYPES,
+                                check_same_thread=False)
+    dest_conn.executescript(script)
+    return dest_conn
 
 class SchedulerDB:
 
@@ -19,8 +32,21 @@ class SchedulerDB:
         self.filename = filename
         if not os.path.exists(filename):
             self.create()
-        self.conn = sqlite3.connect(
-            filename, detect_types=sqlite3.PARSE_DECLTYPES, check_same_thread=False)
+
+        # load DB from disk
+        source = sqlite3.connect(
+            filename,
+            detect_types=sqlite3.PARSE_DECLTYPES,
+            check_same_thread=False
+        )
+        self.conn = copy_database(source, ':memory:')
+
+        # TODO see if this helps
+        cur = self.conn.cursor()
+        cur.execute('CREATE INDEX index_user_id ON history (user_id);')
+
+        self.conn.commit()
+        source.close()
 
     def create(self):
         logger.info('creating {}'.format(self.filename))
@@ -373,5 +399,7 @@ class SchedulerDB:
 
     def finalize(self):
         self.conn.commit()
+        new_filename = '{}_{}'.format(self.filename, datetime.now())
+        copy_database(self.conn, new_filename).close()
         self.conn.close()
         logger.info('db commit')
