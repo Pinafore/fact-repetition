@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+import os
 import json
 import copy
 import pickle
@@ -21,6 +22,9 @@ model = RetentionModel()
 CORRECT = True
 WRONG = False
 URL = 'http://127.0.0.1:8000/api/karl'
+
+if not os.path.exists('output'):
+    os.mkdir('output')
 
 fret_file = open('output/sim_fret.txt', 'w')
 detail_file = open('output/sim_detail.txt', 'w')

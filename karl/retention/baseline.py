@@ -12,7 +12,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim.lr_scheduler import StepLR
 
-from karl.util import User, Fact
+from karl.util import User, Fact, parse_date
 from karl.retention.data import RetentionDataset, apply_parallel, get_split_dfs
 
 
@@ -147,9 +147,9 @@ class RetentionModel:
         self.model.load_state_dict(torch.load('checkpoints/retention_model.pt'))
         self.model.eval()
 
-    def predict(self, user: User, facts: List[Fact], date=None) -> np.ndarray:
+    def predict(self, user: User, facts: List[Fact], date: datetime = None) -> np.ndarray:
         if date is None:
-            date = datetime.now()
+            date = parse_date(datetime.now().strftime('%Y-%m-%dT%H:%M:%S%z'))
         # user_count_correct
         # user_count_wrong
         # user_count_total

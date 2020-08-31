@@ -475,7 +475,7 @@ class MovingAvgScheduler:
         d *= 1 if d <= 0 else 10
         return abs(d)
 
-    def dist_recall_batch(self, user: User, facts: List[Fact]) -> List[float]:
+    def dist_recall_batch(self, user: User, facts: List[Fact], date: datetime) -> List[float]:
         """
         With recall_target = 1, we basically penalize facts that the user
         likely cannot cannot recall.
@@ -490,7 +490,7 @@ class MovingAvgScheduler:
         :return: the (recall_target - recall probablity) of each fact.
         """
         target = user.params.recall_target
-        p_of_recall = self.retention_model.predict(user, facts)
+        p_of_recall = self.retention_model.predict(user, facts, date)
         return np.abs(target - p_of_recall).tolist()
 
     def dist_cool_down(self, user: User, fact: Fact, date: datetime) -> float:
@@ -598,7 +598,7 @@ class MovingAvgScheduler:
         :param fact:
         :return: distance in number of hours.
         """
-        recall_scores = self.dist_recall_batch(user, facts)
+        recall_scores = self.dist_recall_batch(user, facts, date)
         scores = [{
             'qrep': self.dist_qrep(user, fact),
             # 'skill': self.dist_skill(user, fact),
