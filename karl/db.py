@@ -42,7 +42,7 @@ class SchedulerDB:
 
         # TODO see if this helps
         cur = self.conn.cursor()
-        cur.execute('CREATE INDEX index_user_id ON history (user_id);')
+        # cur.execute('CREATE INDEX index_user_id ON history (user_id);')
 
         self.conn.commit()
         source.close()
@@ -398,7 +398,7 @@ class SchedulerDB:
 
     def finalize(self):
         self.conn.commit()
-        # new_filename = '{}_{}'.format(self.filename, datetime.now())
-        # copy_database(self.conn, new_filename).close()
+        new_filename = '{}_{}'.format(self.filename, datetime.now())
+        copy_database(self.conn, new_filename).close()
         self.conn.close()
         logger.info('db commit')
