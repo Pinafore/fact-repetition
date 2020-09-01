@@ -138,7 +138,7 @@ def get_user_history(user_id: str, env: str = None, deck_id: str = None,
     return history_records
 
 @app.get('/api/karl/get_user_stats')
-@cached(cache=TTLCache(maxsize=1024, ttl=600))
+@cached(cache=TTLCache(maxsize=1024, ttl=1800))
 def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
                    date_start: str = None, date_end: str = None):
     '''
@@ -235,6 +235,7 @@ class Leaderboard(BaseModel):
 
 
 @app.get('/api/karl/leaderboard')
+@cached(cache=TTLCache(maxsize=1024, ttl=1800))
 def leaderboard(
         user_id: str = None,
         env: str = None,
