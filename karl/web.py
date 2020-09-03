@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+import json
 import atexit
 import logging
 import numpy as np
@@ -13,6 +14,7 @@ from dateutil.parser import parse as parse_date
 from cachetools import cached, TTLCache
 
 from karl.util import ScheduleRequest, SetParams, Params
+from karl.new_util import User, Record
 from karl.scheduler import MovingAvgScheduler
 
 
@@ -126,16 +128,32 @@ def get_user(user_id: str, env: str = None):
 @app.get('/api/karl/get_all_users')
 def get_all_users(env: str = None):
     env = 'dev' if env == 'dev' else 'prod'
-    users = schedulers[env].db.get_user()
-    return [user.pack() for user in users]
+    users = schedulers[env].db.query(User).all()
+    # TODO maybe slow
+    return [json.dumps({
+        k: v for k, v in user.__dict__.items() if k != '_sa_instance_state'
+    }) for user in users]
 
 @app.get('/api/karl/get_user_history')
 def get_user_history(user_id: str, env: str = None, deck_id: str = None,
                      date_start: str = None, date_end: str = None):
     env = 'dev' if env == 'dev' else 'prod'
     scheduler = schedulers[env]
-    history_records = scheduler.db.get_user_history(user_id, deck_id, date_start, date_end)
-    return history_records
+
+    if date_start is None:
+        date_start = '2008-06-11 08:00:00'
+    if date_end is None:
+        date_end = '2038-06-11 08:00:00'
+
+    date_start = parse_date(date_start)
+    date_end = parse_date(date_end)
+
+    records = scheduler.db.query(Record).\
+        filter(Record.user_id == user_id).\
+        filter(Record.date >= date_start, Record.date <= date_end)
+    if deck_id is not None:
+        records = records.filter(Record.deck_id == deck_id)
+    return records.all()
 
 @app.get('/api/karl/get_user_stats')
 @cached(cache=TTLCache(maxsize=1024, ttl=1800))
@@ -153,10 +171,9 @@ def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
     review_known_rate: float
     '''
     env = 'dev' if env == 'dev' else 'prod'
-    scheduler = schedulers[env]
 
     t0 = datetime.now()
-    history_records = scheduler.db.get_user_history(user_id, deck_id, date_start, date_end)
+    history_records = get_user_history(user_id, env, deck_id, date_start, date_end)
     t1 = datetime.now()
 
     new_facts = 0
@@ -254,9 +271,8 @@ def leaderboard(
     env = 'dev' if env == 'dev' else 'prod'
     scheduler = schedulers[env]
 
-    users = scheduler.db.get_user()
     stats = {}
-    for user in users:
+    for user in scheduler.db.query(User):
         if not user.user_id.isdigit():
             continue
 
@@ -306,4 +322,5 @@ def leaderboard(
 @atexit.register
 def finalize_db():
     for scheduler in schedulers.values():
-        scheduler.db.finalize()
+        scheduler.db.commit()
+        scheduler.db.close()

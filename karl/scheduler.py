@@ -19,13 +19,16 @@ from datetime import datetime, timedelta
 from typing import List, Dict
 # from whoosh.qparser import QueryParser
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
 from plotnine import ggplot, aes, geom_bar, coord_flip
 from pandas.api.types import CategoricalDtype
 
 from karl.db import SchedulerDB
 from karl.lda import process_question
-from karl.util import ScheduleRequest, Params, Fact, User, History
-from karl.util import theme_fs
+from karl.util import ScheduleRequest, theme_fs
+from karl.new_util import Params, User, Fact, Record
 from karl.retention.baseline import RetentionModel
 # from karl.new_retention import HFRetentionModel as RetentionModel
 
@@ -86,7 +89,8 @@ class MovingAvgScheduler:
         self.lda_dir = lda_dir
         self.whoosh_index = whoosh_index
 
-        self.db = SchedulerDB(db_filename)
+        # self.db = SchedulerDB(db_filename)
+        self.db = sessionmaker(bind=create_engine(f'sqlite:///{db_filename}.new.db'))()
         self.retention_model = RetentionModel()
 
         # logger.info('loading question and records...')
@@ -202,15 +206,22 @@ class MovingAvgScheduler:
 
         :param user_id: the `user_id` of the user to be reset. Resets all users if `None`.
         """
-        self.db.delete_user(user_id=user_id)
-        self.db.delete_history(user_id=user_id)
+
         if user_id is not None:
+            # remove user from db
+            user = self.db.query(User).get(user_id)
+            if user is not None:
+                self.db.delete(user)
+
             if user_id in self.preemptive_future[CORRECT]:
                 self.preemptive_future[CORRECT].pop(user_id)
             if user_id in self.preemptive_future[WRONG]:
                 self.preemptive_future[WRONG].pop(user_id)
             if user_id in self.preemptive_commit:
                 self.preemptive_commit.pop(user_id)
+        else:
+            # remove all users
+            self.db.query(User).delete()
 
     def reset_fact(self, fact_id=None) -> None:
         """
@@ -219,7 +230,9 @@ class MovingAvgScheduler:
 
         :param fact_id: the `fact_id` of the fact to be reset. Resets all facts if `None`.
         """
-        self.db.delete_fact(fact_id=fact_id)
+        fact = self.db.query(Fact).get(fact_id)
+        if fact is not None:
+            self.db.query(Fact).delete(fact)
 
     def build_whoosh(self) -> None:
         """
@@ -271,7 +284,7 @@ class MovingAvgScheduler:
         :return: a fact.
         """
         # retrieve from db if exists
-        fact = self.db.get_fact(request.fact_id)
+        fact = self.db.query(Fact).get(request.fact_id)
         if fact is not None:
             return fact
 
@@ -294,7 +307,8 @@ class MovingAvgScheduler:
         fact.skill[np.argmax(fact.qrep)] = 1
         fact.skill *= self.get_skill_for_fact(fact)
 
-        self.db.add_fact(fact)
+        self.db.add(fact)
+        self.db.commit()
         return fact
 
     def get_facts(self, requests: List[ScheduleRequest]) -> List[Fact]:
@@ -309,7 +323,7 @@ class MovingAvgScheduler:
         """
         new_facts, facts = [], []
         for i, r in enumerate(requests):
-            fact = self.db.get_fact(r.fact_id)
+            fact = self.db.query(Fact).get(r.fact_id)
             if fact is None:
                 fact = Fact(
                     fact_id=r.fact_id,
@@ -335,7 +349,8 @@ class MovingAvgScheduler:
             fact.skill = np.zeros_like(fact.qrep)
             fact.skill[np.argmax(fact.qrep)] = 1
             fact.skill *= fact_skills[i]
-        self.db.add_facts(new_facts)
+        self.db.bulk_save_objects(new_facts)
+        self.db.commit()
         return facts
 
     def get_user(self, user_id: str) -> User:
@@ -347,13 +362,14 @@ class MovingAvgScheduler:
         :return: the user.
         """
         # retrieve from db if exists
-        user = self.db.get_user(user_id)
+        user = self.db.query(User).get(user_id)
         if user is not None:
             return user
 
         # create new user and insert to db
         new_user = User(user_id=user_id)
-        self.db.add_user(new_user)
+        self.db.add(new_user)
+        self.db.commit()
         return new_user
 
     # def retrieve(self, fact: dict) -> Tuple[List[dict], List[float]]:
@@ -406,7 +422,7 @@ class MovingAvgScheduler:
         """
         user = self.get_user(user_id)
         user.params = params
-        self.db.update_user(user)
+        self.db.commit()
 
     def dist_category(self, user: User, fact: Fact) -> float:
         """
@@ -1111,40 +1127,27 @@ class MovingAvgScheduler:
         request = requests[indices[0]]
         fact = facts[indices[0]]
 
-        # find that temporary history entry and update
-        # temp_history_id = json.dumps({'user_id': user.user_id, 'fact_id': fact.fact_id})
-        # history = self.db.get_history(temp_history_id)
-        # if history is not None:
-        if False:
-            pass
-        #     history.__dict__.update({
-        #         'history_id': request.history_id,
-        #         'response': request.label,
-        #         'judgement': request.label,
-        #         'date': date
-        #     })
-        #     self.db.update_history(temp_history_id, history)
-        else:
-            history = History(
-                history_id=request.history_id,
-                debug_id=self.debug_id.get(request.user_id, 'null'),
-                user_id=request.user_id,
-                fact_id=fact.fact_id,
-                deck_id=fact.deck_id,
-                response=request.label,
-                judgement=request.label,
-                user_snapshot=json.dumps(user.pack()),
-                scheduler_snapshot=json.dumps(user.params.__dict__),
-                fact_ids=[x.fact_id for x in facts],
-                scheduler_output='',
-                elapsed_seconds_text=request.elapsed_seconds_text,
-                elapsed_seconds_answer=request.elapsed_seconds_answer,
-                elapsed_milliseconds_text=request.elapsed_milliseconds_text,
-                elapsed_milliseconds_answer=request.elapsed_milliseconds_answer,
-                is_new_fact=int(fact.fact_id not in user.previous_study),
-                date=date,
-            )
-            self.db.add_history(history)
+        record = Record(
+            record_id=request.history_id,
+            debug_id=self.debug_id.get(request.user_id, 'null'),
+            user_id=request.user_id,
+            fact_id=fact.fact_id,
+            deck_id=fact.deck_id,
+            response=request.label,
+            judgement=request.label,
+            user_snapshot='',  # TODO
+            scheduler_snapshot=json.dumps(user.params.__dict__),
+            fact_ids=json.dumps([x.fact_id for x in facts]),
+            scheduler_output='',
+            elapsed_seconds_text=request.elapsed_seconds_text,
+            elapsed_seconds_answer=request.elapsed_seconds_answer,
+            elapsed_milliseconds_text=request.elapsed_milliseconds_text,
+            elapsed_milliseconds_answer=request.elapsed_milliseconds_answer,
+            is_new_fact=int(fact.fact_id not in user.previous_study),
+            date=date,
+        )
+        self.db.add(record)
+        self.db.commit()
 
         # for detail display, this need to happen before the `update_user_fact` below
         old_user = copy.deepcopy(user)
@@ -1166,8 +1169,9 @@ class MovingAvgScheduler:
         if user.user_id in self.debug_id:
             self.debug_id.pop(user.user_id)
 
-        self.db.update_user(user)
-        self.db.update_fact(fact)
+        # self.db.update_user(user)
+        # self.db.update_fact(fact)
+        self.db.commit()
 
         detail = {
             'response': request.label,
