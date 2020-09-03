@@ -20,8 +20,8 @@ from karl.scheduler import MovingAvgScheduler
 
 app = FastAPI()
 schedulers = {
-    'dev': MovingAvgScheduler(db_filename='db.sqlite.dev'),
-    'prod': MovingAvgScheduler(db_filename='db.sqlite.prod'),
+    'dev': MovingAvgScheduler(db_filename='karl-dev'),
+    'prod': MovingAvgScheduler(db_filename='karl-prod'),
 }
 
 
@@ -148,15 +148,14 @@ def get_user_history(user_id: str, env: str = None, deck_id: str = None,
     date_start = parse_date(date_start)
     date_end = parse_date(date_end)
 
-    records = scheduler.db.query(Record).\
-        filter(Record.user_id == user_id).\
+    records = scheduler.db.query(Record).filter(Record.user_id == user_id).\
         filter(Record.date >= date_start, Record.date <= date_end)
     if deck_id is not None:
         records = records.filter(Record.deck_id == deck_id)
     return records.all()
 
 @app.get('/api/karl/get_user_stats')
-@cached(cache=TTLCache(maxsize=1024, ttl=1800))
+# @cached(cache=TTLCache(maxsize=1024, ttl=1800))
 def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
                    date_start: str = None, date_end: str = None):
     '''
@@ -252,7 +251,7 @@ class Leaderboard(BaseModel):
 
 
 @app.get('/api/karl/leaderboard')
-@cached(cache=TTLCache(maxsize=1024, ttl=1800))
+# @cached(cache=TTLCache(maxsize=1024, ttl=1800))
 def leaderboard(
         user_id: str = None,
         env: str = None,

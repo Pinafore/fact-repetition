@@ -2,7 +2,8 @@ import io
 import json
 import pytz
 import numpy as np
-import sqlite3
+import msgpack
+import msgpack_numpy
 from dataclasses import dataclass
 from sqlalchemy import create_engine
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
@@ -49,20 +50,26 @@ class JSONEncoded(types.TypeDecorator):
         return value
 
 
-class BinaryNumpy(types.TypeDecorator):
-
-    impl = types.BINARY
+class ParamsType(types.TypeDecorator):
+    
+    impl = types.VARCHAR
 
     def process_bind_param(self, value, dialect):
-        out = io.BytesIO()
-        np.save(out, value)
-        out.seek(0)
-        return sqlite3.Binary(out.read())
+        return json.dumps({k: v for k, v in value.__dict__.items() if not k.startswith('_')})
 
     def process_result_value(self, value, dialect):
-        out = io.BytesIO(value)
-        out.seek(0)
-        return np.load(out)
+        return Params(**json.loads(value))
+
+
+class BinaryNumpy(types.TypeDecorator):
+
+    impl = types.LargeBinary
+
+    def process_bind_param(self, value, dialect):
+        return msgpack.packb(value, default=msgpack_numpy.encode)
+
+    def process_result_value(self, value, dialect):
+        return msgpack.unpackb(value, object_hook=msgpack_numpy.decode)
 
 
 class Fact(Base):
@@ -95,7 +102,7 @@ class User(Base):
     count_correct_before = Column(MutableDict.as_mutable(JSONEncoded), default={})
     # qid -> number of times user and qid incorrectly
     count_wrong_before = Column(MutableDict.as_mutable(JSONEncoded), default={})
-    params = Column(MutableDict.as_mutable(JSONEncoded), default={})
+    params = Column(ParamsType)
 
 
 class Record(Base):
@@ -130,10 +137,11 @@ if __name__ == '__main__':
     from karl.db import SchedulerDB
 
     filename = 'db.sqlite.prod'
+    db_name = 'karl-prod'
 
     db = SchedulerDB(filename)
 
-    engine = create_engine(f'sqlite:///{filename}.new.db', echo=True)
+    engine = create_engine(f'postgresql+psycopg2://shifeng/{db_name}?host=/fs/clip-scratch/shifeng/postgres/run')
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
     session = Session()
@@ -161,7 +169,7 @@ if __name__ == '__main__':
             results=user.results,
             count_correct_before=user.count_correct_before,
             count_wrong_before=user.count_wrong_before,
-            params=user.params.__dict__,
+            params=user.params,
         )
         session.add(new_user)
     session.commit()

@@ -171,6 +171,8 @@ class RetentionModel:
                 prev_date, prev_response = user.previous_study[fact.fact_id]
             else:
                 prev_date = date
+            if isinstance(prev_date, str):
+                prev_date = parse_date(prev_date)
             xs.append([
                 uq_correct,  # user_count_correct
                 uq_wrong,  # user_count_wrong

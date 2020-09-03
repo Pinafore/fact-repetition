@@ -27,7 +27,7 @@ from pandas.api.types import CategoricalDtype
 
 from karl.db import SchedulerDB
 from karl.lda import process_question
-from karl.util import ScheduleRequest, theme_fs
+from karl.util import ScheduleRequest, parse_date, theme_fs
 from karl.new_util import Params, User, Fact, Record
 from karl.retention.baseline import RetentionModel
 # from karl.new_retention import HFRetentionModel as RetentionModel
@@ -90,7 +90,8 @@ class MovingAvgScheduler:
         self.whoosh_index = whoosh_index
 
         # self.db = SchedulerDB(db_filename)
-        self.db = sessionmaker(bind=create_engine(f'sqlite:///{db_filename}.new.db'))()
+        engine = create_engine(f'postgresql+psycopg2://shifeng/{db_filename}?host=/fs/clip-scratch/shifeng/postgres/run')
+        self.db = sessionmaker(bind=engine)()
         self.retention_model = RetentionModel()
 
         # logger.info('loading question and records...')
@@ -433,13 +434,12 @@ class MovingAvgScheduler:
         :param fact:
         :return: 0 if same category, 1 if otherwise.
         """
-        if (
-                len(user.recent_facts) == 0
-                or user.recent_facts[-1].category is None
-                or fact.category is None
-        ):
+        if len(user.records) == 0:
             return 0
-        return float(fact.category != user.recent_facts[-1].category)
+        last_fact = user.records[-1].fact
+        if last_fact is None or last_fact.category is None or fact.category is None:
+            return 0
+        return float(fact.category != last_fact.category)
 
     def dist_answer(self, user: User, fact: Fact) -> float:
         """
@@ -451,14 +451,14 @@ class MovingAvgScheduler:
         :return: 1 if same answer, 0 if otherwise.
         """
         if (
-                len(user.recent_facts) == 0
+                len(user.records) == 0
                 or fact.answer is None
         ):
             return 0
         T = 0
-        for i, recent_fact in enumerate(user.recent_facts[::-1]):
+        for i, record in enumerate(user.records[::-1]):
             # from most recent to least recent
-            if recent_fact.answer == fact.answer:
+            if record.fact.answer == fact.answer:
                 T = i + 1
                 break
         if T == 0:
@@ -478,10 +478,11 @@ class MovingAvgScheduler:
         :param fact:
         :return: different in skill estimate, multiplied by 10 if fact is easier.
         """
-        if len(user.recent_facts) == 0:
+        if len(user.records) == 0:
             user_skill = copy.deepcopy(self.avg_user_skill_estimate)
         else:
-            user_skill = self.get_discounted_average([fact.skill for fact in user.recent_facts],
+            recent_facts = [record.fact for record in user.records[::-1][:user.params.max_recent_facts]]
+            user_skill = self.get_discounted_average([fact.skill for fact in recent_facts],
                                                      user.params.decay_skill)
             user_skill = np.clip(user_skill, a_min=0.0, a_max=1.0)
         topic_idx = np.argmax(fact.qrep)
@@ -523,6 +524,8 @@ class MovingAvgScheduler:
             # TODO handle correct on first try
             return 0
         else:
+            if isinstance(prev_date, str):
+                prev_date = parse_date(prev_date)
             current_date = time.mktime(date.timetuple())
             prev_date = time.mktime(prev_date.timetuple())
             delta_minutes = max(float(current_date - prev_date) / 60, 0)
@@ -566,10 +569,11 @@ class MovingAvgScheduler:
         """
         def cosine_distance(a, b):
             return 1 - (a @ b.T) / (np.linalg.norm(a) * np.linalg.norm(b))
-        if len(user.recent_facts) == 0:
+        if len(user.records) == 0:
             user_qrep = np.array([1 / self.n_topics for _ in range(self.n_topics)])
         else:
-            user_qrep = self.get_discounted_average([x.qrep for x in user.recent_facts],
+            recent_facts = [record.fact for record in user.records[::-1][:user.params.max_recent_facts]]
+            user_qrep = self.get_discounted_average([x.qrep for x in recent_facts],
                                                     user.params.decay_qrep)
         return cosine_distance(user_qrep, fact.qrep)
 
@@ -586,6 +590,8 @@ class MovingAvgScheduler:
         if scheduled_date is None:
             return 0
         else:
+            if isinstance(scheduled_date, str):
+                scheduled_date = parse_date(scheduled_date)
             # NOTE distance in hours, can be negative
             return (scheduled_date - date).total_seconds() / (60 * 60)
 
@@ -602,6 +608,8 @@ class MovingAvgScheduler:
         if scheduled_date is None:
             return 0
         else:
+            if isinstance(scheduled_date, str):
+                scheduled_date = parse_date(scheduled_date)
             # NOTE distance in hours, can be negative
             return (scheduled_date - date).total_seconds() / (60 * 60)
 
@@ -757,11 +765,12 @@ class MovingAvgScheduler:
         order = np.argsort([s['sum'] for s in scores]).tolist()
         fact = facts[order[0]]
 
-        if len(user.recent_facts) == 0:
-            user_qrep = np.array([1 / self.n_topics for _ in range(self.n_topics)])
-        else:
-            user_qrep = self.get_discounted_average([x.qrep for x in user.recent_facts],
-                                                    user.params.decay_qrep)
+        # if len(user.records) == 0:
+        #     user_qrep = np.array([1 / self.n_topics for _ in range(self.n_topics)])
+        # else:
+        #     recent_facts = [record.fact for record in user.records[::-1][:user.params.max_recent_facts]]
+        #     user_qrep = self.get_discounted_average([x.qrep for x in recent_facts],
+        #                                             user.params.decay_qrep)
         # plot_polar(user_qrep, '/fs/www-users/shifeng/temp/user.jpg', fill='green')
         # plot_polar(fact.qrep, '/fs/www-users/shifeng/temp/fact.jpg', fill='yellow')
 
@@ -771,7 +780,7 @@ class MovingAvgScheduler:
             figname = '{}_{}_{}.jpg'.format(user.user_id, fact.fact_id, date.strftime('%Y-%m-%d-%H-%M'))
             local_filename = '/fs/www-users/shifeng/temp/' + figname
             remote_filename = 'http://users.umiacs.umd.edu/~shifeng/temp/' + figname
-            self.plot_histogram(user_qrep, fact.qrep, local_filename)
+            # self.plot_histogram(user_qrep, fact.qrep, local_filename)
 
             rationale += "</br>"
             rationale += "</br>"
@@ -1075,9 +1084,6 @@ class MovingAvgScheduler:
         # user.user_stats.last_week_new_facts = len([x[1] for x in last_week_results])
 
         # update category and previous study (date and response)
-        user.recent_facts.append(fact)
-        if len(user.recent_facts) >= user.params.max_recent_facts:
-            user.recent_facts.pop(0)
         user.previous_study[fact.fact_id] = (date, response)
 
         # update retention features
@@ -1150,7 +1156,7 @@ class MovingAvgScheduler:
         self.db.commit()
 
         # for detail display, this need to happen before the `update_user_fact` below
-        old_user = copy.deepcopy(user)
+        # old_user = copy.deepcopy(user)
 
         # commit
         if not self.preemptive:
@@ -1174,19 +1180,19 @@ class MovingAvgScheduler:
         self.db.commit()
 
         detail = {
-            'response': request.label,
-            'old ltn box': old_user.leitner_box.get(fact.fact_id, '-'),
-            'new ltn box': user.leitner_box.get(fact.fact_id, '-'),
-            'old ltn dat': str(old_user.leitner_scheduled_date.get(fact.fact_id, '-')),
-            'new ltn dat': str(user.leitner_scheduled_date.get(fact.fact_id, '-')),
-            'old sm2 rep': old_user.sm2_repetition.get(fact.fact_id, '-'),
-            'new sm2 rep': user.sm2_repetition.get(fact.fact_id, '-'),
-            'old sm2 inv': old_user.sm2_interval.get(fact.fact_id, '-'),
-            'new sm2 inv': user.sm2_interval.get(fact.fact_id, '-'),
-            'old sm2 e_f': old_user.sm2_efactor.get(fact.fact_id, '-'),
-            'new sm2 e_f': user.sm2_efactor.get(fact.fact_id, '-'),
-            'old sm2 dat': str(old_user.sm2_scheduled_date.get(fact.fact_id, '-')),
-            'new sm2 dat': str(user.sm2_scheduled_date.get(fact.fact_id, '-')),
+            # 'response': request.label,
+            # 'old ltn box': old_user.leitner_box.get(fact.fact_id, '-'),
+            # 'new ltn box': user.leitner_box.get(fact.fact_id, '-'),
+            # 'old ltn dat': str(old_user.leitner_scheduled_date.get(fact.fact_id, '-')),
+            # 'new ltn dat': str(user.leitner_scheduled_date.get(fact.fact_id, '-')),
+            # 'old sm2 rep': old_user.sm2_repetition.get(fact.fact_id, '-'),
+            # 'new sm2 rep': user.sm2_repetition.get(fact.fact_id, '-'),
+            # 'old sm2 inv': old_user.sm2_interval.get(fact.fact_id, '-'),
+            # 'new sm2 inv': user.sm2_interval.get(fact.fact_id, '-'),
+            # 'old sm2 e_f': old_user.sm2_efactor.get(fact.fact_id, '-'),
+            # 'new sm2 e_f': user.sm2_efactor.get(fact.fact_id, '-'),
+            # 'old sm2 dat': str(old_user.sm2_scheduled_date.get(fact.fact_id, '-')),
+            # 'new sm2 dat': str(user.sm2_scheduled_date.get(fact.fact_id, '-')),
         }
 
         return detail
