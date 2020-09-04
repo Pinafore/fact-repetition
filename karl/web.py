@@ -9,7 +9,7 @@ from pprint import pprint
 from fastapi import FastAPI
 from typing import Optional, List, Union
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_date
 from cachetools import cached, TTLCache
 
@@ -178,19 +178,19 @@ def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
     if date_end is None:
         date_end = '2038-06-11 08:00:00'
 
-    date_start = parse_date(date_start)
-    date_end = parse_date(date_end)
+    date_start = parse_date(date_start).date()
+    date_end = parse_date(date_end).date() + timedelta(days=1)
 
     # last record no later than start date
     before_stat = scheduler.db.query(UserStat).\
         filter(UserStat.user_id == user_id).\
-        filter(UserStat.date <= date_start).order_by(UserStat.date.desc()).first()
+        filter(UserStat.date < date_start).order_by(UserStat.date.desc()).first()
     # last record no later than end date
     after_stat = scheduler.db.query(UserStat).\
         filter(UserStat.user_id == user_id).\
         filter(UserStat.date <= date_end).order_by(UserStat.date.desc()).first()
 
-    if after_stat is None:
+    if after_stat is None or after_stat.date < date_start:
         return {
             'new_facts': 0,
             'reviewed_facts': 0,
