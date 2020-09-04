@@ -4,9 +4,10 @@ import pytz
 import numpy as np
 import msgpack
 import msgpack_numpy
+from tqdm import tqdm
 from dataclasses import dataclass
 from sqlalchemy import create_engine
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.ext.declarative import declarative_base
@@ -112,7 +113,7 @@ class Record(Base):
     user_id = Column(String, ForeignKey('users.user_id'))
     fact_id = Column(String, ForeignKey('facts.fact_id'))
     deck_id = Column(String)
-    response = Column(String)
+    response = Column(Boolean)
     judgement = Column(String)
     user_snapshot = Column(String)
     scheduler_snapshot = Column(String)
@@ -129,8 +130,35 @@ class Record(Base):
     fact = relationship("Fact", back_populates="records")
 
 
+class UserStat(Base):
+    __tablename__ = 'user_stats'
+    user_stat_id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey('users.user_id'))
+    date = Column(Date)
+    new_facts = Column(Integer, default=0)
+    reviewed_facts = Column(Integer, default=0)
+    new_correct = Column(Integer, default=0)
+    reviewed_correct = Column(Integer, default=0)
+    total_seen = Column(Integer, default=0)
+    total_milliseconds = Column(Integer, default=0)
+    total_seconds = Column(Integer, default=0)
+    total_minutes = Column(Integer, default=0)
+    elapsed_milliseconds_text = Column(Integer, default=0)
+    elapsed_milliseconds_answer = Column(Integer, default=0)
+    elapsed_seconds_text = Column(Integer, default=0)
+    elapsed_seconds_answer = Column(Integer, default=0)
+    elapsed_minutes_text = Column(Integer, default=0)
+    elapsed_minutes_answer = Column(Integer, default=0)
+    # known_rate = Column(Float)
+    # new_known_rate = Column(Float)
+    # review_known_rate = Column(Float)
+
+    user = relationship("User", back_populates="user_stats")
+
+
 User.records = relationship("Record", order_by=Record.date, back_populates="user")
 Fact.records = relationship("Record", order_by=Record.date, back_populates="fact")
+User.user_stats = relationship("UserStat", order_by=UserStat.date, back_populates="user")
 
 
 if __name__ == '__main__':
@@ -146,7 +174,7 @@ if __name__ == '__main__':
     Session = sessionmaker(bind=engine)
     session = Session()
 
-    for user in db.get_user():
+    for user in tqdm(db.get_user()):
         new_user = User(
             user_id=user.user_id,
             recent_facts=[fact.fact_id for fact in user.recent_facts],
@@ -189,14 +217,18 @@ if __name__ == '__main__':
         session.add(new_fact)
     session.commit()
 
-    for record in db.get_history():
+    for record in tqdm(db.get_history()):
+        record.elapsed_seconds_text = record.elapsed_seconds_text or 0
+        record.elapsed_seconds_answer = record.elapsed_seconds_answer or 0
+        record.elapsed_milliseconds_text = record.elapsed_milliseconds_text or record.elapsed_seconds_text * 1000
+        record.elapsed_milliseconds_answer = record.elapsed_milliseconds_answer or record.elapsed_seconds_answer * 1000
         new_record = Record(
             record_id=record.history_id,
             debug_id=record.debug_id,
             user_id=record.user_id,
             fact_id=record.fact_id,
             deck_id=record.deck_id,
-            response=record.response,
+            response=bool(int(record.response)),
             judgement=record.judgement,
             user_snapshot=record.user_snapshot,
             scheduler_snapshot=record.scheduler_snapshot,
@@ -211,4 +243,87 @@ if __name__ == '__main__':
         )
         session.add(new_record)
     session.commit()
+
+    for user in tqdm(session.query(User)):
+        prev_stat = None
+        curr_stat = None
+        for record in user.records:
+            if curr_stat is None:
+                user_stat_id = json.dumps({
+                    'user_id': user.user_id,
+                    'date': str(record.date.date())
+                })
+                curr_stat = UserStat(
+                    user_stat_id=user_stat_id,
+                    user_id=user.user_id,
+                    date=record.date.date(),
+                    new_facts=0,
+                    reviewed_facts=0,
+                    new_correct=0,
+                    reviewed_correct=0,
+                    total_seen=0,
+                    total_milliseconds=0,
+                    total_seconds=0,
+                    total_minutes=0,
+                    elapsed_milliseconds_text=0,
+                    elapsed_milliseconds_answer=0,
+                    elapsed_seconds_text=0,
+                    elapsed_seconds_answer=0,
+                    elapsed_minutes_text=0,
+                    elapsed_minutes_answer=0,
+                )
+            elif curr_stat.date != record.date.date():
+                session.add(curr_stat)
+                session.commit()
+                user_stat_id = json.dumps({
+                    'user_id': user.user_id,
+                    'date': str(record.date.date()),
+                })
+                new_stat = UserStat(
+                    user_stat_id=user_stat_id,
+                    user_id=user.user_id,
+                    date=record.date.date(),
+                    new_facts=curr_stat.new_facts,
+                    reviewed_facts=curr_stat.reviewed_facts,
+                    new_correct=curr_stat.new_correct,
+                    reviewed_correct=curr_stat.reviewed_correct,
+                    total_seen=curr_stat.total_seen,
+                    total_milliseconds=curr_stat.total_milliseconds,
+                    total_seconds=curr_stat.total_seconds,
+                    total_minutes=curr_stat.total_minutes,
+                    elapsed_milliseconds_text=curr_stat.elapsed_milliseconds_text,
+                    elapsed_milliseconds_answer=curr_stat.elapsed_milliseconds_answer,
+                    elapsed_seconds_text=curr_stat.elapsed_seconds_text,
+                    elapsed_seconds_answer=curr_stat.elapsed_seconds_answer,
+                    elapsed_minutes_text=curr_stat.elapsed_minutes_text,
+                    elapsed_minutes_answer=curr_stat.elapsed_minutes_answer,
+                )
+                curr_stat = new_stat
+
+            if record.is_new_fact:
+                curr_stat.new_facts += 1
+                curr_stat.new_correct += record.response
+            else:
+                curr_stat.reviewed_facts += 1
+                curr_stat.reviewed_correct += record.response
+
+            if record.elapsed_milliseconds_text is None:
+                record.elapsed_milliseconds_text = record.elapsed_seconds_text * 1000
+            if record.elapsed_milliseconds_answer is None:
+                record.elapsed_milliseconds_answer = record.elapsed_seconds_answer * 1000
+            total_milliseconds = record.elapsed_milliseconds_text + record.elapsed_milliseconds_answer
+            curr_stat.total_seen += 1
+            curr_stat.total_milliseconds += total_milliseconds
+            curr_stat.total_seconds += total_milliseconds // 1000
+            curr_stat.total_minutes += total_milliseconds // 60000
+            curr_stat.elapsed_milliseconds_text += record.elapsed_milliseconds_text
+            curr_stat.elapsed_milliseconds_answer += record.elapsed_milliseconds_answer
+            curr_stat.elapsed_seconds_text += record.elapsed_milliseconds_text // 1000
+            curr_stat.elapsed_seconds_answer += record.elapsed_milliseconds_answer // 1000
+            curr_stat.elapsed_minutes_text += record.elapsed_milliseconds_text // 60000
+            curr_stat.elapsed_minutes_answer += record.elapsed_milliseconds_answer // 60000
+        if curr_stat is not None:
+            session.add(curr_stat)
+        session.commit()
+
     session.close()

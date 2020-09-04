@@ -28,7 +28,7 @@ from pandas.api.types import CategoricalDtype
 from karl.db import SchedulerDB
 from karl.lda import process_question
 from karl.util import ScheduleRequest, parse_date, theme_fs
-from karl.new_util import Params, User, Fact, Record
+from karl.new_util import Params, User, Fact, Record, UserStat
 from karl.retention.baseline import RetentionModel
 # from karl.new_retention import HFRetentionModel as RetentionModel
 
@@ -1177,6 +1177,87 @@ class MovingAvgScheduler:
 
         # self.db.update_user(user)
         # self.db.update_fact(fact)
+        # self.db.commit()
+
+        # update user stats
+        # find last entry of user stats
+        if len(user.user_stats) == 0:
+            user_stat_id = json.dumps({
+                'user_id': user.user_id,
+                'date': str(record.date.date())
+            })
+            curr_stat = UserStat(
+                user_stat_id=user_stat_id,
+                user_id=user.user_id,
+                date=record.date.date(),
+                new_facts=0,
+                reviewed_facts=0,
+                new_correct=0,
+                reviewed_correct=0,
+                total_seen=0,
+                total_milliseconds=0,
+                total_seconds=0,
+                total_minutes=0,
+                elapsed_milliseconds_text=0,
+                elapsed_milliseconds_answer=0,
+                elapsed_seconds_text=0,
+                elapsed_seconds_answer=0,
+                elapsed_minutes_text=0,
+                elapsed_minutes_answer=0,
+            )
+        else:
+            curr_stat = user.user_stats[-1]
+
+        is_new_stat = False
+        if date.date() != curr_stat.date:
+            user_stat_id = json.dumps({
+                'user_id': user.user_id,
+                'date': str(record.date.date())
+            })
+            new_stat = UserStat(
+                user_stat_id=user_stat_id,
+                user_id=user.user_id,
+                date=record.date.date(),
+                new_facts=curr_stat.new_facts,
+                reviewed_facts=curr_stat.reviewed_facts,
+                new_correct=curr_stat.new_correct,
+                reviewed_correct=curr_stat.reviewed_correct,
+                total_seen=curr_stat.total_seen,
+                total_milliseconds=curr_stat.total_milliseconds,
+                total_seconds=curr_stat.total_seconds,
+                total_minutes=curr_stat.total_minutes,
+                elapsed_milliseconds_text=curr_stat.elapsed_milliseconds_text,
+                elapsed_milliseconds_answer=curr_stat.elapsed_milliseconds_answer,
+                elapsed_seconds_text=curr_stat.elapsed_seconds_text,
+                elapsed_seconds_answer=curr_stat.elapsed_seconds_answer,
+                elapsed_minutes_text=curr_stat.elapsed_minutes_text,
+                elapsed_minutes_answer=curr_stat.elapsed_minutes_answer,
+            )
+            curr_stat = new_stat
+            is_new_stat = True
+
+        if record.is_new_fact:
+            curr_stat.new_facts += 1
+            curr_stat.new_correct += record.response
+        else:
+            curr_stat.reviewed_facts += 1
+            curr_stat.reviewed_correct += record.response
+
+        total_milliseconds = record.elapsed_milliseconds_text + record.elapsed_milliseconds_answer
+        curr_stat.total_seen += 1
+        curr_stat.total_milliseconds += total_milliseconds
+        curr_stat.total_seconds += total_milliseconds // 1000
+        curr_stat.total_minutes += total_milliseconds // 60000
+        curr_stat.elapsed_milliseconds_text += record.elapsed_milliseconds_text
+        curr_stat.elapsed_milliseconds_answer += record.elapsed_milliseconds_answer
+        curr_stat.elapsed_seconds_text += record.elapsed_milliseconds_text // 1000
+        curr_stat.elapsed_seconds_answer += record.elapsed_milliseconds_answer // 1000
+        curr_stat.elapsed_minutes_text += record.elapsed_milliseconds_text // 60000
+        curr_stat.elapsed_minutes_answer += record.elapsed_milliseconds_answer // 60000
+
+        if is_new_stat:
+            self.db.add(curr_stat)
+
         self.db.commit()
 
         detail = {

@@ -14,14 +14,14 @@ from dateutil.parser import parse as parse_date
 from cachetools import cached, TTLCache
 
 from karl.util import ScheduleRequest, SetParams, Params
-from karl.new_util import User, Record
+from karl.new_util import User, Record, UserStat
 from karl.scheduler import MovingAvgScheduler
 
 
 app = FastAPI()
 schedulers = {
-    'dev': MovingAvgScheduler(db_filename='karl-dev'),
-    'prod': MovingAvgScheduler(db_filename='karl-prod'),
+    'dev': MovingAvgScheduler(db_filename='karl-dev', preemptive=False),
+    'prod': MovingAvgScheduler(db_filename='karl-prod', preemptive=False),
 }
 
 
@@ -154,6 +154,122 @@ def get_user_history(user_id: str, env: str = None, deck_id: str = None,
         records = records.filter(Record.deck_id == deck_id)
     return records.all()
 
+
+@app.get('/api/karl/get_user_stats_new')
+# @cached(cache=TTLCache(maxsize=1024, ttl=1800))
+def get_user_stats_new(user_id: str, env: str = None, deck_id: str = None,
+                       date_start: str = None, date_end: str = None):
+    '''
+    Return in a dictionary the following user stats within given date range.
+
+    new_facts: int
+    reviewed_facts: int
+    total_seen: int
+    total_seconds: int
+    known_rate: float
+    new_known_rate: float
+    review_known_rate: float
+    '''
+    env = 'dev' if env == 'dev' else 'prod'
+    scheduler = schedulers[env]
+
+    if date_start is None:
+        date_start = '2008-06-11 08:00:00'
+    if date_end is None:
+        date_end = '2038-06-11 08:00:00'
+
+    date_start = parse_date(date_start)
+    date_end = parse_date(date_end)
+
+    # last record no later than start date
+    before_stat = scheduler.db.query(UserStat).\
+        filter(UserStat.user_id == user_id).\
+        filter(UserStat.date <= date_start).order_by(UserStat.date.desc()).first()
+    # last record no later than end date
+    after_stat = scheduler.db.query(UserStat).\
+        filter(UserStat.user_id == user_id).\
+        filter(UserStat.date <= date_end).order_by(UserStat.date.desc()).first()
+
+    if after_stat is None:
+        return {
+            'new_facts': 0,
+            'reviewed_facts': 0,
+            'new_correct': 0,
+            'reviewed_correct': 0,
+            'total_seen': 0,
+            'total_milliseconds': 0,
+            'total_seconds': 0,
+            'total_minutes': 0,
+            'elapsed_milliseconds_text': 0,
+            'elapsed_milliseconds_answer': 0,
+            'elapsed_seconds_text': 0,
+            'elapsed_seconds_answer': 0,
+            'elapsed_minutes_text': 0,
+            'elapsed_minutes_answer': 0,
+            'known_rate': 0,
+            'new_known_rate': 0,
+            'review_known_rate': 0,
+        }
+    
+    if before_stat is None:
+        user_stat_id = json.dumps({
+            'user_id': user_id,
+            'date': str(date_start)
+        })
+        before_stat = UserStat(
+            user_stat_id=user_stat_id,
+            user_id=user_id,
+            date=date_start,
+            new_facts=0,
+            reviewed_facts=0,
+            new_correct=0,
+            reviewed_correct=0,
+            total_seen=0,
+            total_milliseconds=0,
+            total_seconds=0,
+            total_minutes=0,
+            elapsed_milliseconds_text=0,
+            elapsed_milliseconds_answer=0,
+            elapsed_seconds_text=0,
+            elapsed_seconds_answer=0,
+            elapsed_minutes_text=0,
+            elapsed_minutes_answer=0,
+        )
+
+    total_correct = (after_stat.new_correct + after_stat.reviewed_correct) - (before_stat.new_correct + before_stat.reviewed_correct)
+
+    known_rate = 0
+    if after_stat.total_seen > before_stat.total_seen:
+        known_rate = total_correct / (after_stat.total_seen - before_stat.total_seen)
+
+    new_known_rate = 0
+    if after_stat.new_facts > before_stat.new_facts:
+        new_known_rate = (after_stat.new_correct - before_stat.new_correct) / (after_stat.new_facts - before_stat.new_facts)
+
+    review_known_rate = 0
+    if after_stat.reviewed_facts > before_stat.reviewed_facts:
+        review_known_rate = (after_stat.reviewed_correct - before_stat.reviewed_correct) / (after_stat.reviewed_facts - before_stat.reviewed_facts)
+    
+    return {
+        'new_facts': after_stat.new_facts - before_stat.new_facts,
+        'reviewed_facts': after_stat.reviewed_facts - before_stat.reviewed_facts,
+        'new_correct': after_stat.new_correct - before_stat.new_correct,
+        'reviewed_correct': after_stat.reviewed_correct - before_stat.reviewed_correct,
+        'total_seen': after_stat.total_seen - before_stat.total_seen,
+        'total_milliseconds': after_stat.total_milliseconds - before_stat.total_milliseconds,
+        'total_seconds': after_stat.total_seconds - before_stat.total_seconds,
+        'total_minutes': after_stat.total_minutes - before_stat.total_minutes,
+        'elapsed_milliseconds_text': after_stat.elapsed_milliseconds_text - before_stat.elapsed_milliseconds_text,
+        'elapsed_milliseconds_answer': after_stat.elapsed_milliseconds_answer - before_stat.elapsed_milliseconds_answer,
+        'elapsed_seconds_text': after_stat.elapsed_seconds_text - before_stat.elapsed_seconds_text,
+        'elapsed_seconds_answer': after_stat.elapsed_seconds_answer - before_stat.elapsed_seconds_answer,
+        'elapsed_minutes_text': after_stat.elapsed_minutes_text - before_stat.elapsed_minutes_text,
+        'elapsed_minutes_answer': after_stat.elapsed_minutes_answer - before_stat.elapsed_minutes_answer,
+        'known_rate': known_rate,
+        'new_known_rate': new_known_rate,
+        'review_known_rate': review_known_rate,
+    }
+
 @app.get('/api/karl/get_user_stats')
 # @cached(cache=TTLCache(maxsize=1024, ttl=1800))
 def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
@@ -185,14 +301,16 @@ def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
 
     new_known, review_known, overall_known = [], [], []
     for h in history_records:
+        # TODO
+        response = str(h.response).lower() == 'true'
         if h.is_new_fact:
             new_facts += 1
-            new_known.append(int(h.response))
+            new_known.append(response)
         else:
             reviewed_facts += 1
-            review_known.append(int(h.response))
+            review_known.append(response)
         total_seen += 1
-        overall_known.append(int(h.response))
+        overall_known.append(response)
 
         if h.elapsed_milliseconds_text is None:
             if h.elapsed_seconds_text is not None:
@@ -275,7 +393,7 @@ def leaderboard(
         if not user.user_id.isdigit():
             continue
 
-        stats[user.user_id] = get_user_stats(
+        stats[user.user_id] = get_user_stats_new(
             user_id=user.user_id,
             env=env,
             deck_id=deck_id,
@@ -283,15 +401,15 @@ def leaderboard(
             date_end=date_end
         )
 
-    profile_keys = [
-        'profile_get_history_records',
-        'profile_compute_stats',
-        'profile_n_history_records',
-    ]
-    profile = {
-        key: np.sum([v[key] for v in stats.values()])
-        for key in profile_keys
-    }
+    # profile_keys = [
+    #     'profile_get_history_records',
+    #     'profile_compute_stats',
+    #     'profile_n_history_records',
+    # ]
+    # profile = {
+    #     key: np.sum([v[key] for v in stats.values()])
+    #     for key in profile_keys
+    # }
 
     # from high value to low
     stats = sorted(stats.items(), key=lambda x: x[1][rank_type])[::-1]
@@ -314,7 +432,7 @@ def leaderboard(
         limit=limit,
     )
 
-    pprint(profile)
+    # pprint(profile)
     return leaderboard
 
 
