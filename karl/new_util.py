@@ -56,7 +56,10 @@ class ParamsType(types.TypeDecorator):
     impl = types.VARCHAR
 
     def process_bind_param(self, value, dialect):
-        return json.dumps({k: v for k, v in value.__dict__.items() if not k.startswith('_')})
+        if value is not None:
+            return json.dumps({k: v for k, v in value.__dict__.items() if not k.startswith('_')})
+        else:
+            return json.dumps({k: v for k, v in Params().__dict__.items() if not k.startswith('_')})
 
     def process_result_value(self, value, dialect):
         return Params(**json.loads(value))
