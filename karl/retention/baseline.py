@@ -173,6 +173,9 @@ class RetentionModel:
                 prev_date = date
             if isinstance(prev_date, str):
                 prev_date = parse_date(prev_date)
+            fact_mean_overall_accuracy = 0
+            if fact.results is not None and len(fact.results) > 0:
+                fact_mean_overall_accuracy = np.mean(fact.results)
             xs.append([
                 uq_correct,  # user_count_correct
                 uq_wrong,  # user_count_wrong
@@ -181,7 +184,7 @@ class RetentionModel:
                 0 if uq_total == 0 else uq_correct / uq_total,  # user_average_question_accuracy
                 0 if len(user.results) == 0 else user.results[-1],  # user_previous_result
                 (date - prev_date).seconds / (60 * 60),  # user_gap_from_previous
-                0 if len(fact.results) == 0 else np.mean(fact.results),  # question_average_overall_accuracy
+                fact_mean_overall_accuracy,  # question_average_overall_accuracy
                 len(fact.results),  # question_count_total
                 sum(fact.results),  # question_count_correct
                 len(fact.results) - sum(fact.results),  # question_count_wrong

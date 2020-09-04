@@ -155,10 +155,10 @@ def get_user_history(user_id: str, env: str = None, deck_id: str = None,
     return records.all()
 
 
-@app.get('/api/karl/get_user_stats_new')
-# @cached(cache=TTLCache(maxsize=1024, ttl=1800))
-def get_user_stats_new(user_id: str, env: str = None, deck_id: str = None,
-                       date_start: str = None, date_end: str = None):
+@app.get('/api/karl/get_user_stats')
+@cached(cache=TTLCache(maxsize=1024, ttl=600))
+def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
+                   date_start: str = None, date_end: str = None):
     '''
     Return in a dictionary the following user stats within given date range.
 
@@ -272,8 +272,8 @@ def get_user_stats_new(user_id: str, env: str = None, deck_id: str = None,
 
 @app.get('/api/karl/get_user_stats')
 # @cached(cache=TTLCache(maxsize=1024, ttl=1800))
-def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
-                   date_start: str = None, date_end: str = None):
+def old_get_user_stats(user_id: str, env: str = None, deck_id: str = None,
+                       date_start: str = None, date_end: str = None):
     '''
     Return in a dictionary the following user stats within given date range.
 
@@ -393,7 +393,7 @@ def leaderboard(
         if not user.user_id.isdigit():
             continue
 
-        stats[user.user_id] = get_user_stats_new(
+        stats[user.user_id] = get_user_stats(
             user_id=user.user_id,
             env=env,
             deck_id=deck_id,
