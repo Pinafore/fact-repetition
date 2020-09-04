@@ -67,7 +67,7 @@ def schedule(requests: List[ScheduleRequest]):
         'order': results['order'],
         'rationale': results['rationale'],
         'facts_info': results['facts_info'],
-        'profile': results['profile'],
+        # 'profile': results['profile'],
     }
 
 

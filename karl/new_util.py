@@ -52,7 +52,7 @@ class JSONEncoded(types.TypeDecorator):
 
 
 class ParamsType(types.TypeDecorator):
-    
+
     impl = types.VARCHAR
 
     def process_bind_param(self, value, dialect):

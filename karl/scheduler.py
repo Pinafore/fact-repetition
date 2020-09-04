@@ -1084,7 +1084,7 @@ class MovingAvgScheduler:
         # user.user_stats.last_week_new_facts = len([x[1] for x in last_week_results])
 
         # update category and previous study (date and response)
-        user.previous_study[fact.fact_id] = (date, response)
+        user.previous_study[fact.fact_id] = (str(date), response)
 
         # update retention features
         fact.results.append(response == CORRECT)
@@ -1304,7 +1304,9 @@ class MovingAvgScheduler:
         interval = timedelta(days=increment_days[new_box])
         # TODO is this correct? increment on previous instead of current study date?
         prev_date, prev_response = user.previous_study[fact.fact_id]
-        user.leitner_scheduled_date[fact.fact_id] = prev_date + interval
+        if isinstance(prev_date, str):
+            prev_date = parse_date(prev_date)
+        user.leitner_scheduled_date[fact.fact_id] = str(prev_date + interval)
 
     def sm2_update(self, user: User, fact: Fact, response: bool) -> None:
         """
@@ -1342,7 +1344,9 @@ class MovingAvgScheduler:
         user.sm2_efactor[fact.fact_id] = e_f
         user.sm2_interval[fact.fact_id] = inv
         prev_date, prev_response = user.previous_study[fact.fact_id]
-        user.sm2_scheduled_date[fact.fact_id] = prev_date + timedelta(days=inv)
+        if isinstance(prev_date, str):
+            prev_date = parse_date(prev_date)
+        user.sm2_scheduled_date[fact.fact_id] = str(prev_date + timedelta(days=inv))
 
     def plot_histogram(self, user_qrep: np.ndarray, fact_qrep: np.ndarray, filename: str) -> None:
         """
