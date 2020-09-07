@@ -4,10 +4,8 @@
 import json
 import atexit
 import logging
-import numpy as np
-from pprint import pprint
 from fastapi import FastAPI
-from typing import Optional, List, Union
+from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_date
@@ -129,7 +127,6 @@ def get_user(user_id: str, env: str = None):
 def get_all_users(env: str = None):
     env = 'dev' if env == 'dev' else 'prod'
     users = schedulers[env].db.query(User).all()
-    # TODO maybe slow
     return [json.dumps({
         k: v for k, v in user.__dict__.items() if k != '_sa_instance_state'
     }) for user in users]
@@ -151,6 +148,7 @@ def get_user_history(user_id: str, env: str = None, deck_id: str = None,
     records = scheduler.db.query(Record).filter(Record.user_id == user_id).\
         filter(Record.date >= date_start, Record.date <= date_end)
     if deck_id is not None:
+        print('deck_id', deck_id)
         records = records.filter(Record.deck_id == deck_id)
     return records.all()
 
@@ -181,13 +179,18 @@ def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
     date_start = parse_date(date_start).date()
     date_end = parse_date(date_end).date() + timedelta(days=1)
 
+    if deck_id is None:
+        deck_id = 'all'
+
     # last record no later than start date
     before_stat = scheduler.db.query(UserStat).\
         filter(UserStat.user_id == user_id).\
+        filter(UserStat.deck_id == deck_id).\
         filter(UserStat.date < date_start).order_by(UserStat.date.desc()).first()
     # last record no later than end date
     after_stat = scheduler.db.query(UserStat).\
         filter(UserStat.user_id == user_id).\
+        filter(UserStat.deck_id == deck_id).\
         filter(UserStat.date <= date_end).order_by(UserStat.date.desc()).first()
 
     if after_stat is None or after_stat.date < date_start:
@@ -210,15 +213,17 @@ def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
             'new_known_rate': 0,
             'review_known_rate': 0,
         }
-    
+
     if before_stat is None:
         user_stat_id = json.dumps({
             'user_id': user_id,
-            'date': str(date_start)
+            'date': str(date_start),
+            'deck_id': deck_id,
         })
         before_stat = UserStat(
             user_stat_id=user_stat_id,
             user_id=user_id,
+            deck_id=deck_id,
             date=date_start,
             new_facts=0,
             reviewed_facts=0,
@@ -249,7 +254,7 @@ def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
     review_known_rate = 0
     if after_stat.reviewed_facts > before_stat.reviewed_facts:
         review_known_rate = (after_stat.reviewed_correct - before_stat.reviewed_correct) / (after_stat.reviewed_facts - before_stat.reviewed_facts)
-    
+
     return {
         'new_facts': after_stat.new_facts - before_stat.new_facts,
         'reviewed_facts': after_stat.reviewed_facts - before_stat.reviewed_facts,
@@ -265,97 +270,30 @@ def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
         'elapsed_seconds_answer': after_stat.elapsed_seconds_answer - before_stat.elapsed_seconds_answer,
         'elapsed_minutes_text': after_stat.elapsed_minutes_text - before_stat.elapsed_minutes_text,
         'elapsed_minutes_answer': after_stat.elapsed_minutes_answer - before_stat.elapsed_minutes_answer,
-        'known_rate': known_rate,
-        'new_known_rate': new_known_rate,
-        'review_known_rate': review_known_rate,
-    }
-
-@app.get('/api/karl/get_user_stats')
-# @cached(cache=TTLCache(maxsize=1024, ttl=1800))
-def old_get_user_stats(user_id: str, env: str = None, deck_id: str = None,
-                       date_start: str = None, date_end: str = None):
-    '''
-    Return in a dictionary the following user stats within given date range.
-
-    new_facts: int
-    reviewed_facts: int
-    total_seen: int
-    total_seconds: int
-    known_rate: float
-    new_known_rate: float
-    review_known_rate: float
-    '''
-    env = 'dev' if env == 'dev' else 'prod'
-
-    t0 = datetime.now()
-    history_records = get_user_history(user_id, env, deck_id, date_start, date_end)
-    t1 = datetime.now()
-
-    new_facts = 0
-    reviewed_facts = 0
-    total_seen = 0
-    new_known_rate = 0
-    review_known_rate = 0
-    elapsed_milliseconds_text = 0
-    elapsed_milliseconds_answer = 0
-
-    new_known, review_known, overall_known = [], [], []
-    for h in history_records:
-        # TODO
-        response = str(h.response).lower() == 'true'
-        if h.is_new_fact:
-            new_facts += 1
-            new_known.append(response)
-        else:
-            reviewed_facts += 1
-            review_known.append(response)
-        total_seen += 1
-        overall_known.append(response)
-
-        if h.elapsed_milliseconds_text is None:
-            if h.elapsed_seconds_text is not None:
-                elapsed_milliseconds_text += 1000 * h.elapsed_seconds_text
-        else:
-            elapsed_milliseconds_text += h.elapsed_milliseconds_text
-        if h.elapsed_milliseconds_answer is None:
-            if h.elapsed_seconds_answer is not None:
-                elapsed_milliseconds_answer += 1000 * h.elapsed_seconds_answer
-        else:
-            elapsed_milliseconds_answer += h.elapsed_milliseconds_answer
-
-    new_known_rate = 0 if len(new_known) == 0 else np.mean(new_known)
-    review_known_rate = 0 if len(review_known) == 0 else np.mean(review_known)
-    known_rate = 0 if len(overall_known) == 0 else np.mean(overall_known)
-    total_milliseconds = elapsed_milliseconds_text + elapsed_milliseconds_answer
-
-    t2 = datetime.now()
-
-    return {
-        'new_facts': new_facts,
-        'reviewed_facts': reviewed_facts,
-        'total_seen': total_seen,
-        'total_milliseconds': total_milliseconds,
-        'total_seconds': total_milliseconds // 1000,
-        'total_minutes': total_milliseconds // 60000,
-        'elapsed_milliseconds_text': elapsed_milliseconds_text,
-        'elapsed_milliseconds_answer': elapsed_milliseconds_answer,
-        'elapsed_seconds_text': elapsed_milliseconds_text // 1000,
-        'elapsed_seconds_answer': elapsed_milliseconds_answer // 1000,
-        'elapsed_minutes_text': elapsed_milliseconds_text // 60000,
-        'elapsed_minutes_answer': elapsed_milliseconds_answer // 60000,
         'known_rate': round(known_rate * 100, 2),
         'new_known_rate': round(new_known_rate * 100, 2),
         'review_known_rate': round(review_known_rate * 100, 2),
-        'profile_get_history_records': (t1 - t0).total_seconds(),
-        'profile_compute_stats': (t2 - t1).total_seconds(),
-        'profile_n_history_records': len(history_records),
     }
+
+
+class IntOrFloat:
+
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, v):
+        if isinstance(v, float) or isinstance(v, int):
+            return v
+        raise TypeError('int or float required')
 
 
 class Ranking(BaseModel):
     user_id: int
     rank: int
-    value: Union[int, float]
+    # value: Union[int, float]  # don't use this
+    value: IntOrFloat
 
 
 class Leaderboard(BaseModel):
@@ -431,6 +369,9 @@ def leaderboard(
         skip=skip,
         limit=limit,
     )
+
+    if len(leaderboard.leaderboard) > 0:
+        print(leaderboard.leaderboard[0].value, type(leaderboard.leaderboard[0].value))
 
     # pprint(profile)
     return leaderboard

@@ -25,7 +25,6 @@ from sqlalchemy.orm import sessionmaker
 from plotnine import ggplot, aes, geom_bar, coord_flip
 from pandas.api.types import CategoricalDtype
 
-from karl.db import SchedulerDB
 from karl.lda import process_question
 from karl.util import ScheduleRequest, parse_date, theme_fs
 from karl.new_util import Params, User, Fact, Record, UserStat
@@ -90,7 +89,7 @@ class MovingAvgScheduler:
         self.whoosh_index = whoosh_index
 
         # self.db = SchedulerDB(db_filename)
-        engine = create_engine(f'postgresql+psycopg2://shifeng/{db_filename}?host=/fs/clip-scratch/shifeng/postgres/run')
+        engine = create_engine(f'postgresql+psycopg2://shifeng@localhost:5433/{db_filename}?host=/fs/clip-quiz/shifeng/postgres/run')
         self.db = sessionmaker(bind=engine)()
         self.retention_model = RetentionModel()
 
@@ -778,7 +777,7 @@ class MovingAvgScheduler:
 
         if plot:
             figname = '{}_{}_{}.jpg'.format(user.user_id, fact.fact_id, date.strftime('%Y-%m-%d-%H-%M'))
-            local_filename = '/fs/www-users/shifeng/temp/' + figname
+            # local_filename = '/fs/www-users/shifeng/temp/' + figname
             remote_filename = 'http://users.umiacs.umd.edu/~shifeng/temp/' + figname
             # self.plot_histogram(user_qrep, fact.qrep, local_filename)
 

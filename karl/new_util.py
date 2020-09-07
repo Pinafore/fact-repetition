@@ -1,9 +1,8 @@
-import io
 import json
-import pytz
 import numpy as np
 import msgpack
 import msgpack_numpy
+from collections import defaultdict
 from tqdm import tqdm
 from dataclasses import dataclass
 from sqlalchemy import create_engine
@@ -137,6 +136,7 @@ class UserStat(Base):
     __tablename__ = 'user_stats'
     user_stat_id = Column(String, primary_key=True)
     user_id = Column(String, ForeignKey('users.user_id'))
+    deck_id = Column(String)
     date = Column(Date)
     new_facts = Column(Integer, default=0)
     reviewed_facts = Column(Integer, default=0)
@@ -172,11 +172,12 @@ if __name__ == '__main__':
 
     db = SchedulerDB(filename)
 
-    engine = create_engine(f'postgresql+psycopg2://shifeng/{db_name}?host=/fs/clip-scratch/shifeng/postgres/run')
+    engine = create_engine(f'postgresql+psycopg2://shifeng@localhost:5433/{db_name}?host=/fs/clip-quiz/shifeng/postgres/run')
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
     session = Session()
 
+    '''
     for user in tqdm(db.get_user()):
         new_user = User(
             user_id=user.user_id,
@@ -246,19 +247,24 @@ if __name__ == '__main__':
         )
         session.add(new_record)
     session.commit()
+    '''
 
+    # do one pass over records and get user stats with deck_id = 'all'
     for user in tqdm(session.query(User)):
         prev_stat = None
         curr_stat = None
+        deck_id = 'all'
         for record in user.records:
             if curr_stat is None:
                 user_stat_id = json.dumps({
                     'user_id': user.user_id,
-                    'date': str(record.date.date())
+                    'date': str(record.date.date()),
+                    'deck_id': deck_id,
                 })
                 curr_stat = UserStat(
                     user_stat_id=user_stat_id,
                     user_id=user.user_id,
+                    deck_id=deck_id,
                     date=record.date.date(),
                     new_facts=0,
                     reviewed_facts=0,
@@ -281,10 +287,12 @@ if __name__ == '__main__':
                 user_stat_id = json.dumps({
                     'user_id': user.user_id,
                     'date': str(record.date.date()),
+                    'deck_id': deck_id,
                 })
                 new_stat = UserStat(
                     user_stat_id=user_stat_id,
                     user_id=user.user_id,
+                    deck_id=deck_id,
                     date=record.date.date(),
                     new_facts=curr_stat.new_facts,
                     reviewed_facts=curr_stat.reviewed_facts,
@@ -328,5 +336,100 @@ if __name__ == '__main__':
         if curr_stat is not None:
             session.add(curr_stat)
         session.commit()
+
+    # do one pass over records and get user stats with deck_id = 'all'
+    for user in tqdm(session.query(User)):
+        # group user records by deck_id first
+        # then process each deck_id
+        records_by_deck_id = defaultdict(list)
+        for record in user.records:
+            if record.deck_id is not None:
+                records_by_deck_id[record.deck_id].append(record)
+
+        for deck_id, records in records_by_deck_id.items():
+            prev_stat = None
+            curr_stat = None
+            for record in records:
+                if curr_stat is None:
+                    user_stat_id = json.dumps({
+                        'user_id': user.user_id,
+                        'date': str(record.date.date()),
+                        'deck_id': deck_id,
+                    })
+                    curr_stat = UserStat(
+                        user_stat_id=user_stat_id,
+                        user_id=user.user_id,
+                        deck_id=deck_id,
+                        date=record.date.date(),
+                        new_facts=0,
+                        reviewed_facts=0,
+                        new_correct=0,
+                        reviewed_correct=0,
+                        total_seen=0,
+                        total_milliseconds=0,
+                        total_seconds=0,
+                        total_minutes=0,
+                        elapsed_milliseconds_text=0,
+                        elapsed_milliseconds_answer=0,
+                        elapsed_seconds_text=0,
+                        elapsed_seconds_answer=0,
+                        elapsed_minutes_text=0,
+                        elapsed_minutes_answer=0,
+                    )
+                elif curr_stat.date != record.date.date():
+                    session.add(curr_stat)
+                    session.commit()
+                    user_stat_id = json.dumps({
+                        'user_id': user.user_id,
+                        'date': str(record.date.date()),
+                        'deck_id': deck_id,
+                    })
+                    new_stat = UserStat(
+                        user_stat_id=user_stat_id,
+                        user_id=user.user_id,
+                        deck_id=deck_id,
+                        date=record.date.date(),
+                        new_facts=curr_stat.new_facts,
+                        reviewed_facts=curr_stat.reviewed_facts,
+                        new_correct=curr_stat.new_correct,
+                        reviewed_correct=curr_stat.reviewed_correct,
+                        total_seen=curr_stat.total_seen,
+                        total_milliseconds=curr_stat.total_milliseconds,
+                        total_seconds=curr_stat.total_seconds,
+                        total_minutes=curr_stat.total_minutes,
+                        elapsed_milliseconds_text=curr_stat.elapsed_milliseconds_text,
+                        elapsed_milliseconds_answer=curr_stat.elapsed_milliseconds_answer,
+                        elapsed_seconds_text=curr_stat.elapsed_seconds_text,
+                        elapsed_seconds_answer=curr_stat.elapsed_seconds_answer,
+                        elapsed_minutes_text=curr_stat.elapsed_minutes_text,
+                        elapsed_minutes_answer=curr_stat.elapsed_minutes_answer,
+                    )
+                    curr_stat = new_stat
+
+                if record.is_new_fact:
+                    curr_stat.new_facts += 1
+                    curr_stat.new_correct += record.response
+                else:
+                    curr_stat.reviewed_facts += 1
+                    curr_stat.reviewed_correct += record.response
+
+                if record.elapsed_milliseconds_text is None:
+                    record.elapsed_milliseconds_text = record.elapsed_seconds_text * 1000
+                if record.elapsed_milliseconds_answer is None:
+                    record.elapsed_milliseconds_answer = record.elapsed_seconds_answer * 1000
+                total_milliseconds = record.elapsed_milliseconds_text + record.elapsed_milliseconds_answer
+                curr_stat.total_seen += 1
+                curr_stat.total_milliseconds += total_milliseconds
+                curr_stat.total_seconds += total_milliseconds // 1000
+                curr_stat.total_minutes += total_milliseconds // 60000
+                curr_stat.elapsed_milliseconds_text += record.elapsed_milliseconds_text
+                curr_stat.elapsed_milliseconds_answer += record.elapsed_milliseconds_answer
+                curr_stat.elapsed_seconds_text += record.elapsed_milliseconds_text // 1000
+                curr_stat.elapsed_seconds_answer += record.elapsed_milliseconds_answer // 1000
+                curr_stat.elapsed_minutes_text += record.elapsed_milliseconds_text // 60000
+                curr_stat.elapsed_minutes_answer += record.elapsed_milliseconds_answer // 60000
+            if curr_stat is not None:
+                session.add(curr_stat)
+            session.commit()
 
     session.close()
