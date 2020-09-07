@@ -157,7 +157,7 @@ def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
     review_known_rate: float
     '''
     env = 'dev' if env == 'dev' else 'prod'
-    return schedulers[env].get_user_stat(user_id, deck_id, date_start, date_end)
+    return schedulers[env].get_user_stats(user_id, deck_id, date_start, date_end)
 
 class IntOrFloat:
 

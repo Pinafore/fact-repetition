@@ -89,7 +89,7 @@ class MovingAvgScheduler:
         self.whoosh_index = whoosh_index
 
         # self.db = SchedulerDB(db_filename)
-        engine = create_engine(f'postgresql+psycopg2://shifeng@localhost:5433/{db_filename}?host=/fs/clip-quiz/shifeng/postgres/run')
+        engine = create_engine(f'postgresql+psycopg2://shifeng@localhost:5433/{db_filename}?host=/fs/clip-scratch/shifeng/postgres/run')
         self.db = sessionmaker(bind=engine)()
         self.retention_model = RetentionModel()
 
