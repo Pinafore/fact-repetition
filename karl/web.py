@@ -7,21 +7,25 @@ import logging
 from fastapi import FastAPI
 from typing import Optional, List
 from pydantic import BaseModel
-from datetime import datetime, timedelta
+from datetime import datetime
 from dateutil.parser import parse as parse_date
 from cachetools import cached, TTLCache
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 from karl.util import ScheduleRequest, SetParams, Params
-from karl.new_util import User, Record, UserStat
 from karl.scheduler import MovingAvgScheduler
 
 
 app = FastAPI()
-schedulers = {
-    'dev': MovingAvgScheduler(db_filename='karl-dev', preemptive=False),
-    'prod': MovingAvgScheduler(db_filename='karl-prod', preemptive=False),
+scheduler = MovingAvgScheduler(preemptive=False)
+
+engines = {
+    'prod': create_engine('postgresql+psycopg2://shifeng@localhost:5433/karl-prod?host=/fs/clip-scratch/shifeng/postgres/run'),
+    'dev': create_engine('postgresql+psycopg2://shifeng@localhost:5433/karl-dev?host=/fs/clip-scratch/shifeng/postgres/run'),
 }
 
+sessions = {env: sessionmaker(bind=engine)() for env, engine in engines.items()}
 
 # create logger with 'scheduler'
 logger = logging.getLogger('scheduler')
@@ -58,9 +62,8 @@ def schedule(requests: List[ScheduleRequest]):
         date = parse_date(requests[0].date)
 
     env = 'dev' if requests[0].env == 'dev' else 'prod'
-    scheduler = schedulers[env]
 
-    results = scheduler.schedule(requests, date, plot=False)
+    results = scheduler.schedule(sessions[env], requests, date, plot=False)
     return {
         'order': results['order'],
         'rationale': results['rationale'],
@@ -79,9 +82,8 @@ def update(requests: List[ScheduleRequest]):
         date = parse_date(requests[0].date)
 
     env = 'dev' if requests[0].env == 'dev' else 'prod'
-    scheduler = schedulers[env]
 
-    return scheduler.update(requests, date)
+    return scheduler.update(sessions[env], requests, date)
 
 
 @app.post('/api/karl/set_params')
@@ -91,25 +93,28 @@ def set_params(params: SetParams):
     env = params.pop('env')
     env = 'dev' if env == 'dev' else 'prod'
     params = Params(**params)
-    schedulers[env].set_user_params(user_id, params)
+    scheduler.set_user_params(sessions[env], user_id, params)
 
 
 @app.post('/api/karl/get_fact')
 def get_fact(request: ScheduleRequest):
     env = 'dev' if request.env == 'dev' else 'prod'
-    return schedulers[env].get_fact(request).pack()
+    fact = scheduler.get_fact(sessions[env], request)
+    return json.dumps({
+        k: v for k, v in fact.__dict__.items() if k != '_sa_instance_state'
+    })
 
 
 @app.get('/api/karl/reset_user')
 def reset_user(user_id: str = None, env: str = None):
     env = 'dev' if env == 'dev' else 'prod'
-    schedulers[env].reset_user(user_id=user_id)
+    scheduler.reset_user(sessions[env], user_id=user_id)
 
 
 @app.get('/api/karl/reset_fact')
 def reset_fact(fact_id: str = None, env: str = None):
     env = 'dev' if env == 'dev' else 'prod'
-    schedulers[env].reset_fact(fact_id=fact_id)
+    scheduler.reset_fact(sessions[env], fact_id=fact_id)
 
 
 @app.get('/api/karl/status')
@@ -120,7 +125,7 @@ def status():
 @app.get('/api/karl/get_user')
 def get_user(user_id: str, env: str = None):
     env = 'dev' if env == 'dev' else 'prod'
-    user = schedulers[env].get_user(user_id)
+    user = scheduler.get_user(sessions[env], user_id)
     return json.dumps({
         k: v for k, v in user.__dict__.items() if k != '_sa_instance_state'
     })
@@ -129,7 +134,7 @@ def get_user(user_id: str, env: str = None):
 @app.get('/api/karl/get_all_users')
 def get_all_users(env: str = None):
     env = 'dev' if env == 'dev' else 'prod'
-    users = schedulers[env].get_all_users()
+    users = scheduler.get_all_users(sessions[env])
     return [json.dumps({
         k: v for k, v in user.__dict__.items() if k != '_sa_instance_state'
     }) for user in users]
@@ -138,7 +143,7 @@ def get_all_users(env: str = None):
 def get_user_history(user_id: str, env: str = None, deck_id: str = None,
                      date_start: str = None, date_end: str = None):
     env = 'dev' if env == 'dev' else 'prod'
-    return schedulers[env].get_records(user_id, deck_id, date_start, date_end)
+    return scheduler.get_records(sessions[env], user_id, deck_id, date_start, date_end)
 
 
 @app.get('/api/karl/get_user_stats')
@@ -157,7 +162,7 @@ def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
     review_known_rate: float
     '''
     env = 'dev' if env == 'dev' else 'prod'
-    return schedulers[env].get_user_stats(user_id, deck_id, date_start, date_end)
+    return scheduler.get_user_stats(sessions[env], user_id, deck_id, date_start, date_end)
 
 class IntOrFloat:
 
@@ -207,10 +212,9 @@ def leaderboard(
     that ranks [skip: skip + limit)
     '''
     env = 'dev' if env == 'dev' else 'prod'
-    scheduler = schedulers[env]
 
     stats = {}
-    for user in scheduler.get_all_users():
+    for user in scheduler.get_all_users(sessions[env]):
         if not user.user_id.isdigit():
             continue
 
