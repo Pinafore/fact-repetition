@@ -21,8 +21,8 @@ app = FastAPI()
 scheduler = MovingAvgScheduler(preemptive=False)
 
 engines = {
-    'prod': create_engine('postgresql+psycopg2://shifeng@localhost:5433/karl-prod?host=/fs/clip-scratch/shifeng/postgres/run'),
-    'dev': create_engine('postgresql+psycopg2://shifeng@localhost:5433/karl-dev?host=/fs/clip-scratch/shifeng/postgres/run'),
+    'prod': create_engine('postgresql+psycopg2://shifeng@localhost:5433/karl-prod?host=/fs/clip-quiz/shifeng/postgres/run'),
+    'dev': create_engine('postgresql+psycopg2://shifeng@localhost:5433/karl-dev?host=/fs/clip-quiz/shifeng/postgres/run'),
 }
 
 sessions = {env: sessionmaker(bind=engine)() for env, engine in engines.items()}
