@@ -120,13 +120,16 @@ def status():
 @app.get('/api/karl/get_user')
 def get_user(user_id: str, env: str = None):
     env = 'dev' if env == 'dev' else 'prod'
-    return schedulers[env].get_user(user_id).pack()
+    user = schedulers[env].get_user(user_id)
+    return json.dumps({
+        k: v for k, v in user.__dict__.items() if k != '_sa_instance_state'
+    })
 
 
 @app.get('/api/karl/get_all_users')
 def get_all_users(env: str = None):
     env = 'dev' if env == 'dev' else 'prod'
-    users = schedulers[env].db.query(User).all()
+    users = schedulers[env].get_all_users()
     return [json.dumps({
         k: v for k, v in user.__dict__.items() if k != '_sa_instance_state'
     }) for user in users]
@@ -135,22 +138,7 @@ def get_all_users(env: str = None):
 def get_user_history(user_id: str, env: str = None, deck_id: str = None,
                      date_start: str = None, date_end: str = None):
     env = 'dev' if env == 'dev' else 'prod'
-    scheduler = schedulers[env]
-
-    if date_start is None:
-        date_start = '2008-06-11 08:00:00'
-    if date_end is None:
-        date_end = '2038-06-11 08:00:00'
-
-    date_start = parse_date(date_start)
-    date_end = parse_date(date_end)
-
-    records = scheduler.db.query(Record).filter(Record.user_id == user_id).\
-        filter(Record.date >= date_start, Record.date <= date_end)
-    if deck_id is not None:
-        print('deck_id', deck_id)
-        records = records.filter(Record.deck_id == deck_id)
-    return records.all()
+    return schedulers[env].get_records(user_id, deck_id, date_start, date_end)
 
 
 @app.get('/api/karl/get_user_stats')
@@ -169,112 +157,7 @@ def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
     review_known_rate: float
     '''
     env = 'dev' if env == 'dev' else 'prod'
-    scheduler = schedulers[env]
-
-    if date_start is None:
-        date_start = '2008-06-11 08:00:00'
-    if date_end is None:
-        date_end = '2038-06-11 08:00:00'
-
-    date_start = parse_date(date_start).date()
-    date_end = parse_date(date_end).date() + timedelta(days=1)
-
-    if deck_id is None:
-        deck_id = 'all'
-
-    # last record no later than start date
-    before_stat = scheduler.db.query(UserStat).\
-        filter(UserStat.user_id == user_id).\
-        filter(UserStat.deck_id == deck_id).\
-        filter(UserStat.date < date_start).order_by(UserStat.date.desc()).first()
-    # last record no later than end date
-    after_stat = scheduler.db.query(UserStat).\
-        filter(UserStat.user_id == user_id).\
-        filter(UserStat.deck_id == deck_id).\
-        filter(UserStat.date <= date_end).order_by(UserStat.date.desc()).first()
-
-    if after_stat is None or after_stat.date < date_start:
-        return {
-            'new_facts': 0,
-            'reviewed_facts': 0,
-            'new_correct': 0,
-            'reviewed_correct': 0,
-            'total_seen': 0,
-            'total_milliseconds': 0,
-            'total_seconds': 0,
-            'total_minutes': 0,
-            'elapsed_milliseconds_text': 0,
-            'elapsed_milliseconds_answer': 0,
-            'elapsed_seconds_text': 0,
-            'elapsed_seconds_answer': 0,
-            'elapsed_minutes_text': 0,
-            'elapsed_minutes_answer': 0,
-            'known_rate': 0,
-            'new_known_rate': 0,
-            'review_known_rate': 0,
-        }
-
-    if before_stat is None:
-        user_stat_id = json.dumps({
-            'user_id': user_id,
-            'date': str(date_start),
-            'deck_id': deck_id,
-        })
-        before_stat = UserStat(
-            user_stat_id=user_stat_id,
-            user_id=user_id,
-            deck_id=deck_id,
-            date=date_start,
-            new_facts=0,
-            reviewed_facts=0,
-            new_correct=0,
-            reviewed_correct=0,
-            total_seen=0,
-            total_milliseconds=0,
-            total_seconds=0,
-            total_minutes=0,
-            elapsed_milliseconds_text=0,
-            elapsed_milliseconds_answer=0,
-            elapsed_seconds_text=0,
-            elapsed_seconds_answer=0,
-            elapsed_minutes_text=0,
-            elapsed_minutes_answer=0,
-        )
-
-    total_correct = (after_stat.new_correct + after_stat.reviewed_correct) - (before_stat.new_correct + before_stat.reviewed_correct)
-
-    known_rate = 0
-    if after_stat.total_seen > before_stat.total_seen:
-        known_rate = total_correct / (after_stat.total_seen - before_stat.total_seen)
-
-    new_known_rate = 0
-    if after_stat.new_facts > before_stat.new_facts:
-        new_known_rate = (after_stat.new_correct - before_stat.new_correct) / (after_stat.new_facts - before_stat.new_facts)
-
-    review_known_rate = 0
-    if after_stat.reviewed_facts > before_stat.reviewed_facts:
-        review_known_rate = (after_stat.reviewed_correct - before_stat.reviewed_correct) / (after_stat.reviewed_facts - before_stat.reviewed_facts)
-
-    return {
-        'new_facts': after_stat.new_facts - before_stat.new_facts,
-        'reviewed_facts': after_stat.reviewed_facts - before_stat.reviewed_facts,
-        'new_correct': after_stat.new_correct - before_stat.new_correct,
-        'reviewed_correct': after_stat.reviewed_correct - before_stat.reviewed_correct,
-        'total_seen': after_stat.total_seen - before_stat.total_seen,
-        'total_milliseconds': after_stat.total_milliseconds - before_stat.total_milliseconds,
-        'total_seconds': after_stat.total_seconds - before_stat.total_seconds,
-        'total_minutes': after_stat.total_minutes - before_stat.total_minutes,
-        'elapsed_milliseconds_text': after_stat.elapsed_milliseconds_text - before_stat.elapsed_milliseconds_text,
-        'elapsed_milliseconds_answer': after_stat.elapsed_milliseconds_answer - before_stat.elapsed_milliseconds_answer,
-        'elapsed_seconds_text': after_stat.elapsed_seconds_text - before_stat.elapsed_seconds_text,
-        'elapsed_seconds_answer': after_stat.elapsed_seconds_answer - before_stat.elapsed_seconds_answer,
-        'elapsed_minutes_text': after_stat.elapsed_minutes_text - before_stat.elapsed_minutes_text,
-        'elapsed_minutes_answer': after_stat.elapsed_minutes_answer - before_stat.elapsed_minutes_answer,
-        'known_rate': round(known_rate * 100, 2),
-        'new_known_rate': round(new_known_rate * 100, 2),
-        'review_known_rate': round(review_known_rate * 100, 2),
-    }
-
+    return schedulers[env].get_user_stat(user_id, deck_id, date_start, date_end)
 
 class IntOrFloat:
 
@@ -327,7 +210,7 @@ def leaderboard(
     scheduler = schedulers[env]
 
     stats = {}
-    for user in scheduler.db.query(User):
+    for user in scheduler.get_all_users():
         if not user.user_id.isdigit():
             continue
 
@@ -370,15 +253,13 @@ def leaderboard(
         limit=limit,
     )
 
-    if len(leaderboard.leaderboard) > 0:
-        print(leaderboard.leaderboard[0].value, type(leaderboard.leaderboard[0].value))
-
     # pprint(profile)
     return leaderboard
 
 
 @atexit.register
 def finalize_db():
-    for scheduler in schedulers.values():
-        scheduler.db.commit()
-        scheduler.db.close()
+    pass
+    # for scheduler in schedulers.values():
+    #     scheduler.db.commit()
+    #     scheduler.db.close()
