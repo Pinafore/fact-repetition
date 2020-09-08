@@ -341,8 +341,8 @@ class MovingAvgScheduler:
             fact.skill = np.zeros_like(fact.qrep)
             fact.skill[np.argmax(fact.qrep)] = 1
             fact.skill *= fact_skills[i]
-        self.session.bulk_save_objects(new_facts)
-        self.session.commit()
+        session.bulk_save_objects(new_facts)
+        session.commit()
         return facts
 
     def get_all_users(self, session) -> List[User]:
@@ -1174,30 +1174,6 @@ class MovingAvgScheduler:
         :param date: date on which user studied fact.
         :param response: user's response on this fact.
         """
-        # NOTE user_stats is no longer used
-        # # update user_stats. this should happen before we change the state of the user
-        # if len(user.user_stats.results) > 0:
-        #     # TODO inaccurate estimate of total seconds spent on the interface
-        #     new_seconds = int((date - previous_study_date).total_seconds())
-        #     user.user_stats.total_seconds += new_seconds
-
-        # # user.user_stats.results is a list of (result, new / review, date)
-        # is_new_fact = fact.fact_id not in user.previous_study
-        # user.user_stats.results.append((
-        #     response == CORRECT,
-        #     is_new_fact,
-        #     date.strftime('%Y-%m-%dT%H:%M:%S%z'),
-        # ))
-        # user.user_stats.new_facts += is_new_fact
-        # user.user_stats.reviewed_facts += not is_new_fact
-        # user.user_stats.new_known_rate = np.mean([a[0] for a in user.user_stats.results if a[1]])
-        # user.user_stats.review_known_rate = np.mean([a[0] for a in user.user_stats.results if not a[1]])
-        # user.user_stats.total_seen += 1
-        # last_week_datetime = date - timedelta(days=7)
-        # last_week_results = [x for x in user.user_stats.results if parse_date(x[2]) >= last_week_datetime]
-        # user.user_stats.last_week_seen = len(last_week_results)
-        # user.user_stats.last_week_new_facts = len([x[1] for x in last_week_results])
-
         # update category and previous study (date and response)
         user.previous_study[fact.fact_id] = (str(date), response)
 
@@ -1295,15 +1271,47 @@ class MovingAvgScheduler:
         # self.db.commit()
 
         # update user stats
-        # find last entry of user stats
-        if len(user.user_stats) == 0:
+        self.update_user_stats(session, user, record, deck_id='all')
+        if fact.deck_id is not None:
+            self.update_user_stats(session, user, record, deck_id=fact.deck_id)
+
+        session.commit()
+
+        detail = {
+            # 'response': request.label,
+            # 'old ltn box': old_user.leitner_box.get(fact.fact_id, '-'),
+            # 'new ltn box': user.leitner_box.get(fact.fact_id, '-'),
+            # 'old ltn dat': str(old_user.leitner_scheduled_date.get(fact.fact_id, '-')),
+            # 'new ltn dat': str(user.leitner_scheduled_date.get(fact.fact_id, '-')),
+            # 'old sm2 rep': old_user.sm2_repetition.get(fact.fact_id, '-'),
+            # 'new sm2 rep': user.sm2_repetition.get(fact.fact_id, '-'),
+            # 'old sm2 inv': old_user.sm2_interval.get(fact.fact_id, '-'),
+            # 'new sm2 inv': user.sm2_interval.get(fact.fact_id, '-'),
+            # 'old sm2 e_f': old_user.sm2_efactor.get(fact.fact_id, '-'),
+            # 'new sm2 e_f': user.sm2_efactor.get(fact.fact_id, '-'),
+            # 'old sm2 dat': str(old_user.sm2_scheduled_date.get(fact.fact_id, '-')),
+            # 'new sm2 dat': str(user.sm2_scheduled_date.get(fact.fact_id, '-')),
+        }
+
+        return detail
+
+    def update_user_stats(self, session, user: User, record: Record, deck_id: str):
+        curr_stat = session.query(UserStat).\
+            filter(UserStat.user_id == user.user_id).\
+            filter(UserStat.deck_id == deck_id).\
+            order_by(UserStat.date.desc()).first()
+
+        is_new_stat = False
+        if curr_stat is None:
             user_stat_id = json.dumps({
                 'user_id': user.user_id,
-                'date': str(record.date.date())
+                'date': str(record.date.date()),
+                'deck_id': deck_id,
             })
             curr_stat = UserStat(
                 user_stat_id=user_stat_id,
                 user_id=user.user_id,
+                deck_id=deck_id,
                 date=record.date.date(),
                 new_facts=0,
                 reviewed_facts=0,
@@ -1320,18 +1328,20 @@ class MovingAvgScheduler:
                 elapsed_minutes_text=0,
                 elapsed_minutes_answer=0,
             )
-        else:
-            curr_stat = user.user_stats[-1]
+            is_new_stat = True
 
-        is_new_stat = False
-        if date.date() != curr_stat.date:
+        if record.date.date() != curr_stat.date:
+            # there is a previous user_stat, but not from today
+            # copy user stat to today
             user_stat_id = json.dumps({
                 'user_id': user.user_id,
-                'date': str(record.date.date())
+                'date': str(record.date.date()),
+                'deck_id': deck_id,
             })
             new_stat = UserStat(
                 user_stat_id=user_stat_id,
                 user_id=user.user_id,
+                deck_id=deck_id,
                 date=record.date.date(),
                 new_facts=curr_stat.new_facts,
                 reviewed_facts=curr_stat.reviewed_facts,
@@ -1372,26 +1382,6 @@ class MovingAvgScheduler:
 
         if is_new_stat:
             session.add(curr_stat)
-
-        session.commit()
-
-        detail = {
-            # 'response': request.label,
-            # 'old ltn box': old_user.leitner_box.get(fact.fact_id, '-'),
-            # 'new ltn box': user.leitner_box.get(fact.fact_id, '-'),
-            # 'old ltn dat': str(old_user.leitner_scheduled_date.get(fact.fact_id, '-')),
-            # 'new ltn dat': str(user.leitner_scheduled_date.get(fact.fact_id, '-')),
-            # 'old sm2 rep': old_user.sm2_repetition.get(fact.fact_id, '-'),
-            # 'new sm2 rep': user.sm2_repetition.get(fact.fact_id, '-'),
-            # 'old sm2 inv': old_user.sm2_interval.get(fact.fact_id, '-'),
-            # 'new sm2 inv': user.sm2_interval.get(fact.fact_id, '-'),
-            # 'old sm2 e_f': old_user.sm2_efactor.get(fact.fact_id, '-'),
-            # 'new sm2 e_f': user.sm2_efactor.get(fact.fact_id, '-'),
-            # 'old sm2 dat': str(old_user.sm2_scheduled_date.get(fact.fact_id, '-')),
-            # 'new sm2 dat': str(user.sm2_scheduled_date.get(fact.fact_id, '-')),
-        }
-
-        return detail
 
     def leitner_update(self, user: User, fact: Fact, response: bool) -> None:
         """
