@@ -1,4 +1,5 @@
 import json
+import socket
 import numpy as np
 import msgpack
 import msgpack_numpy
@@ -164,6 +165,9 @@ Fact.records = relationship("Record", order_by=Record.date, back_populates="fact
 User.user_stats = relationship("UserStat", order_by=UserStat.date, back_populates="user")
 
 
+
+
+
 if __name__ == '__main__':
     from karl.db import SchedulerDB
 
@@ -172,10 +176,22 @@ if __name__ == '__main__':
 
     db = SchedulerDB(filename)
 
-    engine = create_engine(f'postgresql+psycopg2://shifeng@localhost:5433/{db_name}?host=/fs/clip-quiz/shifeng/postgres/run')
-    Base.metadata.create_all(engine)
-    Session = sessionmaker(bind=engine)
-    session = Session()
+    hostname = socket.gethostname()
+    if hostname.startswith('newspeak'):
+        db_host = '/fs/clip-quiz/shifeng/postgres/run'
+    elif hostname.startswith('lapine'):
+        db_host = '/fs/clip-scratch/shifeng/postgres/run'
+    else:
+        print('unrecognized hostname')
+        exit()
+    engines = {
+        'prod': create_engine(f'postgresql+psycopg2://shifeng@localhost:5433/karl-prod?host={db_host}'),
+        'dev': create_engine(f'postgresql+psycopg2://shifeng@localhost:5433/karl-dev?host={db_host}'),
+    }
+
+    Base.metadata.create_all(engines['prod'])
+    sessions = {env: sessionmaker(bind=engine)() for env, engine in engines.items()}
+    session = sessions['prod']
 
     '''
     for user in tqdm(db.get_user()):

@@ -7,6 +7,7 @@ import time
 import copy
 import pickle
 import gensim
+import socket
 import hashlib
 import logging
 import threading

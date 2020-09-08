@@ -3,6 +3,7 @@
 
 import json
 import atexit
+import socket
 import logging
 from fastapi import FastAPI
 from typing import Optional, List
@@ -20,12 +21,23 @@ from karl.scheduler import MovingAvgScheduler
 app = FastAPI()
 scheduler = MovingAvgScheduler(preemptive=False)
 
-engines = {
-    'prod': create_engine('postgresql+psycopg2://shifeng@localhost:5433/karl-prod?host=/fs/clip-quiz/shifeng/postgres/run'),
-    'dev': create_engine('postgresql+psycopg2://shifeng@localhost:5433/karl-dev?host=/fs/clip-quiz/shifeng/postgres/run'),
-}
+def get_sessions():
+    hostname = socket.gethostname()
+    if hostname.startswith('newspeak'):
+        db_host = '/fs/clip-quiz/shifeng/postgres/run'
+    elif hostname.startswith('lapine'):
+        db_host = '/fs/clip-scratch/shifeng/postgres/run'
+    else:
+        print('unrecognized hostname')
+        exit()
+    engines = {
+        'prod': create_engine(f'postgresql+psycopg2://shifeng@localhost:5433/karl-prod?host={db_host}'),
+        'dev': create_engine(f'postgresql+psycopg2://shifeng@localhost:5433/karl-dev?host={db_host}'),
+    }
 
-sessions = {env: sessionmaker(bind=engine)() for env, engine in engines.items()}
+    return {env: sessionmaker(bind=engine)() for env, engine in engines.items()}
+
+sessions = get_sessions()
 
 # create logger with 'scheduler'
 logger = logging.getLogger('scheduler')
