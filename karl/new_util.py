@@ -166,8 +166,6 @@ User.user_stats = relationship("UserStat", order_by=UserStat.date, back_populate
 
 
 
-
-
 if __name__ == '__main__':
     from karl.db import SchedulerDB
 
