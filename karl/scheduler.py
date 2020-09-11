@@ -24,8 +24,8 @@ from plotnine import ggplot, aes, geom_bar, coord_flip
 from pandas.api.types import CategoricalDtype
 
 from karl.lda import process_question
-from karl.util import ScheduleRequest, parse_date, theme_fs
-from karl.new_util import Params, User, Fact, Record, UserStat
+from karl.new_util import ScheduleRequest, Params, User, Fact, Record, UserStat
+from karl.new_util import parse_date, theme_fs
 from karl.retention.baseline import RetentionModel
 # from karl.new_retention import HFRetentionModel as RetentionModel
 

@@ -14,7 +14,7 @@ from cachetools import cached, TTLCache
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from karl.util import ScheduleRequest, SetParams, Params
+from karl.new_util import ScheduleRequest, SetParams, Params
 from karl.scheduler import MovingAvgScheduler
 
 

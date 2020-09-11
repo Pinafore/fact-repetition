@@ -12,7 +12,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim.lr_scheduler import StepLR
 
-from karl.util import User, Fact, parse_date
+from karl.new_util import User, Fact, parse_date
 from karl.retention.data import RetentionDataset, apply_parallel, get_split_dfs
 
 

@@ -5,7 +5,9 @@ import msgpack
 import msgpack_numpy
 from collections import defaultdict
 from tqdm import tqdm
+from pydantic import BaseModel
 from dataclasses import dataclass
+from dateutil.parser import parse as parse_date
 from sqlalchemy import create_engine
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date
 from sqlalchemy import ForeignKey
@@ -14,26 +16,11 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.mutable import MutableDict, MutableList
 import sqlalchemy.types as types
 
+from plotnine import theme, theme_light, \
+    element_text, element_blank, element_rect, element_line
+
 
 Base = declarative_base()
-
-
-@dataclass
-class Params:
-    qrep: float = 1                     # cosine distance between qreps
-    skill: float = 0                    # fact difficulty vs user skill level
-    recall: float = 1                   # recall probability
-    recall_target: float = 1            # target of recall probability
-    category: float = 1                 # change in category from prev
-    answer: float = 1                   # reptition of the same category
-    leitner: float = 0                  # hours till leitner scheduled date
-    sm2: float = 1                      # hours till sm2 scheduled date
-    decay_qrep: float = 0.9             # discount factor
-    decay_skill: float = 0.9            # discount factor
-    cool_down: float = 1                # weight for cool down
-    cool_down_time_correct: float = 20  # minutes to cool down
-    cool_down_time_wrong: float = 4     # minutes to cool down
-    max_recent_facts: int = 10          # num of recent facts to keep record of
 
 
 class JSONEncoded(types.TypeDecorator):
@@ -164,6 +151,85 @@ User.records = relationship("Record", order_by=Record.date, back_populates="user
 Fact.records = relationship("Record", order_by=Record.date, back_populates="fact")
 User.user_stats = relationship("UserStat", order_by=UserStat.date, back_populates="user")
 
+
+class ScheduleRequest(BaseModel):
+    text: str
+    date: Optional[str]
+    answer: Optional[str]
+    category: Optional[str]
+    user_id: Optional[str]
+    fact_id: Optional[str]
+    label: Optional[bool]
+    history_id: Optional[str]
+    repetition_model: Optional[str]
+    deck_name: Optional[str]
+    deck_id: Optional[str]
+    env: Optional[str]
+    elapsed_seconds_text: Optional[int]
+    elapsed_seconds_answer: Optional[int]
+    elapsed_milliseconds_text: Optional[int]
+    elapsed_milliseconds_answer: Optional[int]
+
+
+class theme_fs(theme_light):
+    """
+    A theme similar to :class:`theme_linedraw` but with light grey
+    lines and axes to direct more attention towards the data.
+    Parameters
+    """
+
+    def __init__(self, base_size=11, base_family='DejaVu Sans'):
+        """
+        :param base_size: All text sizes are a scaled versions of the base font size.
+        :param base_family: Base font family.
+        """
+        theme_light.__init__(self, base_size, base_family)
+        self.add_theme(theme(
+            axis_ticks=element_line(color='#DDDDDD', size=0.5),
+            panel_border=element_rect(fill='None', color='#838383',
+                                      size=1),
+            strip_background=element_rect(
+                fill='#DDDDDD', color='#838383', size=1),
+            strip_text_x=element_text(color='black'),
+            strip_text_y=element_text(color='black', angle=-90),
+            legend_key=element_blank(),
+        ), inplace=True)
+
+
+class SetParams(BaseModel):
+    user_id: str = None                 # make it easier to set params for user
+    env: str = None                     # make it easier to set params for user
+    qrep: float = 1                     # cosine distance between qreps
+    skill: float = 0                    # fact difficulty vs user skill level
+    recall: float = 1                   # recall probability
+    recall_target: float = 1            # recall target probability
+    category: float = 1                 # change in category from prev
+    answer: float = 1                   # reptition of the same category
+    leitner: float = 0                  # hours till leitner scheduled date
+    sm2: float = 1                      # hours till sm2 scheduled date
+    decay_qrep: float = 0.9             # discount factor
+    decay_skill: float = 0.9            # discount factor
+    cool_down: float = 1                # weight for cool down
+    cool_down_time_correct: float = 20  # minutes to cool down
+    cool_down_time_wrong: float = 4     # minutes to cool down
+    max_recent_facts: int = 10          # num of recent facts to keep record of
+
+@dataclass
+class Params:
+    qrep: float = 1                     # cosine distance between qreps
+    skill: float = 0                    # fact difficulty vs user skill level
+    recall: float = 1                   # recall probability
+    recall_target: float = 1            # target of recall probability
+    category: float = 1                 # change in category from prev
+    answer: float = 1                   # reptition of the same category
+    leitner: float = 0                  # hours till leitner scheduled date
+    sm2: float = 1                      # hours till sm2 scheduled date
+    decay_qrep: float = 0.9             # discount factor
+    decay_skill: float = 0.9            # discount factor
+    cool_down: float = 1                # weight for cool down
+    cool_down_time_correct: float = 20  # minutes to cool down
+    cool_down_time_wrong: float = 4     # minutes to cool down
+    max_recent_facts: int = 10          # num of recent facts to keep record of
 
 
 if __name__ == '__main__':

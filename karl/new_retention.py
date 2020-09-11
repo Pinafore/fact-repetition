@@ -47,7 +47,7 @@ from karl.retention_utils import (
     retention_data_collator,
 )
 
-from karl.util import User, Fact
+from karl.new_util import User, Fact
 
 logger = logging.getLogger(__name__)
 
