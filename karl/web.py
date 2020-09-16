@@ -37,6 +37,7 @@ def get_sessions():
 
     return {env: sessionmaker(bind=engine)() for env, engine in engines.items()}
 
+
 sessions = get_sessions()
 
 # create logger with 'scheduler'
