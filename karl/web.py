@@ -13,6 +13,7 @@ from dateutil.parser import parse as parse_date
 from cachetools import cached, TTLCache
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import SQLAlchemyError
 
 from karl.new_util import ScheduleRequest, SetParams, Params
 from karl.scheduler import MovingAvgScheduler
@@ -76,13 +77,17 @@ def schedule(requests: List[ScheduleRequest]):
 
     env = 'dev' if requests[0].env == 'dev' else 'prod'
 
-    results = scheduler.schedule(sessions[env], requests, date, plot=False)
-    return {
-        'order': results['order'],
-        'rationale': results['rationale'],
-        'facts_info': results['facts_info'],
-        # 'profile': results['profile'],
-    }
+    try:
+        results = scheduler.schedule(sessions[env], requests, date, plot=False)
+        return {
+            'order': results['order'],
+            'rationale': results['rationale'],
+            'facts_info': results['facts_info'],
+            # 'profile': results['profile'],
+        }
+    except SQLAlchemyError as e:
+        print(repr(e))
+        sessions[env].rollback()
 
 
 @app.post('/api/karl/update')
@@ -96,7 +101,13 @@ def update(requests: List[ScheduleRequest]):
 
     env = 'dev' if requests[0].env == 'dev' else 'prod'
 
-    return scheduler.update(sessions[env], requests, date)
+    try:
+        update_results = scheduler.update(sessions[env], requests, date)
+        sessions[env].commit()
+        return update_results
+    except SQLAlchemyError as e:
+        print(repr(e))
+        sessions[env].rollback()
 
 
 @app.post('/api/karl/set_params')
@@ -106,7 +117,12 @@ def set_params(params: SetParams):
     env = params.pop('env')
     env = 'dev' if env == 'dev' else 'prod'
     params = Params(**params)
-    scheduler.set_user_params(sessions[env], user_id, params)
+    try:
+        scheduler.set_user_params(sessions[env], user_id, params)
+        sessions[env].commit()
+    except SQLAlchemyError as e:
+        print(repr(e))
+        sessions[env].rollback()
 
 
 @app.post('/api/karl/get_fact')
@@ -121,13 +137,23 @@ def get_fact(request: ScheduleRequest):
 @app.get('/api/karl/reset_user')
 def reset_user(user_id: str = None, env: str = None):
     env = 'dev' if env == 'dev' else 'prod'
-    scheduler.reset_user(sessions[env], user_id=user_id)
+    try:
+        scheduler.reset_user(sessions[env], user_id=user_id)
+        sessions[env].comimit()
+    except SQLAlchemyError as e:
+        print(repr(e))
+        sessions[env].rollback()
 
 
 @app.get('/api/karl/reset_fact')
 def reset_fact(fact_id: str = None, env: str = None):
     env = 'dev' if env == 'dev' else 'prod'
-    scheduler.reset_fact(sessions[env], fact_id=fact_id)
+    try:
+        scheduler.reset_fact(sessions[env], fact_id=fact_id)
+        sessions[env].commit()
+    except SQLAlchemyError as e:
+        print(repr(e))
+        sessions[env].rollback()
 
 
 @app.get('/api/karl/status')
@@ -151,6 +177,7 @@ def get_all_users(env: str = None):
     return [json.dumps({
         k: v for k, v in user.__dict__.items() if k != '_sa_instance_state'
     }) for user in users]
+
 
 @app.get('/api/karl/get_user_history')
 def get_user_history(user_id: str, env: str = None, deck_id: str = None,

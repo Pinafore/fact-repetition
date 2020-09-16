@@ -6,8 +6,8 @@ import msgpack_numpy
 from collections import defaultdict
 from tqdm import tqdm
 from pydantic import BaseModel
+from typing import Optional
 from dataclasses import dataclass
-from dateutil.parser import parse as parse_date
 from sqlalchemy import create_engine
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date
 from sqlalchemy import ForeignKey
@@ -15,6 +15,7 @@ from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.mutable import MutableDict, MutableList
 import sqlalchemy.types as types
+from dateutil.parser import parse as parse_date
 
 from plotnine import theme, theme_light, \
     element_text, element_blank, element_rect, element_line
