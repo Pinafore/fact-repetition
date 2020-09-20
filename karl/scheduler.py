@@ -1225,6 +1225,12 @@ class MovingAvgScheduler:
         request = requests[indices[0]]
         fact = facts[indices[0]]
 
+        user_snapshot = {
+            'leitner_box': user.leitner_box,
+            'count_correct_before': user.count_correct_before,
+            'count_wrong_before': user.count_wrong_before,
+        }
+
         record = Record(
             record_id=request.history_id,
             debug_id=self.debug_id.get(request.user_id, 'null'),
@@ -1233,7 +1239,7 @@ class MovingAvgScheduler:
             deck_id=fact.deck_id,
             response=request.label,
             judgement=request.label,
-            user_snapshot='',  # TODO
+            user_snapshot=json.dumps(user_snapshot),
             scheduler_snapshot=json.dumps(user.params.__dict__),
             fact_ids=json.dumps([x.fact_id for x in facts]),
             scheduler_output='',
@@ -1407,7 +1413,9 @@ class MovingAvgScheduler:
         new_box = max(min(new_box, 10), 1)
         user.leitner_box[fact.fact_id] = new_box
         interval = timedelta(days=increment_days[new_box])
-        # TODO is this correct? increment on previous instead of current study date?
+        # NOTE we increment on top `previous_study`, so it should be updated in
+        # `update` before `leitner_update` is called.
+        # it should correpond to the latest study date.
         prev_date, prev_response = user.previous_study[fact.fact_id]
         if isinstance(prev_date, str):
             prev_date = parse_date(prev_date)
