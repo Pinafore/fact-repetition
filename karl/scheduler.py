@@ -1272,9 +1272,8 @@ class MovingAvgScheduler:
         # self.db.commit()
 
         # update user stats
-        self.update_user_stats(session, user, record, deck_id='all')
-        if fact.deck_id is not None:
-            self.update_user_stats(session, user, record, deck_id=fact.deck_id)
+        deck_id = 'all' if not fact.deck_id else fact.deck_id
+        self.update_user_stats(session, user, record, deck_id=deck_id)
 
         session.commit()
 
