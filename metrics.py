@@ -306,7 +306,7 @@ def get_metrics(
 
 if __name__ == '__main__':
     session = get_sessions()['prod']
-    # update_user_snapshot(session)
+    update_user_snapshot(session)
 
     metric_class_list = [
         n_facts_shown,

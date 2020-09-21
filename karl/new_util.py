@@ -254,9 +254,9 @@ if __name__ == '__main__':
         'dev': create_engine(f'postgresql+psycopg2://shifeng@localhost:5433/karl-dev?host={db_host}'),
     }
 
-    Base.metadata.create_all(engines['prod'])
+    Base.metadata.create_all(engines['dev'])
     sessions = {env: sessionmaker(bind=engine)() for env, engine in engines.items()}
-    session = sessions['prod']
+    session = sessions['dev']
 
     '''
     for user in tqdm(db.get_user()):

@@ -36,7 +36,7 @@ def get_sessions():
         'dev': create_engine(f'postgresql+psycopg2://shifeng@localhost:5433/karl-dev?host={db_host}'),
     }
 
-    return {env: sessionmaker(bind=engine)() for env, engine in engines.items()}
+    return {env: sessionmaker(bind=engine, autoflush=False)() for env, engine in engines.items()}
 
 
 sessions = get_sessions()
