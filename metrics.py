@@ -7,11 +7,15 @@
 
 
 import json
+import bisect
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from datetime import timedelta
-from plotnine import *
+from datetime import datetime, timedelta
+from typing import Dict
+from plotnine import ggplot, aes, theme,\
+    geom_point, geom_line,\
+    element_text
 
 from karl.new_util import User, Record, parse_date
 from karl.web import get_sessions
@@ -103,6 +107,23 @@ class n_new_facts_shown(Metric):
         self.value += record.is_new_fact
 
 
+class ratio_new_facts_shown(Metric):
+
+    name = 'ratio_new_facts_shown'
+    description = 'Ratio of new facts among all shown.'
+
+    def __init__(self, **kwargs):
+        self.n_fact_shown = n_facts_shown(**kwargs)
+        self.n_new_facts_shown = n_new_facts_shown(**kwargs)
+        self.value = 0
+    
+    def update(self, record):
+        self.n_fact_shown.update(record)
+        self.n_new_facts_shown.update(record)
+        self.value = 0 if self.n_fact_shown.value == 0 else \
+            (self.n_new_facts_shown.value / self.n_fact_shown.value)
+
+
 class n_new_facts_correct(Metric):
 
     name = 'n_new_facts_correct'
@@ -125,6 +146,22 @@ class n_new_facts_wrong(Metric):
 
     def update(self, record):
         self.value += (record.is_new_fact and not record.response)
+
+
+class ratio_new_facts_correct(Metric):
+
+    name = 'ratio_new_facts_correct'
+    description = 'Ratio of new facts answered correctly among all new facts.'
+
+    def __init__(self, **kwargs):
+        self.n_new_facts_shown = n_new_facts_shown(**kwargs)
+        self.n_new_facts_correct = n_new_facts_correct(**kwargs)
+    
+    def update(self, record):
+        self.n_new_facts_shown.update(record)
+        self.n_new_facts_correct.update(record)
+        self.value = 0 if self.n_new_facts_shown.value == 0 else \
+            (self.n_new_facts_correct.value / self.n_new_facts_shown.value)
 
 
 class n_old_facts_shown(Metric):
@@ -163,9 +200,26 @@ class n_old_facts_wrong(Metric):
         self.value += (not record.is_new_fact and not record.response)
 
 
-class n_known_facts_shown(Metric):
+class ratio_old_facts_correct(Metric):
 
-    name = 'n_known_facts_shown'
+    name = 'ratio_old_facts_correct'
+    description = 'Ratio of old facts answered correctly among all old facts shown.'
+
+    def __init__(self, **kwargs):
+        self.n_old_facts_shown = n_old_facts_shown(**kwargs)
+        self.n_old_facts_correct = n_old_facts_correct(**kwargs)
+        self.value = 0
+    
+    def update(self, record):
+        self.n_old_facts_shown.update(record)
+        self.n_old_facts_correct.update(record)
+        self.value = 0 if self.n_old_facts_shown.value == 0 else \
+            (self.n_old_facts_correct.value / self.n_old_facts_shown.value)
+
+
+class n_known_old_facts_shown(Metric):
+
+    name = 'n_known_old_facts_shown'
     description = '''Number of already-known old facts shown. These are the
         facts that the user got correct the first try (potentially before the
         datetime span). Thess cards are probably too easy.'''
@@ -179,9 +233,9 @@ class n_known_facts_shown(Metric):
             self.correct_on_first_try[record.user_id][record.fact_id]
 
 
-class n_known_facts_correct(Metric):
+class n_known_old_facts_correct(Metric):
 
-    name = 'n_known_facts_correct'
+    name = 'n_known_old_facts_correct'
     description = 'Number of already-known old facts answered correctly (which is expected). These are the facts that the user got correct the first try (potentially before the datetime span). Thess cards are probably too easy.'
 
     def __init__(self, **kwargs):
@@ -194,9 +248,9 @@ class n_known_facts_correct(Metric):
             record.response
 
 
-class n_known_facts_wrong(Metric):
+class n_known_old_facts_wrong(Metric):
 
-    name = 'n_known_facts_wrong'
+    name = 'n_known_old_facts_wrong'
     description = 'Number of already-known old facts answered incorrectly (which is unexpected). These are the facts that the user got correct the first try (potentially before the datetime span). This means the user might have got it correct by being lucky.'
 
     def __init__(self, **kwargs):
@@ -207,6 +261,39 @@ class n_known_facts_wrong(Metric):
         self.value += not record.is_new_fact and \
             self.correct_on_first_try[record.user_id][record.fact_id] and \
             not record.response
+
+class ratio_known_old_facts_shown(Metric):
+
+    name = 'ratio_known_old_facts_shown'
+    description = 'Ratio of known facts shown among all old facts.'
+
+    def __init__(self, **kwargs):
+        self.n_old_facts_shown = n_old_facts_shown(**kwargs)
+        self.n_known_old_facts_shown = n_known_old_facts_shown(**kwargs)
+        self.value = 0
+
+    def update(self, record):
+        self.n_old_facts_shown.update(record)
+        self.n_known_old_facts_shown.update(record)
+        self.value = 0 if self.n_old_facts_shown.value == 0 else \
+            (self.n_known_old_facts_shown.value / self.n_old_facts_shown.value)
+
+
+class ratio_known_old_facts_correct(Metric):
+
+    name = 'ratio_known_old_facts_correct'
+    description = 'Ratio lf already-known old facts answered correctly among all known old facts shown.'
+
+    def __init__(self, **kwargs):
+        self.n_known_old_facts_shown = n_known_old_facts_shown(**kwargs)
+        self.n_known_old_facts_correct = n_known_old_facts_correct(**kwargs)
+        self.value = 0
+    
+    def update(self, record):
+        self.n_known_old_facts_shown.update(record)
+        self.n_known_old_facts_correct.update(record)
+        self.value = 0 if self.n_known_old_facts_shown.value == 0 else \
+            (self.n_known_old_facts_correct.value / self.n_known_old_facts_shown.value)
 
 
 class n_learned(Metric):
@@ -233,6 +320,23 @@ class n_learned(Metric):
             self.counter[record.fact_id] = 0
 
 
+class ratio_learned(Metric):
+
+    name = 'ratio_learned'
+    description = 'Ratio of cards learned (see `n_learned`) among those not previously known.'
+
+    def __init__(self, **kwargs):
+        self.n_learned = n_learned(**kwargs)
+        self.n_not_known = 0
+        self.value = 0
+    
+    def update(self, record):
+        self.n_learned.update(record)
+        if record.is_new_fact and not record.response:
+            self.n_not_known += 1
+        self.value = 0 if self.n_not_known == 0 else (self.n_learned.value / self.n_not_known)
+
+
 class n_learned_but_forgotten(Metric):
 
     name = 'n_learned_but_fogotten'
@@ -257,15 +361,50 @@ class n_learned_but_forgotten(Metric):
             self.counter[record.fact_id] = 0
 
 
+class ratio_learned_but_forgotten(Metric):
+
+    name = 'ratio_learned_but_forgotten'
+    description = 'Ratio of learned facts forgotten.'
+
+    def __init__(self, **kwargs):
+        self.n_learned = n_learned(**kwargs)
+        self.n_learned_but_forgotten = n_learned_but_forgotten(**kwargs)
+    
+    def update(self, record):
+        self.n_learned.update(record)
+        self.n_learned_but_forgotten.update(record)
+        self.value = 0 if self.n_learned.value == 0 else \
+            (self.n_learned_but_forgotten.value / self.n_learned.value)
+    
 
 def get_metrics(
     session,
-    metric_class_list,
-    user_id: str = None,
-    deck_id: str = None,
-    date_start: str = None,
-    date_end: str = None
+    date_start: datetime = None,
+    date_end: datetime = None,
+    date_stride: int = 1,
 ):
+    metric_class_list = [
+        n_facts_shown,
+        ratio_new_facts_shown,
+        ratio_new_facts_correct,
+        n_new_facts_shown,
+        n_new_facts_correct,
+        n_new_facts_wrong,
+        n_old_facts_shown,
+        n_old_facts_correct,
+        n_old_facts_wrong,
+        ratio_old_facts_correct,
+        n_known_old_facts_shown,
+        n_known_old_facts_correct,
+        n_known_old_facts_wrong,
+        ratio_known_old_facts_shown,
+        ratio_known_old_facts_correct,
+        n_learned,
+        n_learned_but_forgotten,
+        ratio_learned,
+        ratio_learned_but_forgotten,
+    ]
+
     n_users = session.query(User).count()
     correct_on_first_try = {}  # user_id -> {fact_id -> bool}
     for user in tqdm(session.query(User), total=n_users):
@@ -276,92 +415,103 @@ def get_metrics(
             correct_on_first_try[user.user_id][record.fact_id] = record.response
 
     if date_start is None:
-        date_start = '2008-06-11 08:00:00'
+        date_start = session.query(Record).first().date.date()
     if date_end is None:
-        date_end = '2038-06-11 08:00:00'
-    date_start = parse_date(date_start)
-    date_end = parse_date(date_end)
+        date_end = session.query(Record).order_by(Record.date.desc()).first().date.date()
+    
+    n_bins = (date_end - date_start).days // date_stride + 1
+    end_dates = [date_start + i * timedelta(days=date_stride) for i in range(n_bins)]
 
-    if user_id is not None:
-        users = [session.query(User).filter(User.user_id == user_id).first()]
-    else:
-        users = session.query(User)
-
-    metrics_by_user = {}
-    for user in users:
-        records = session.query(Record).\
-            filter(Record.date >= date_start, Record.date <= date_end).\
-            filter(Record.user_id == user.user_id)
-        if deck_id is not None:
-            records = records.filter(Record.deck_id == deck_id)
-
+    rows = []
+    for user in tqdm(session.query(User), total=n_users):
+        # TODO filter users by number of records within this period
+        if len(user.records) < 20:
+            continue
+        repetition_model = infer_repetition_model(session, user=user, date_end=date_end)
         metrics = [metric_class(correct_on_first_try=correct_on_first_try) for metric_class in metric_class_list]
-        for record in records:
+        curr_end_date = end_dates[bisect.bisect(end_dates, user.records[0].date.date())]
+        for record in user.records:
+            try:
+                new_end_date = end_dates[bisect.bisect(end_dates, record.date.date())]
+            except IndexError:
+                new_end_date = end_dates[-1]
+            if new_end_date != curr_end_date:
+                # finished computing metrics for this date window
+                for m in metrics:
+                    rows.append({
+                        'user_id': user.user_id,
+                        'name': m.name,
+                        'value': m.value,
+                        'date_start': date_start,
+                        'date_end': curr_end_date,
+                        'repetition_model': repetition_model,
+                    })
+                curr_end_date = new_end_date
             for metric in metrics:
                 metric.update(record)
 
-        metrics_by_user[user.user_id] = {m.name: m.value for m in metrics}
-    return metrics_by_user
+    df = pd.DataFrame(rows)
+    df.date_start = df.date_start.astype(np.datetime64)
+    df.date_end = df.date_end.astype(np.datetime64)
+    return df
+
+def infer_repetition_model(session, user: User, record: Record = None, date_end: datetime = None) -> str:
+    # find out the last repetition model that the user used before date_end
+    # given a dictionary of params, infer what repetition model is used
+    if record is None:
+        records = session.query(Record).\
+            filter(Record.user_id == user.user_id)
+        if date_end is not None:
+            records = records.filter(Record.date <= date_end)
+        record = records.order_by(Record.date.desc()).first()
+    if record is None:
+        return None
+    
+    params = json.loads(record.scheduler_snapshot)
+    if params['qrep'] == 0:
+        if params['leitner'] > 0:
+            return 'leitner'
+        elif params['sm2'] > 0:
+            return 'sm2'
+        else:
+            return 'unknown'
+    else:
+        if 'recall_target' in params:
+            return 'karl-' + str(params['recall_target'] * 100)
+        else:
+            return 'karl-100'
 
 
 if __name__ == '__main__':
     session = get_sessions()['prod']
-    # update_user_snapshot(session)
-
-    metric_class_list = [
-        n_facts_shown,
-        n_new_facts_shown,
-        n_new_facts_correct,
-        n_new_facts_wrong,
-        n_new_facts_wrong,
-        n_old_facts_shown,
-        n_old_facts_correct,
-        n_old_facts_wrong,
-        n_known_facts_shown,
-        n_known_facts_correct,
-        n_known_facts_wrong,
-        n_learned,
-        n_learned_but_forgotten,
-    ]
-
-    date_stride = 3
-    date_start = session.query(Record).first().date.date()
-    date_end = session.query(Record).order_by(Record.date.desc()).first().date.date()
-    rows = []
-    for i in range((date_end - date_start).days // date_stride):
-        window_start = date_start
-        window_end = window_start + timedelta(days=(i + 1) * date_stride)
-        metrics_by_user = get_metrics(session, metric_class_list,
-                                      date_start=str(window_start), date_end=str(window_end))
-        metrics_averaged = {}
-        for user, metrics in metrics_by_user.items():
-            for name, value in metrics.items():
-                if name not in metrics_averaged:
-                    metrics_averaged[name] = []
-                metrics_averaged[name].append(value)
-        metrics_averaged = {k: np.mean(v) for k, v in metrics_averaged.items()}
-        for k, v in metrics_averaged.items():
-            rows.append({
-                'index': i,
-                'name': k,
-                'value': v,
-                'date_start': window_start,
-                'date_end': window_end,
-            })
-        print(window_start, window_end)
-    
-    df = pd.DataFrame(rows)
-    # otherwise it won't be considered as ordered
-    df.date_start = df.date_end.astype(np.datetime64)
-    df.date_end = df.date_end.astype(np.datetime64)
-
-    p = (
-        ggplot(df)
-        + aes(x='date_end', y='value', color='name')
-        + geom_point()
-        + geom_line()
-        + theme(
-            axis_text_x=element_text(rotation=30)
+    update_user_snapshot(session)
+    df = get_metrics(session)
+    # average for each user
+    df = df.groupby(['user_id', 'name', 'date_start', 'date_end', 'repetition_model']).mean()
+    # average for each repetition model
+    df = df.groupby(['repetition_model', 'name', 'date_start', 'date_end']).mean().reset_index()
+    for name in df.name.unique():
+        # compare repetition models on each metric
+        p = (
+            ggplot(df[df.name == name])
+            + aes(x='date_end', y='value', color='repetition_model')
+            + geom_point()
+            + geom_line()
+            + theme(
+                axis_text_x=element_text(rotation=30)
+            )
         )
-    )
-    p.save('output/metrics.pdf')
+        p.save(f'output/{name}.pdf')
+
+    for repetition_model in df.repetition_model.unique():
+        # compare metrics for each repetition model
+        p = (
+            ggplot(df[df.repetition_model == repetition_model])
+            + aes(x='date_end', y='value', color='name')
+            + geom_point()
+            + geom_line()
+            + theme(
+                axis_text_x=element_text(rotation=30)
+            )
+        )
+        p.save(f'output/{repetition_model}.pdf')
