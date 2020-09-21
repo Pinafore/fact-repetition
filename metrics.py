@@ -68,7 +68,7 @@ def update_user_snapshot(session):
                 'count_wrong_before': count_wrong_before,
             }
             record.user_snapshot = json.dumps(user_snapshot)
-            session.commit()
+        session.commit()
 
 
 class Metric:
@@ -484,7 +484,7 @@ def infer_repetition_model(session, user: User, record: Record = None, date_end:
 
 if __name__ == '__main__':
     session = get_sessions()['prod']
-    update_user_snapshot(session)
+    # update_user_snapshot(session)
     df = get_metrics(session)
     # average for each user
     df = df.groupby(['user_id', 'name', 'date_start', 'date_end', 'repetition_model']).mean()
