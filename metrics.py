@@ -1,4 +1,4 @@
-"""each metric returns a name, a description, and a scalar value"""
+"""each metric has a name, a description, and a scalar value"""
 # think of the metrics from the perspectives of the scheduler
 # if the scheduler recommended this fact and the response is X, what does it say about the scheduler?
 # e.g. is it too aggressively showing difficult new facts? is it repeating easy old facts too much?
@@ -19,56 +19,6 @@ from plotnine import ggplot, aes, theme,\
 
 from karl.new_util import User, Record, parse_date
 from karl.web import get_sessions
-
-
-def leitner_update(leitner_box, fact, response: bool) -> None:
-    """
-    Update Leitner box and scheduled date of card.
-
-    :param user:
-    :param fact:
-    :param response: CORRECT or WRONG.
-    """
-    # leitner boxes 1~10
-    # days[0] = None as placeholder since we don't have box 0
-    # days[9] and days[10] = 9999 to make it never repeat
-    cur_box = leitner_box.get(fact.fact_id, None)
-    if cur_box is None:
-        cur_box = 1
-    new_box = cur_box + (1 if response else -1)
-    new_box = max(min(new_box, 10), 1)
-    leitner_box[fact.fact_id] = new_box
-
-
-def update_user_snapshot(session):
-    debug = False
-    n_users = session.query(User).count()
-    for i, user in enumerate(tqdm(session.query(User), total=n_users)):
-        if debug and i > 10:
-            break
-        leitner_box = {}  # fact_id -> box (1~10)
-        count_correct_before = {}  # fact_id -> number of times answered correctly before
-        count_wrong_before = {}  # fact_id -> number of times answered incorrectly before
-        for j, record in enumerate(user.records):
-            if debug and j > 100:
-                break
-            fact = record.fact
-            leitner_update(leitner_box, fact, record.response)
-            if fact.fact_id not in count_correct_before:
-                count_correct_before[fact.fact_id] = 0
-            if fact.fact_id not in count_wrong_before:
-                count_wrong_before[fact.fact_id] = 0
-            if record.response:
-                count_correct_before[fact.fact_id] += 1
-            else:
-                count_wrong_before[fact.fact_id] += 1
-            user_snapshot = {
-                'leitner_box': leitner_box,
-                'count_correct_before': count_correct_before,
-                'count_wrong_before': count_wrong_before,
-            }
-            record.user_snapshot = json.dumps(user_snapshot)
-        session.commit()
 
 
 class Metric:
@@ -377,34 +327,16 @@ class ratio_learned_but_forgotten(Metric):
             (self.n_learned_but_forgotten.value / self.n_learned.value)
     
 
-def get_metrics(
+def get_user_metrics(
     session,
+    metric_class_list,
     date_start: datetime = None,
     date_end: datetime = None,
-    date_stride: int = 1,
+    date_stride: int = 2,
 ):
-    metric_class_list = [
-        n_facts_shown,
-        ratio_new_facts_shown,
-        ratio_new_facts_correct,
-        n_new_facts_shown,
-        n_new_facts_correct,
-        n_new_facts_wrong,
-        n_old_facts_shown,
-        n_old_facts_correct,
-        n_old_facts_wrong,
-        ratio_old_facts_correct,
-        n_known_old_facts_shown,
-        n_known_old_facts_correct,
-        n_known_old_facts_wrong,
-        ratio_known_old_facts_shown,
-        ratio_known_old_facts_correct,
-        n_learned,
-        n_learned_but_forgotten,
-        ratio_learned,
-        ratio_learned_but_forgotten,
-    ]
-
+    '''
+    User-specific metrics.
+    '''
     n_users = session.query(User).count()
     correct_on_first_try = {}  # user_id -> {fact_id -> bool}
     for user in tqdm(session.query(User), total=n_users):
@@ -415,13 +347,13 @@ def get_metrics(
             correct_on_first_try[user.user_id][record.fact_id] = record.response
 
     if date_start is None:
-        date_start = session.query(Record).first().date.date()
+        date_start = session.query(Record).order_by(Record.date).first().date.date()
     if date_end is None:
         date_end = session.query(Record).order_by(Record.date.desc()).first().date.date()
-    
+
     n_bins = (date_end - date_start).days // date_stride + 1
     end_dates = [date_start + i * timedelta(days=date_stride) for i in range(n_bins)]
-
+    
     rows = []
     for user in tqdm(session.query(User), total=n_users):
         # TODO filter users by number of records within this period
@@ -429,12 +361,11 @@ def get_metrics(
             continue
         repetition_model = infer_repetition_model(session, user=user, date_end=date_end)
         metrics = [metric_class(correct_on_first_try=correct_on_first_try) for metric_class in metric_class_list]
-        curr_end_date = end_dates[bisect.bisect(end_dates, user.records[0].date.date())]
+        idx = bisect.bisect(end_dates, user.records[0].date.date())
+        curr_end_date = end_dates[min(len(end_dates) - 1, idx)]
         for record in user.records:
-            try:
-                new_end_date = end_dates[bisect.bisect(end_dates, record.date.date())]
-            except IndexError:
-                new_end_date = end_dates[-1]
+            idx = bisect.bisect(end_dates, record.date.date())
+            new_end_date = end_dates[min(len(end_dates) - 1, idx)]
             if new_end_date != curr_end_date:
                 # finished computing metrics for this date window
                 for m in metrics:
@@ -447,8 +378,17 @@ def get_metrics(
                         'repetition_model': repetition_model,
                     })
                 curr_end_date = new_end_date
-            for metric in metrics:
-                metric.update(record)
+            for m in metrics:
+                m.update(record)
+        for m in metrics:
+            rows.append({
+                'user_id': user.user_id,
+                'name': m.name,
+                'value': m.value,
+                'date_start': date_start,
+                'date_end': curr_end_date,
+                'repetition_model': repetition_model,
+            })
 
     df = pd.DataFrame(rows)
     df.date_start = df.date_start.astype(np.datetime64)
@@ -484,12 +424,35 @@ def infer_repetition_model(session, user: User, record: Record = None, date_end:
 
 if __name__ == '__main__':
     session = get_sessions()['prod']
-    # update_user_snapshot(session)
-    df = get_metrics(session)
+
+    metric_class_list = [
+        n_facts_shown,
+        ratio_new_facts_shown,
+        ratio_new_facts_correct,
+        n_new_facts_shown,
+        n_new_facts_correct,
+        n_new_facts_wrong,
+        n_old_facts_shown,
+        n_old_facts_correct,
+        n_old_facts_wrong,
+        ratio_old_facts_correct,
+        n_known_old_facts_shown,
+        n_known_old_facts_correct,
+        n_known_old_facts_wrong,
+        ratio_known_old_facts_shown,
+        ratio_known_old_facts_correct,
+        n_learned,
+        n_learned_but_forgotten,
+        ratio_learned,
+        ratio_learned_but_forgotten,
+    ]
+
+    df = get_user_metrics(session, metric_class_list)
     # average for each user
     df = df.groupby(['user_id', 'name', 'date_start', 'date_end', 'repetition_model']).mean()
     # average for each repetition model
     df = df.groupby(['repetition_model', 'name', 'date_start', 'date_end']).mean().reset_index()
+
     for name in df.name.unique():
         # compare repetition models on each metric
         p = (
@@ -505,8 +468,12 @@ if __name__ == '__main__':
 
     for repetition_model in df.repetition_model.unique():
         # compare metrics for each repetition model
+        # separate counts from ratios
+        ratio_list = [m.name for m in metric_class_list if m.name.startswith('ratio_')]
+        df_plot = df[df.repetition_model == repetition_model]
+        df_plot = df_plot[df_plot.name.isin(ratio_list)]
         p = (
-            ggplot(df[df.repetition_model == repetition_model])
+            ggplot(df_plot)
             + aes(x='date_end', y='value', color='name')
             + geom_point()
             + geom_line()
@@ -514,4 +481,18 @@ if __name__ == '__main__':
                 axis_text_x=element_text(rotation=30)
             )
         )
-        p.save(f'output/{repetition_model}.pdf')
+        p.save(f'output/{repetition_model}_ratios.pdf')
+
+        count_list = [m.name for m in metric_class_list if m.name.startswith('n_')]
+        df_plot = df[df.repetition_model == repetition_model]
+        df_plot = df_plot[df_plot.name.isin(count_list)]
+        p = (
+            ggplot(df_plot)
+            + aes(x='date_end', y='value', color='name')
+            + geom_point()
+            + geom_line()
+            + theme(
+                axis_text_x=element_text(rotation=30)
+            )
+        )
+        p.save(f'output/{repetition_model}_count.pdf')
