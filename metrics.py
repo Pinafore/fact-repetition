@@ -17,7 +17,8 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Dict
 from plotnine import ggplot, aes, theme,\
-    geom_point, geom_line,\
+    geom_point, geom_line, geom_area,\
+    facet_grid, facet_wrap,\
     element_text
 
 from karl.new_util import User, Record, parse_date, theme_fs
@@ -249,7 +250,7 @@ def infer_repetition_model(session, user: User, record: Record = None, date_end:
             return 'karl-100'
 
 
-def get_user_metrics(
+def compute_accumulative_metrics(
     session,
     metric_class_list,
     date_start: datetime = None,
@@ -317,7 +318,7 @@ def get_user_metrics(
 
 session = get_sessions()['prod']
 
-user_metric_class_list = [
+accumulative_metric_class_list = [
     n_facts_shown,
     n_new_facts_shown,
     n_new_facts_correct,
@@ -332,57 +333,49 @@ user_metric_class_list = [
     n_learned_but_forgotten,
 ]
 
-raw_df = get_user_metrics(session, user_metric_class_list)
+raw_df = compute_accumulative_metrics(session, accumulative_metric_class_list)
 
 # %%
-for threshold in [20, 50, 100]:
-    Path(f'figures/{threshold}_plus/').mkdir(parents=True, exist_ok=True)
-    user_ids = [u.user_id for u in session.query(User) if len(u.previous_study) >= threshold]
-    df = raw_df[raw_df.user_id.isin(user_ids)]
-    df = df.groupby(['repetition_model', 'name', 'date_window_end']).mean().reset_index()
-    # visualize all repetition models on each metric
-    for name in df.name.unique():
-        p = (
-            ggplot(df[df.name == name])
-            + aes(x='date_window_end', y='value', color='repetition_model')
-            + geom_point()
-            + geom_line()
-            + theme_fs()
-            + theme(
-                axis_text_x=element_text(rotation=30)
-            )
-        )
-        p.save(f'figures/{threshold}_plus/metric_{name}.pdf')
+# when we compute derivative metrics (e.g. ratios), we can either
+# 1) take the sum of raw metrics first, then compute derivatives
+# of compute derivatives for each user, then take the average
 
-    # visualize all ratio and count metrics for each repetition model
-    for repetition_model in df.repetition_model.unique():
-        # ratio_list = [m.name for m in user_metric_class_list if m.name.startswith('ratio_')]
-        # df_plot = df[df.repetition_model == repetition_model]
-        # df_plot = df_plot[df_plot.name.isin(ratio_list)]
-        # p = (
-        #     ggplot(df_plot)
-        #     + aes(x='date_window_end', y='value', color='name')
-        #     + geom_point()
-        #     + geom_line()
-        #     + theme_fs()
-        #     + theme(
-        #         axis_text_x=element_text(rotation=30)
-        #     )
-        # )
-        # p.save(f'figures/{threshold}_plus/repetition_{repetition_model}_ratios.pdf')
+threshold = 20
+Path(f'figures/{threshold}_plus/').mkdir(parents=True, exist_ok=True)
+user_ids = [u.user_id for u in session.query(User) if len(u.previous_study) >= threshold]
+df = raw_df[raw_df.user_id.isin(user_ids)]
 
-        count_list = [m.name for m in user_metric_class_list if m.name.startswith('n_')]
-        df_plot = df[df.repetition_model == repetition_model]
-        df_plot = df_plot[df_plot.name.isin(count_list)]
-        p = (
-            ggplot(df_plot)
-            + aes(x='date_window_end', y='value', color='name')
-            + geom_point()
-            + geom_line()
-            + theme_fs()
-            + theme(
-                axis_text_x=element_text(rotation=30)
-            )
-        )
-        p.save(f'figures/{threshold}_plus/repetition_{repetition_model}_count.pdf')
-    # %%
+# take the sum of users within each group
+df = df.groupby(['repetition_model', 'name', 'date_window_end']).sum().reset_index()
+# turn metrics into columns so it's easier to compute derivative metrics
+df = df.pivot_table(index=['repetition_model', 'date_window_end'], columns='name', values='value')
+df['ratio_new_correct_vs_all'] = df.n_new_facts_correct / df.n_facts_shown
+df['ratio_new_wrong_vs_all'] = df.n_new_facts_wrong / df.n_facts_shown
+df['ratio_old_correct_vs_all'] = df.n_old_facts_correct / df.n_facts_shown
+df['ratio_old_wrong_vs_all'] = df.n_old_facts_correct / df.n_facts_shown
+# df['ratio_known_vs_all'] = df.n_known_old_facts_shown / df.n_facts_shown
+# df['ratio_known_vs_old'] = df.n_known_old_facts_shown / df.n_old_facts_shown
+# df['ratio_known_correct_vs_known'] = df.n_known_old_facts_correct / df.n_known_old_facts_shown
+
+# done with derivatives, convert metrics from columns to rows
+df = df.stack()
+df.name = 'value'
+df = df.reset_index()
+
+# for name in df.name.unique():
+names = [
+    'ratio_new_correct_vs_all',
+    'ratio_new_wrong_vs_all',
+    'ratio_old_correct_vs_all',
+    'ratio_old_wrong_vs_all',
+]
+p = (
+    ggplot(df[df.name.isin(names)])
+    + geom_area(aes(x='date_window_end', y='value', fill='name'), alpha=0.75)
+    + facet_wrap('repetition_model')
+    + theme_fs()
+    + theme(
+        axis_text_x=element_text(rotation=30)
+    )
+)
+p.draw()
