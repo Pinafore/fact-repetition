@@ -1,4 +1,5 @@
 # %%
+import json
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -9,7 +10,6 @@ from plotnine import *
 
 from karl.web import get_sessions
 from karl.new_util import Record, User, theme_fs
-from metrics import Metric
 
 
 # %%
@@ -17,7 +17,20 @@ class DatedMetric:
 
     name = None
     description = None
-    values = None  # date -> scalar value
+    values = defaultdict(lambda: 0) # date -> scalar value
+
+    def __init__(self, **kwargs):
+        pass
+    
+    def update(self, record):
+        pass
+
+    def __getitem__(self, date: datetime):
+        return self.values[date]
+
+    def items(self):
+        return self.values.items()
+
 
 class n_daily_users(DatedMetric):
     
@@ -35,6 +48,7 @@ class n_daily_users(DatedMetric):
         if record.user.user_id not in self.daily_active_user_ids[date]:
             self.values[date] += 1
             self.daily_active_user_ids[date].add(record.user.user_id)
+
 
 class n_daily_users_10_plus(DatedMetric):
     
@@ -56,6 +70,7 @@ class n_daily_users_10_plus(DatedMetric):
         if self.daily_user_count[date][record.user_id] == self.threshold:
             self.values[date] += 1
             
+
 class n_daily_users_50_plus(DatedMetric):
     
     name = 'n_daily_users_50_plus'
@@ -109,22 +124,108 @@ class n_total_facts_shown(DatedMetric):
     def update(self, record):
         self.values[record.date.date()] += 1
         
-        
-class n_average_facts_shown(DatedMetric):
-    
-    name = 'n_average_facts_shown'
-    description = 'Total number of facts studied on each day.'
-    
+
+def infer_repetition_model(record: Record) -> str:
+    # find out the last repetition model that the user used before date_end
+    # given a dictionary of params, infer what repetition model is used
+    params = json.loads(record.scheduler_snapshot)
+    if params['qrep'] == 0:
+        if params['leitner'] > 0:
+            return 'leitner'
+        elif params['sm2'] > 0:
+            return 'sm2'
+        else:
+            return 'unknown'
+    else:
+        if 'recall_target' in params:
+            return 'karl-' + str(int(params['recall_target'] * 100))
+        else:
+            return 'karl-100'
+
+
+class n_leitner_users(DatedMetric):
+
+    name = 'n_leitner_users'
+    description = 'Number of daily active Leitner users.'
+
     def __init__(self, **kwargs):
-        self.n_total_facts_shown = n_total_facts_shown(**kwargs)
-        self.n_daily_users = n_daily_users(**kwargs)
+        self.daily_users = defaultdict(set)
         self.values = defaultdict(lambda: 0)
     
     def update(self, record):
-        self.n_total_facts_shown.update(record)
-        self.n_daily_users.update(record)
+        repetition_model = infer_repetition_model(record)
         date = record.date.date()
-        self.values[date] = self.n_total_facts_shown.values[date] / self.n_daily_users.values[date]
+        if repetition_model == 'leitner' and record.user_id not in self.daily_users[date]:
+            self.daily_users[date].add(record.user_id)
+            self.values[date] += 1
+
+
+class n_sm2_users(DatedMetric):
+
+    name = 'n_sm2_users'
+    description = 'Number of daily active SM2 users.'
+
+    def __init__(self, **kwargs):
+        self.daily_users = defaultdict(set)
+        self.values = defaultdict(lambda: 0)
+    
+    def update(self, record):
+        repetition_model = infer_repetition_model(record)
+        date = record.date.date()
+        if repetition_model == 'sm2' and record.user_id not in self.daily_users[date]:
+            self.daily_users[date].add(record.user_id)
+            self.values[date] += 1
+
+
+class n_karl100_users(DatedMetric):
+
+    name = 'n_karl100_users'
+    description = 'Number of daily active karl100 users.'
+
+    def __init__(self, **kwargs):
+        self.daily_users = defaultdict(set)
+        self.values = defaultdict(lambda: 0)
+    
+    def update(self, record):
+        repetition_model = infer_repetition_model(record)
+        date = record.date.date()
+        if repetition_model == 'karl-100' and record.user_id not in self.daily_users[date]:
+            self.daily_users[date].add(record.user_id)
+            self.values[date] += 1
+
+
+class n_karl85_users(DatedMetric):
+
+    name = 'n_karl85_users'
+    description = 'Number of daily active karl85 users.'
+
+    def __init__(self, **kwargs):
+        self.daily_users = defaultdict(set)
+        self.values = defaultdict(lambda: 0)
+    
+    def update(self, record):
+        repetition_model = infer_repetition_model(record)
+        date = record.date.date()
+        if repetition_model == 'karl-85' and record.user_id not in self.daily_users[date]:
+            self.daily_users[date].add(record.user_id)
+            self.values[date] += 1
+
+
+class n_karl50_users(DatedMetric):
+
+    name = 'n_karl50_users'
+    description = 'Number of daily active karl85 users.'
+
+    def __init__(self, **kwargs):
+        self.daily_users = defaultdict(set)
+        self.values = defaultdict(lambda: 0)
+    
+    def update(self, record):
+        repetition_model = infer_repetition_model(record)
+        date = record.date.date()
+        if repetition_model == 'karl-50' and record.user_id not in self.daily_users[date]:
+            self.daily_users[date].add(record.user_id)
+            self.values[date] += 1
 
 
 def get_sys_metrics(
@@ -166,15 +267,25 @@ metric_class_list = [
     n_daily_users_10_plus,
     n_daily_users_50_plus,
     n_daily_users_100_plus,
-    # n_total_facts_shown,
-    n_average_facts_shown,
+    n_leitner_users,
+    n_sm2_users,
+    n_karl100_users,
+    n_karl85_users,
+    n_karl50_users,
 ]
 
 df = get_sys_metrics(session, metric_class_list)
 
 # %%
+names = [m.name for m in [
+    n_leitner_users,
+    n_sm2_users,
+    n_karl100_users,
+    n_karl85_users,
+    n_karl50_users,
+]]
 p = (
-    ggplot(df)
+    ggplot(df[df.name.isin(names)])
     + aes(x='date', y='value', color='name')
     + geom_point()
     + geom_line()
@@ -183,5 +294,18 @@ p = (
         axis_text_x=element_text(rotation=30)
     )
 )
-p.save('output/sys_metrics.pdf')
+p.draw()
+# p.save('output/sys_metrics.pdf')
+# %%
+
+rows = []
+n_records = session.query(Record).count()
+for record in tqdm(session.query(Record), total=n_records):
+    repetition_model = infer_repetition_model(record)
+    rows.append({
+        'date': record.date.date(),
+        'user_id': record.user_id,
+        'repetition_model': repetition_model,
+    })
+df = pd.DataFrame(rows)
 # %%

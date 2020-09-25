@@ -1,3 +1,4 @@
+# %%
 #!/usr/bin/env python
 # coding: utf-8
 
@@ -187,7 +188,7 @@ def get_user_history(user_id: str, env: str = None, deck_id: str = None,
 
 
 @app.get('/api/karl/get_user_stats')
-@cached(cache=TTLCache(maxsize=1024, ttl=600))
+# @cached(cache=TTLCache(maxsize=1024, ttl=600))
 def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
                    date_start: str = None, date_end: str = None):
     '''

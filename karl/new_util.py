@@ -234,12 +234,10 @@ class Params:
 
 
 if __name__ == '__main__':
-    from karl.db import SchedulerDB
-
-    filename = 'db.sqlite.prod'
-    db_name = 'karl-prod'
-
-    db = SchedulerDB(filename)
+    # from karl.db import SchedulerDB
+    # filename = 'db.sqlite.prod'
+    # db_name = 'karl-prod'
+    # db = SchedulerDB(filename)
 
     hostname = socket.gethostname()
     if hostname.startswith('newspeak'):
@@ -254,9 +252,10 @@ if __name__ == '__main__':
         'dev': create_engine(f'postgresql+psycopg2://shifeng@localhost:5433/karl-dev?host={db_host}'),
     }
 
-    Base.metadata.create_all(engines['dev'])
+    env = 'prod'
+    Base.metadata.create_all(engines[env])
     sessions = {env: sessionmaker(bind=engine)() for env, engine in engines.items()}
-    session = sessions['dev']
+    session = sessions[env]
 
     '''
     for user in tqdm(db.get_user()):

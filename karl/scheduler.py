@@ -405,7 +405,7 @@ class MovingAvgScheduler:
             filter(UserStat.user_id == user_id).\
             filter(UserStat.deck_id == deck_id).\
             filter(UserStat.date <= date_end).order_by(UserStat.date.desc()).first()
-
+        
         if after_stat is None or after_stat.date < date_start:
             return {
                 'new_facts': 0,
@@ -1277,8 +1277,9 @@ class MovingAvgScheduler:
         # self.db.commit()
 
         # update user stats
-        deck_id = 'all' if not fact.deck_id else fact.deck_id
-        self.update_user_stats(session, user, record, deck_id=deck_id)
+        self.update_user_stats(session, user, record, deck_id='all')
+        if fact.deck_id is not None:
+            self.update_user_stats(session, user, record, deck_id=fact.deck_id)
 
         session.commit()
 
@@ -1387,6 +1388,8 @@ class MovingAvgScheduler:
 
         if is_new_stat:
             session.add(curr_stat)
+            session.commit()
+
 
     def leitner_update(self, user: User, fact: Fact, response: bool) -> None:
         """

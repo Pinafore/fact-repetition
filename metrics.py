@@ -90,7 +90,7 @@ class n_new_facts_wrong(DatedMetric):
         self.values = defaultdict(lambda: 0)
 
     def update(self, record):
-        self.values[record.date.date()]+= (record.is_new_fact and not record.response)
+        self.values[record.date.date()]+= record.is_new_fact and (not record.response)
 
 
 class n_old_facts_shown(DatedMetric):
@@ -102,7 +102,7 @@ class n_old_facts_shown(DatedMetric):
         self.values = defaultdict(lambda: 0)
 
     def update(self, record):
-        self.values[record.date.date()] += not record.is_new_fact
+        self.values[record.date.date()] += (not record.is_new_fact)
 
 
 class n_old_facts_correct(DatedMetric):
@@ -114,7 +114,7 @@ class n_old_facts_correct(DatedMetric):
         self.values = defaultdict(lambda: 0)
 
     def update(self, record):
-        self.values[record.date.date()] += (not record.is_new_fact and record.response)
+        self.values[record.date.date()] += (not record.is_new_fact) and record.response
 
 
 class n_old_facts_wrong(DatedMetric):
@@ -126,7 +126,7 @@ class n_old_facts_wrong(DatedMetric):
         self.values = defaultdict(lambda: 0)
 
     def update(self, record):
-        self.values[record.date.date()] += (not record.is_new_fact and not record.response)
+        self.values[record.date.date()] += (not record.is_new_fact) and (not record.response)
 
 
 class n_known_old_facts_shown(DatedMetric):
@@ -141,7 +141,7 @@ class n_known_old_facts_shown(DatedMetric):
         self.values = defaultdict(lambda: 0)
 
     def update(self, record):
-        self.values[record.date.date()] += not record.is_new_fact and \
+        self.values[record.date.date()] += (not record.is_new_fact) and \
             self.correct_on_first_try[record.user_id][record.fact_id]
 
 
@@ -155,7 +155,7 @@ class n_known_old_facts_correct(DatedMetric):
         self.values = defaultdict(lambda: 0)
 
     def update(self, record):
-        self.values[record.date.date()] += not record.is_new_fact and \
+        self.values[record.date.date()] += (not record.is_new_fact) and \
             self.correct_on_first_try[record.user_id][record.fact_id] and \
             record.response
 
@@ -170,9 +170,9 @@ class n_known_old_facts_wrong(DatedMetric):
         self.values = defaultdict(lambda: 0)
 
     def update(self, record):
-        self.values[record.date.date()] += not record.is_new_fact and \
+        self.values[record.date.date()] += (not record.is_new_fact) and \
             self.correct_on_first_try[record.user_id][record.fact_id] and \
-            not record.response
+            (not record.response)
 
 
 class n_learned(DatedMetric):
@@ -201,7 +201,7 @@ class n_learned(DatedMetric):
 
 class n_learned_but_forgotten(DatedMetric):
 
-    name = 'n_learned_but_fogotten'
+    name = 'n_learned_but_forgotten'
     description = 'Number of learned cards answered incorrectly afterwards. See `n_learned` for definition of what is a learned card.'
 
     def __init__(self, **kwargs):
@@ -280,9 +280,9 @@ def compute_accumulative_metrics(
         if len(user.records) == 0:
             continue
 
-        # initialize user specific metrics
-        metrics = [metric_class(correct_on_first_try=correct_on_first_try) for metric_class in metric_class_list]
+        metrics = [m(correct_on_first_try=correct_on_first_try) for m in metric_class_list]
 
+        # initialize user specific metrics
         for record in session.query(Record).\
             filter(Record.user_id == user.user_id).\
             filter(Record.date >= date_start).\
@@ -346,23 +346,37 @@ user_ids = [u.user_id for u in session.query(User) if len(u.previous_study) >= t
 df = raw_df[raw_df.user_id.isin(user_ids)]
 
 # take the sum of users within each group
-df = df.groupby(['repetition_model', 'name', 'date_window_end']).sum().reset_index()
+df = raw_df.groupby(['repetition_model', 'name', 'date_window_end']).sum().reset_index()
 # turn metrics into columns so it's easier to compute derivative metrics
 df = df.pivot_table(index=['repetition_model', 'date_window_end'], columns='name', values='value')
-df['ratio_new_correct_vs_all'] = df.n_new_facts_correct / df.n_facts_shown
-df['ratio_new_wrong_vs_all'] = df.n_new_facts_wrong / df.n_facts_shown
-df['ratio_old_correct_vs_all'] = df.n_old_facts_correct / df.n_facts_shown
-df['ratio_old_wrong_vs_all'] = df.n_old_facts_correct / df.n_facts_shown
+df['n_facts_shown_csum'] = df.groupby('repetition_model')['n_facts_shown'].cumsum()
+df['n_new_facts_correct_csum'] = df.groupby('repetition_model')['n_new_facts_correct'].cumsum()
+df['n_new_facts_wrong_csum'] = df.groupby('repetition_model')['n_new_facts_wrong'].cumsum()
+df['n_old_facts_correct_csum'] = df.groupby('repetition_model')['n_old_facts_correct'].cumsum()
+df['n_old_facts_wrong_csum'] = df.groupby('repetition_model')['n_old_facts_wrong'].cumsum()
+df['n_learned_csum'] = df.groupby('repetition_model')['n_learned'].cumsum()
+df['n_learned_but_forgotten_csum'] = df.groupby('repetition_model')['n_learned_but_forgotten'].cumsum()
+# [new, old] x [correct, wrong] vs all
+df['ratio_new_correct_vs_all'] = df.n_new_facts_correct_csum / df.n_facts_shown_csum
+df['ratio_new_wrong_vs_all'] = df.n_new_facts_wrong_csum / df.n_facts_shown_csum
+df['ratio_old_correct_vs_all'] = df.n_old_facts_correct_csum / df.n_facts_shown_csum
+df['ratio_old_wrong_vs_all'] = df.n_old_facts_wrong_csum / df.n_facts_shown_csum
+df['ratio_old_wrong_vs_all'] = df.n_old_facts_wrong_csum / df.n_facts_shown_csum
+# [learned, learned_but_forgotten] vs all
+df['ratio_learned_vs_all'] = df.n_learned_csum / df.n_facts_shown_csum
+df['ratio_learned_but_forgotten_vs_all'] = df.n_learned_but_forgotten_csum / df.n_facts_shown_csum
 # df['ratio_known_vs_all'] = df.n_known_old_facts_shown / df.n_facts_shown
 # df['ratio_known_vs_old'] = df.n_known_old_facts_shown / df.n_old_facts_shown
 # df['ratio_known_correct_vs_known'] = df.n_known_old_facts_correct / df.n_known_old_facts_shown
 
+# %%
 # done with derivatives, convert metrics from columns to rows
 df = df.stack()
 df.name = 'value'
 df = df.reset_index()
 
-# for name in df.name.unique():
+# %%
+'''Break down of [new, old] x [correct, wrong]'''
 names = [
     'ratio_new_correct_vs_all',
     'ratio_new_wrong_vs_all',
@@ -379,3 +393,20 @@ p = (
     )
 )
 p.draw()
+
+# %%
+names = [
+    'n_learned',
+    'n_learned_but_forgotten',
+]
+p = (
+    ggplot(df[df.name.isin(names)])
+    + geom_line(aes(x='date_window_end', y='value', color='name'), alpha=0.75)
+    + facet_wrap('repetition_model')
+    + theme_fs()
+    + theme(
+        axis_text_x=element_text(rotation=30)
+    )
+)
+p.draw()
+# %%
