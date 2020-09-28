@@ -297,15 +297,3 @@ p = (
 p.draw()
 # p.save('output/sys_metrics.pdf')
 # %%
-
-rows = []
-n_records = session.query(Record).count()
-for record in tqdm(session.query(Record), total=n_records):
-    repetition_model = infer_repetition_model(record)
-    rows.append({
-        'date': record.date.date(),
-        'user_id': record.user_id,
-        'repetition_model': repetition_model,
-    })
-df = pd.DataFrame(rows)
-# %%

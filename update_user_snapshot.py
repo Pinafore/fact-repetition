@@ -24,17 +24,12 @@ def leitner_update(leitner_box, fact, response: bool) -> None:
 
 
 def update_user_snapshot(session):
-    debug = False
     n_users = session.query(User).count()
     for i, user in enumerate(tqdm(session.query(User), total=n_users)):
-        if debug and i > 10:
-            break
         leitner_box = {}  # fact_id -> box (1~10)
         count_correct_before = {}  # fact_id -> number of times answered correctly before
         count_wrong_before = {}  # fact_id -> number of times answered incorrectly before
         for j, record in enumerate(user.records):
-            if debug and j > 100:
-                break
             fact = record.fact
             leitner_update(leitner_box, fact, record.response)
             if fact.fact_id not in count_correct_before:

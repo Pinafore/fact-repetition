@@ -1224,12 +1224,6 @@ class MovingAvgScheduler:
         request = requests[indices[0]]
         fact = facts[indices[0]]
 
-        user_snapshot = {
-            'leitner_box': user.leitner_box,
-            'count_correct_before': user.count_correct_before,
-            'count_wrong_before': user.count_wrong_before,
-        }
-
         record = Record(
             record_id=request.history_id,
             debug_id=self.debug_id.get(request.user_id, 'null'),
@@ -1238,7 +1232,7 @@ class MovingAvgScheduler:
             deck_id=fact.deck_id,
             response=request.label,
             judgement=request.label,
-            user_snapshot=json.dumps(user_snapshot),
+            user_snapshot='',
             scheduler_snapshot=json.dumps(user.params.__dict__),
             fact_ids=json.dumps([x.fact_id for x in facts]),
             scheduler_output='',
@@ -1249,13 +1243,10 @@ class MovingAvgScheduler:
             is_new_fact=int(fact.fact_id not in user.previous_study),
             date=date,
         )
-        session.add(record)
-        session.commit()
 
-        # for detail display, this need to happen before the `update_user_fact` below
-        # old_user = copy.deepcopy(user)
 
-        # commit
+        # update user and fact
+        # (optionally) commit preemptive compute
         if not self.preemptive:
             self.update_user_fact(user, fact, date, request.label)
         elif user.user_id not in self.preemptive_future[request.label]:
@@ -1272,34 +1263,19 @@ class MovingAvgScheduler:
         if user.user_id in self.debug_id:
             self.debug_id.pop(user.user_id)
 
-        # self.db.update_user(user)
-        # self.db.update_fact(fact)
-        # self.db.commit()
-
         # update user stats
         self.update_user_stats(session, user, record, deck_id='all')
         if fact.deck_id is not None:
             self.update_user_stats(session, user, record, deck_id=fact.deck_id)
 
+        # NOTE this is AFTER the user and fact update
+        record.user_snapshot = json.dumps({
+            'leitner_box': user.leitner_box,
+            'count_correct_before': user.count_correct_before,
+            'count_wrong_before': user.count_wrong_before,
+        })
+        session.add(record)
         session.commit()
-
-        detail = {
-            # 'response': request.label,
-            # 'old ltn box': old_user.leitner_box.get(fact.fact_id, '-'),
-            # 'new ltn box': user.leitner_box.get(fact.fact_id, '-'),
-            # 'old ltn dat': str(old_user.leitner_scheduled_date.get(fact.fact_id, '-')),
-            # 'new ltn dat': str(user.leitner_scheduled_date.get(fact.fact_id, '-')),
-            # 'old sm2 rep': old_user.sm2_repetition.get(fact.fact_id, '-'),
-            # 'new sm2 rep': user.sm2_repetition.get(fact.fact_id, '-'),
-            # 'old sm2 inv': old_user.sm2_interval.get(fact.fact_id, '-'),
-            # 'new sm2 inv': user.sm2_interval.get(fact.fact_id, '-'),
-            # 'old sm2 e_f': old_user.sm2_efactor.get(fact.fact_id, '-'),
-            # 'new sm2 e_f': user.sm2_efactor.get(fact.fact_id, '-'),
-            # 'old sm2 dat': str(old_user.sm2_scheduled_date.get(fact.fact_id, '-')),
-            # 'new sm2 dat': str(user.sm2_scheduled_date.get(fact.fact_id, '-')),
-        }
-
-        return detail
 
     def update_user_stats(self, session, user: User, record: Record, deck_id: str):
         curr_stat = session.query(UserStat).\
