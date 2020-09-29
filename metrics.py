@@ -6,13 +6,15 @@ import pandas as pd
 from tqdm import tqdm
 from typing import List
 from pathlib import Path
+from pandas.api.types import CategoricalDtype
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Dict
-from plotnine import ggplot, aes, theme,\
-    geom_point, geom_line, geom_area,\
+from plotnine import ggplot, ggtitle, aes, theme,\
+    geom_point, geom_line, geom_area, \
     facet_grid, facet_wrap,\
-    element_text
+    element_text, scale_fill_brewer, scale_fill_manual,\
+    scale_x_log10, scale_y_log10
 
 from karl.new_util import User, Record, parse_date, theme_fs
 from karl.web import get_sessions
@@ -32,16 +34,6 @@ def infer_repetition_model(scheduler_snapshot) -> str:
             return 'karl-' + str(int(params['recall_target'] * 100))
         else:
             return 'karl-100'
-
-# the question we are trying to answer is: how much did the user manage
- # to learn during this time period?
-        # The first choice is to only consider facts that are first shown
-        # within the time window.
-        # Among these cards, some are known to the user a priori, some are
-        # unfimiliar but eventually learned, some never got learned during the
-        # time window.
-        # The goal is for the user to be able to learn the maximium number of
-        # cards with the minimium possible effort.
 
 
 # %%
@@ -107,7 +99,6 @@ df['n_days_since_start'] = (df.date - df.user_start_date).dt.days
 # number of total minutes
 df['n_minutes_spent'] = df.groupby('user_id')['elapsed_minutes'].cumsum()
 
-
 def func(bins):
     def find_bin(n):
         idx = bisect.bisect(bins, n)
@@ -136,7 +127,6 @@ df['date_binned'] = df.date.apply(func(date_bins))
 n_minutes_bin_size = 60  # minutes
 n_bins = int((df.n_minutes_spent.max()) // n_minutes_bin_size + 1)
 n_minutes_bins = [i * n_minutes_bin_size for i in range(n_bins)]
-print(n_minutes_bins)
 df['n_minutes_spent_binned'] = df.n_facts_shown.apply(func(n_minutes_bins))
 
 '''Compute derivative metrics'''
@@ -145,114 +135,169 @@ df['n_new_facts_wrong'] = df.groupby('user_id', group_keys=False).apply(lambda x
 df['n_old_facts_correct'] = df.groupby('user_id', group_keys=False).apply(lambda x: ~x.is_new_fact & x.result)
 df['n_old_facts_wrong'] = df.groupby('user_id', group_keys=False).apply(lambda x: ~x.is_new_fact & ~x.result)
 for i in df.leitner_box.unique():
-    # not previously-known facts that got improved to level-i familiarity 
-    df[f'n_learned_{i}'] = df.groupby('user_id', group_keys=False).apply(lambda x: (x.leitner_box == i) & x.result & ~x.is_known_fact)
+    if i > 1:
+        # initial box means first occurrence; it doesn't count
+        # not previously-known facts that got improved to level-i familiarity 
+        df[f'n_learned_{i}'] = df.groupby('user_id', group_keys=False).apply(lambda x: (x.leitner_box == i) & x.result & ~x.is_known_fact)
 
-# choose an x-axis and average across users.
-# choices (binned version optional):
-# n_minutes_spent, n_facts_shown, n_days_since_start, date
 df['n_new_facts_correct_csum'] = df.groupby('user_id')['n_new_facts_correct'].cumsum()
 df['n_new_facts_wrong_csum'] = df.groupby('user_id')['n_new_facts_wrong'].cumsum()
 df['n_old_facts_correct_csum'] = df.groupby('user_id')['n_old_facts_correct'].cumsum()
 df['n_old_facts_wrong_csum'] = df.groupby('user_id')['n_old_facts_wrong'].cumsum()
+for i in df.leitner_box.unique():
+    if i > 1:
+        # initial box means first occurrence; it doesn't count
+        df[f'n_learned_{i}_csum'] = df.groupby('user_id')[f'n_learned_{i}'].cumsum()
 
 # [new, old] x [correct, wrong] vs all
 df['ratio_new_correct_vs_all'] = df.n_new_facts_correct_csum / df.n_facts_shown
 df['ratio_new_wrong_vs_all'] = df.n_new_facts_wrong_csum / df.n_facts_shown
 df['ratio_old_correct_vs_all'] = df.n_old_facts_correct_csum / df.n_facts_shown
 df['ratio_old_wrong_vs_all'] = df.n_old_facts_wrong_csum / df.n_facts_shown
+# %%
+for x_axis_name in [
+    'n_minutes_spent_binned',
+    'n_facts_shown_binned',
+]:
+    metrics = [
+        'ratio_new_correct_vs_all',
+        'ratio_new_wrong_vs_all',
+        'ratio_old_correct_vs_all',
+        'ratio_old_wrong_vs_all',
+    ]
+    metric_type = CategoricalDtype(categories=metrics, ordered=True)
+    df_plot = pd.melt(
+        df.groupby(['repetition_model', x_axis_name]).mean().reset_index(),
+        id_vars=['repetition_model', x_axis_name],
+        value_vars=metrics,
+        var_name='name',
+        value_name='value',
+    )
+    df_plot.name = df_plot.name.astype(metric_type)
+    p = (
+        ggplot(
+            df_plot,
+            aes(x=x_axis_name, y='value', color='name', fill='name'),
+        )
+        + geom_area(alpha=0.75)
+        + facet_wrap('repetition_model')
+        + theme_fs()
+        + theme(
+            axis_text_x=element_text(rotation=30)
+        )
+        # + scale_fill_brewer(type='div', pallette=4)
+        + scale_fill_manual(
+            values=[
+                '#ff1400',  # dark red
+                '#ffaca5',  # light red
+                '#595bff',  # dark blue
+                '#b2b3ff',  # light blue
+            ]
+        )
+    )
+    p.draw()
 
-names = [
-    'ratio_new_correct_vs_all',
-    'ratio_new_wrong_vs_all',
-    'ratio_old_correct_vs_all',
-    'ratio_old_wrong_vs_all',
-]
-
-x_axis_name = 'n_facts_shown_binned'
-df_plot = pd.melt(
-    df.groupby(['repetition_model', x_axis_name]).sum().reset_index(),
-    id_vars=['repetition_model', x_axis_name],
-    value_vars=names,
-    var_name='name',
-    value_name='value',
-)
+for x_axis_name in [
+    'n_minutes_spent_binned',
+    'n_facts_shown_binned',
+]:
+    leitner_boxes = sorted([i for i in df.leitner_box.unique() if i > 1])
+    # reverse because lower sequential values usually corresponds to darker colors
+    leitner_boxes = [f'n_learned_{i}_csum' for i in leitner_boxes][::-1]
+    leitner_box_type = CategoricalDtype(categories=leitner_boxes, ordered=True)
+    df_plot = pd.melt(
+        df.groupby(['repetition_model', x_axis_name]).mean().reset_index(),
+        id_vars=['repetition_model', x_axis_name],
+        value_vars=leitner_boxes,
+        var_name='name',
+        value_name='value',
+    ).reset_index()
+    df_plot.name = df_plot.name.astype(leitner_box_type)
+    p = (
+        ggplot(
+            df_plot,
+            aes(x=x_axis_name, y='value', color='name', fill='name'),
+        )
+        + geom_line(alpha=0.75, size=1)
+        + facet_wrap('repetition_model')
+        + theme_fs()
+        + theme(
+            axis_text_x=element_text(rotation=30)
+        )
+        + scale_fill_brewer(type='seq', pallette=3)
+    )
+    p.draw()
+# %%
+'''System report'''
+# daily active users 
+df_plot = df.groupby(['user_id', 'repetition_model', 'date_binned']).mean().reset_index()
+df_plot = df_plot.groupby(['repetition_model', 'date_binned'])['user_id'].count().reset_index(name='n_active_users')
+total_daily_count = df_plot.groupby('date_binned').sum().to_dict()['n_active_users']
+df_plot['ratio'] = df_plot.apply(lambda x: x['n_active_users'] / total_daily_count[x['date_binned']], axis=1)
+df_plot.date_binned = df_plot.date_binned.astype(np.datetime64)
 
 p = (
-    ggplot(df_plot)
-    + geom_area(aes(x=x_axis_name, y='value', fill='name'), alpha=0.75)
-    + facet_wrap('repetition_model')
+    ggplot(
+        df_plot,
+        aes(x='date_binned', y='n_active_users', color='repetition_model', fill='repetition_model')
+    )
+    + geom_line(alpha=0.75, size=1)
     + theme_fs()
     + theme(
         axis_text_x=element_text(rotation=30)
     )
 )
 p.draw()
-
 # %%
-# turn metrics into columns so it's easier to compute derivative metrics
-df = df.pivot_table(index=['repetition_model', 'n_days_since_start'], columns='name', values='value')
-df['n_facts_shown_csum'] = df.groupby('repetition_model')['n_facts_shown'].cumsum()
-df['n_new_facts_correct_csum'] = df.groupby('repetition_model')['n_new_facts_correct'].cumsum()
-df['n_new_facts_wrong_csum'] = df.groupby('repetition_model')['n_new_facts_wrong'].cumsum()
-df['n_old_facts_correct_csum'] = df.groupby('repetition_model')['n_old_facts_correct'].cumsum()
-df['n_old_facts_wrong_csum'] = df.groupby('repetition_model')['n_old_facts_wrong'].cumsum()
-df['n_learned_csum'] = df.groupby('repetition_model')['n_learned'].cumsum()
-df['n_learned_but_forgotten_csum'] = df.groupby('repetition_model')['n_learned_but_forgotten'].cumsum()
-# [new, old] x [correct, wrong] vs all
-df['ratio_new_correct_vs_all'] = df.n_new_facts_correct_csum / df.n_facts_shown_csum
-df['ratio_new_wrong_vs_all'] = df.n_new_facts_wrong_csum / df.n_facts_shown_csum
-df['ratio_old_correct_vs_all'] = df.n_old_facts_correct_csum / df.n_facts_shown_csum
-df['ratio_old_wrong_vs_all'] = df.n_old_facts_wrong_csum / df.n_facts_shown_csum
-# [learned, learned_but_forgotten] vs all
-df['ratio_learned_vs_all'] = df.n_learned_csum / df.n_facts_shown_csum
-df['ratio_learned_but_forgotten_vs_all'] = df.n_learned_but_forgotten_csum / df.n_facts_shown_csum
-# df['ratio_known_vs_all'] = df.n_known_old_facts_shown / df.n_facts_shown
-# df['ratio_known_vs_old'] = df.n_known_old_facts_shown / df.n_old_facts_shown
-# df['ratio_known_correct_vs_known'] = df.n_known_old_facts_correct / df.n_known_old_facts_shown
-
-# %%
-# done with derivatives, convert metrics from columns to rows
-df = df.stack()
-df.name = 'value'
-df = df.reset_index()
-
-# %%
-# so that plotnine recognize dates as sequential data
-df.date = df.date.astype(np.datetime64)
-df.date_binned = df.date_binned.astype(np.datetime64)
-
-'''Break down of [new, old] x [correct, wrong]'''
-names = [
-    'ratio_new_correct_vs_all',
-    'ratio_new_wrong_vs_all',
-    'ratio_old_correct_vs_all',
-    'ratio_old_wrong_vs_all',
-]
+# scatter plot of number of records vs number of minutes colored by repetition model
+df_left = df.groupby(['user_id', 'repetition_model'])['user_id'].count().reset_index(name='n_records')
+df_right = df.groupby(['user_id', 'repetition_model'])['elapsed_minutes'].sum().reset_index(name='total_minutes')
+df_plot = pd.merge(df_left, df_right, how='left', on=['user_id', 'repetition_model'])
 p = (
-    ggplot(df[df.name.isin(names)])
-    + geom_area(aes(x='n_days_since_start', y='value', fill='name'), alpha=0.75)
-    + facet_wrap('repetition_model')
-    + theme_fs()
-    + theme(
-        axis_text_x=element_text(rotation=30)
+    ggplot(
+        df_plot,
+        aes(x='n_records', y='total_minutes', color='repetition_model', fill='repetition_model')
     )
+    + geom_point(alpha=0.6, size=3)
+    + theme_fs()
+    + scale_fill_brewer(type='qual')
+    + scale_x_log10()
+    + scale_y_log10()
 )
 p.draw()
+# %%
+users = session.query(User).all()
+users = sorted(users, key=lambda x: -len(x.records))
 
 # %%
-names = [
-    'ratio_learned_vs_all',
-    'ratio_learned_but_forgotten_vs_all',
-]
-p = (
-    ggplot(df[df.name.isin(names)])
-    + geom_line(aes(x='n_facts_shown_csum', y='value', color='name'), alpha=0.75)
-    + facet_wrap('repetition_model')
-    + theme_fs()
-    + theme(
-        axis_text_x=element_text(rotation=30)
+for i, user in enumerate(users[30:40]):
+    repetition_model = infer_repetition_model(user.records[-1].scheduler_snapshot)
+    x_axis_name = 'n_minutes_spent_binned'
+    leitner_boxes = sorted([i for i in df.leitner_box.unique() if i > 1])
+    # reverse because lower sequential values usually corresponds to darker colors
+    leitner_boxes = [f'n_learned_{i}_csum' for i in leitner_boxes][::-1]
+    leitner_box_type = CategoricalDtype(categories=leitner_boxes, ordered=True)
+    df_plot = df[df.user_id == user.user_id]
+    df_plot = pd.melt(
+        df_plot.groupby(x_axis_name).mean().reset_index(),
+        id_vars=x_axis_name,
+        value_vars=leitner_boxes,
+        var_name='name',
+        value_name='value',
+    ).reset_index()
+    df_plot.name = df_plot.name.astype(leitner_box_type)
+    p = (
+        ggplot(
+            df_plot,
+            aes(x=x_axis_name, y='value', color='name', fill='name'),
+        )
+        + geom_line(alpha=0.75, size=1)
+        + theme_fs()
+        + theme(
+            axis_text_x=element_text(rotation=30)
+        )
+        + scale_fill_brewer(type='seq', pallette=3)
+        + ggtitle(f'user_id: {user.user_id} repetition_model: {repetition_model}')
     )
-)
-p.draw()
+    p.draw()
 # %%

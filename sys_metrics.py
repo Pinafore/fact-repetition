@@ -297,3 +297,14 @@ p = (
 p.draw()
 # p.save('output/sys_metrics.pdf')
 # %%
+p = (
+    ggplot(df[df.name.isin(names)])
+    + aes(x='date', y='value', color='name')
+    + geom_area()
+    + theme_fs()
+    + theme(
+        axis_text_x=element_text(rotation=30)
+    )
+)
+p.draw()
+# %%

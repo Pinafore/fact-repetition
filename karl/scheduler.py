@@ -953,11 +953,11 @@ class MovingAvgScheduler:
         user = self.get_user(session, user)
 
         if requests[0].repetition_model is None:
-            repetition_model_name = 'default'
+            repetition_model_name = 'karl100'
         else:
             repetition_model_name = requests[0].repetition_model.lower()
 
-        if repetition_model_name == 'sm2' or repetition_model_name == 'sm-2':
+        if repetition_model_name in ['sm2', 'sm-2']:
             user.params = Params(
                 qrep=0,
                 skill=0,
@@ -975,24 +975,12 @@ class MovingAvgScheduler:
                 leitner=1,
                 sm2=0,
             )
-        elif repetition_model_name == 'karl':
-            if user.params.qrep == 0:
-                # user might have specified some of the params
-                # only reset to karl parameters if currently using non-karl scheduler
-                # in which case params.qrep should be 0
-                user.params = Params()
+        elif repetition_model_name in ['karl', 'karl100']:
+            user.params = Params()
         elif repetition_model_name == 'karl50':
-            if user.params.qrep == 0:
-                # user might have specified some of the params
-                # only reset to karl parameters if currently using non-karl scheduler
-                # in which case params.qrep should be 0
-                user.params = Params(recall_target=0.5)
+            user.params = Params(recall_target=0.5)
         elif repetition_model_name == 'karl85':
-            if user.params.qrep == 0:
-                # user might have specified some of the params
-                # only reset to karl parameters if currently using non-karl scheduler
-                # in which case params.qrep should be 0
-                user.params = Params(recall_target=0.85)
+            user.params = Params(recall_target=0.85)
 
         facts = [facts[i] for i in indices]
 
