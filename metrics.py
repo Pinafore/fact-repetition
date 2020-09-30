@@ -11,7 +11,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Dict
 from plotnine import ggplot, ggtitle, aes, theme,\
-    geom_point, geom_line, geom_area, \
+    geom_point, geom_line, geom_area, geom_ribbon, \
     facet_grid, facet_wrap,\
     element_text, scale_fill_brewer, scale_fill_manual,\
     scale_x_log10, scale_y_log10
@@ -82,12 +82,13 @@ for user in tqdm(session.query(User), total=session.query(User).count()):
             'is_new_fact': record.is_new_fact,
             'result': record.response,
             'date': record.date.date(),
+            'datetime': record.date,
             'elapsed_minutes': seconds / 60,
             'user_start_date': user_start_date[user.user_id],
             'is_known_fact': correct_on_first_try[user.user_id][record.fact_id],
             'leitner_box': json.loads(record.user_snapshot)['leitner_box'][record.fact_id],
         })
-raw_df = pd.DataFrame(rows)
+raw_df = pd.DataFrame(rows).sort_values('datetime', axis=0)
 
 # %%
 df = raw_df.copy()
@@ -129,6 +130,10 @@ n_bins = int((df.n_minutes_spent.max()) // n_minutes_bin_size + 1)
 n_minutes_bins = [i * n_minutes_bin_size for i in range(n_bins)]
 df['n_minutes_spent_binned'] = df.n_facts_shown.apply(func(n_minutes_bins))
 
+df.date = df.date.astype(np.datetime64)
+df.datetime = df.datetime.astype(np.datetime64)
+df.date_binned = df.date_binned.astype(np.datetime64)
+
 '''Compute derivative metrics'''
 df['n_new_facts_correct'] = df.groupby('user_id', group_keys=False).apply(lambda x: x.is_new_fact & x.result)
 df['n_new_facts_wrong'] = df.groupby('user_id', group_keys=False).apply(lambda x: x.is_new_fact & ~x.result)
@@ -155,78 +160,91 @@ df['ratio_new_wrong_vs_all'] = df.n_new_facts_wrong_csum / df.n_facts_shown
 df['ratio_old_correct_vs_all'] = df.n_old_facts_correct_csum / df.n_facts_shown
 df['ratio_old_wrong_vs_all'] = df.n_old_facts_wrong_csum / df.n_facts_shown
 # %%
-for x_axis_name in [
-    'n_minutes_spent_binned',
-    'n_facts_shown_binned',
-]:
-    metrics = [
-        'ratio_new_correct_vs_all',
-        'ratio_new_wrong_vs_all',
-        'ratio_old_correct_vs_all',
-        'ratio_old_wrong_vs_all',
-    ]
-    metric_type = CategoricalDtype(categories=metrics, ordered=True)
-    df_plot = pd.melt(
-        df.groupby(['repetition_model', x_axis_name]).mean().reset_index(),
-        id_vars=['repetition_model', x_axis_name],
-        value_vars=metrics,
-        var_name='name',
-        value_name='value',
-    )
-    df_plot.name = df_plot.name.astype(metric_type)
-    p = (
-        ggplot(
-            df_plot,
-            aes(x=x_axis_name, y='value', color='name', fill='name'),
-        )
-        + geom_area(alpha=0.75)
-        + facet_wrap('repetition_model')
-        + theme_fs()
-        + theme(
-            axis_text_x=element_text(rotation=30)
-        )
-        # + scale_fill_brewer(type='div', pallette=4)
-        + scale_fill_manual(
-            values=[
-                '#ff1400',  # dark red
-                '#ffaca5',  # light red
-                '#595bff',  # dark blue
-                '#b2b3ff',  # light blue
-            ]
-        )
-    )
-    p.draw()
+# [new, old] x [correct, wrong]
+x_axis_name = 'n_minutes_spent_binned'
+metrics = [
+    'ratio_new_correct_vs_all',
+    'ratio_new_wrong_vs_all',
+    'ratio_old_correct_vs_all',
+    'ratio_old_wrong_vs_all',
+]
 
-for x_axis_name in [
-    'n_minutes_spent_binned',
-    'n_facts_shown_binned',
-]:
-    leitner_boxes = sorted([i for i in df.leitner_box.unique() if i > 1])
-    # reverse because lower sequential values usually corresponds to darker colors
-    leitner_boxes = [f'n_learned_{i}_csum' for i in leitner_boxes][::-1]
-    leitner_box_type = CategoricalDtype(categories=leitner_boxes, ordered=True)
-    df_plot = pd.melt(
-        df.groupby(['repetition_model', x_axis_name]).mean().reset_index(),
-        id_vars=['repetition_model', x_axis_name],
-        value_vars=leitner_boxes,
-        var_name='name',
-        value_name='value',
-    ).reset_index()
-    df_plot.name = df_plot.name.astype(leitner_box_type)
-    p = (
-        ggplot(
-            df_plot,
-            aes(x=x_axis_name, y='value', color='name', fill='name'),
-        )
-        + geom_line(alpha=0.75, size=1)
-        + facet_wrap('repetition_model')
-        + theme_fs()
-        + theme(
-            axis_text_x=element_text(rotation=30)
-        )
-        + scale_fill_brewer(type='seq', pallette=3)
+metric_type = CategoricalDtype(categories=metrics, ordered=True)
+df_plot = df.groupby(['repetition_model', x_axis_name]).mean().reset_index()
+df_plot = pd.melt(
+    df_plot,
+    id_vars=['repetition_model', x_axis_name],
+    value_vars=metrics,
+    var_name='name',
+    value_name='value',
+)
+df_plot.name = df_plot.name.astype(metric_type)
+p = (
+    ggplot(
+        df_plot,
+        aes(x=x_axis_name, y='value', color='name', fill='name'),
     )
-    p.draw()
+    + geom_area(alpha=0.75)
+    + facet_wrap('repetition_model')
+    + theme_fs()
+    + theme(
+        axis_text_x=element_text(rotation=30)
+    )
+    # + scale_fill_brewer(type='div', pallette=4)
+    + scale_fill_manual(
+        values=[
+            '#ff1400',  # dark red
+            '#ffaca5',  # light red
+            '#595bff',  # dark blue
+            '#b2b3ff',  # light blue
+        ]
+    )
+)
+p.draw()
+# %%
+# study progress
+users = sorted(session.query(User), key=lambda x: -len(x.records))
+user_id_list = [user.user_id for user in users]
+
+x_axis_name = 'n_minutes_spent_binned'
+leitner_boxes = sorted([i for i in df.leitner_box.unique() if i > 1])
+# reverse because lower sequential values usually corresponds to darker colors
+leitner_boxes = [f'n_learned_{i}_csum' for i in leitner_boxes][::-1]
+extended_metrics = (
+    [f'{metric}_mean' for metric in leitner_boxes]
+    + [f'{metric}_min' for metric in leitner_boxes]
+    + [f'{metric}_max' for metric in leitner_boxes]
+)
+
+df_plot = df[df.user_id.isin(user_id_list)]
+df_plot = pd.melt(
+    df_plot,
+    id_vars=['user_id', 'repetition_model', x_axis_name],
+    value_vars=leitner_boxes,
+    var_name='name',
+    value_name='value',
+)
+df_plot = df_plot.groupby(['repetition_model', 'name', x_axis_name]).agg(['mean', 'std']).reset_index()
+df_plot.columns = [l1 if not l2 else l2 for l1, l2 in df_plot.columns]
+df_plot['min'] = df_plot['mean'] - df_plot['std'] / 2
+df_plot['max'] = df_plot['mean'] + df_plot['std'] / 2
+df_plot.name = df_plot.name.astype(CategoricalDtype(categories=leitner_boxes,ordered=True))
+
+p = (
+    ggplot(
+        df_plot,
+        aes(x=x_axis_name, y='mean', ymin='min', ymax='max', color='name', fill='name'),
+    )
+    + geom_line(alpha=0.75, size=1)
+    + geom_ribbon(alpha=0.5)
+    + facet_wrap('repetition_model')
+    + theme_fs()
+    + theme(
+        axis_text_x=element_text(rotation=30)
+    )
+    # + scale_fill_brewer(type='seq', pallette=3)
+)
+p.draw()
 # %%
 '''System report'''
 # daily active users 
@@ -234,7 +252,6 @@ df_plot = df.groupby(['user_id', 'repetition_model', 'date_binned']).mean().rese
 df_plot = df_plot.groupby(['repetition_model', 'date_binned'])['user_id'].count().reset_index(name='n_active_users')
 total_daily_count = df_plot.groupby('date_binned').sum().to_dict()['n_active_users']
 df_plot['ratio'] = df_plot.apply(lambda x: x['n_active_users'] / total_daily_count[x['date_binned']], axis=1)
-df_plot.date_binned = df_plot.date_binned.astype(np.datetime64)
 
 p = (
     ggplot(
@@ -268,18 +285,16 @@ p.draw()
 # %%
 users = session.query(User).all()
 users = sorted(users, key=lambda x: -len(x.records))
-
-# %%
-for i, user in enumerate(users[30:40]):
+# %
+for i, user in enumerate(users[0:10]):
+    x_axis_name = 'datetime'
     repetition_model = infer_repetition_model(user.records[-1].scheduler_snapshot)
-    x_axis_name = 'n_minutes_spent_binned'
     leitner_boxes = sorted([i for i in df.leitner_box.unique() if i > 1])
     # reverse because lower sequential values usually corresponds to darker colors
     leitner_boxes = [f'n_learned_{i}_csum' for i in leitner_boxes][::-1]
     leitner_box_type = CategoricalDtype(categories=leitner_boxes, ordered=True)
-    df_plot = df[df.user_id == user.user_id]
     df_plot = pd.melt(
-        df_plot.groupby(x_axis_name).mean().reset_index(),
+        df[df.user_id == user.user_id],
         id_vars=x_axis_name,
         value_vars=leitner_boxes,
         var_name='name',
