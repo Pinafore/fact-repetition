@@ -11,7 +11,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Dict
 from plotnine import ggplot, ggtitle, aes, theme,\
-    geom_point, geom_line, geom_area, geom_ribbon, \
+    geom_point, geom_line, geom_area, geom_ribbon, geom_bar, geom_density, \
     facet_grid, facet_wrap,\
     element_text, scale_fill_brewer, scale_fill_manual,\
     scale_x_log10, scale_y_log10
@@ -168,8 +168,6 @@ metrics = [
     'ratio_old_correct_vs_all',
     'ratio_old_wrong_vs_all',
 ]
-
-metric_type = CategoricalDtype(categories=metrics, ordered=True)
 df_plot = df.groupby(['repetition_model', x_axis_name]).mean().reset_index()
 df_plot = pd.melt(
     df_plot,
@@ -178,7 +176,7 @@ df_plot = pd.melt(
     var_name='name',
     value_name='value',
 )
-df_plot.name = df_plot.name.astype(metric_type)
+df_plot.name = df_plot.name.astype(CategoricalDtype(categories=metrics, ordered=True))
 p = (
     ggplot(
         df_plot,
@@ -201,10 +199,18 @@ p = (
     )
 )
 p.draw()
+p.save(f'figures/new_old_correct_wrong.pdf')
 # %%
 # study progress
-users = sorted(session.query(User), key=lambda x: -len(x.records))
-user_id_list = [user.user_id for user in users]
+n_bins = 10
+n_facts_bin_size = (df['n_facts_shown'].max()) // (n_bins - 1)
+n_facts_bins = [i * n_facts_bin_size for i in range(n_bins)]
+df_users = df.groupby('user_id')['record_id'].count().reset_index(name='count')
+df_users['count_binned'] = df_users['count'].apply(func(n_facts_bins))
+user_binned = df_users[['user_id', 'count_binned']].to_dict()
+user_binned_dict = {
+    v: user_binned['count_binned'][k] for k, v in user_binned['user_id'].items()
+}
 
 x_axis_name = 'n_minutes_spent_binned'
 leitner_boxes = sorted([i for i in df.leitner_box.unique() if i > 1])
@@ -216,35 +222,39 @@ extended_metrics = (
     + [f'{metric}_max' for metric in leitner_boxes]
 )
 
-df_plot = df[df.user_id.isin(user_id_list)]
-df_plot = pd.melt(
-    df_plot,
-    id_vars=['user_id', 'repetition_model', x_axis_name],
-    value_vars=leitner_boxes,
-    var_name='name',
-    value_name='value',
-)
-df_plot = df_plot.groupby(['repetition_model', 'name', x_axis_name]).agg(['mean', 'std']).reset_index()
-df_plot.columns = [l1 if not l2 else l2 for l1, l2 in df_plot.columns]
-df_plot['min'] = df_plot['mean'] - df_plot['std'] / 2
-df_plot['max'] = df_plot['mean'] + df_plot['std'] / 2
-df_plot.name = df_plot.name.astype(CategoricalDtype(categories=leitner_boxes,ordered=True))
-
-p = (
-    ggplot(
-        df_plot,
-        aes(x=x_axis_name, y='mean', ymin='min', ymax='max', color='name', fill='name'),
+df_sub = df.copy()
+df_sub['user_records_binned'] = df_sub['user_id'].apply(lambda x: user_binned_dict[x])
+for user_bin in df_sub['user_records_binned'].unique():
+    df_plot = pd.melt(
+        df_sub[df_sub.user_records_binned == user_bin],
+        id_vars=['user_id', 'repetition_model', x_axis_name],
+        value_vars=leitner_boxes,
+        var_name='name',
+        value_name='value',
     )
-    + geom_line(alpha=0.75, size=1)
-    + geom_ribbon(alpha=0.5)
-    + facet_wrap('repetition_model')
-    + theme_fs()
-    + theme(
-        axis_text_x=element_text(rotation=30)
+    df_plot = df_plot.groupby(['repetition_model', 'name', x_axis_name]).agg(['mean', 'std']).reset_index()
+    df_plot.columns = [l1 if not l2 else l2 for l1, l2 in df_plot.columns]
+    df_plot['min'] = df_plot['mean'] - df_plot['std'] / 2
+    df_plot['max'] = df_plot['mean'] + df_plot['std'] / 2
+    df_plot.name = df_plot.name.astype(CategoricalDtype(categories=leitner_boxes,ordered=True))
+    
+    p = (
+        ggplot(
+            df_plot,
+            aes(x=x_axis_name, y='mean', ymin='min', ymax='max', color='name', fill='name'),
+        )
+        + geom_line(alpha=0.75, size=1)
+        + geom_ribbon(alpha=0.5)
+        + facet_wrap('repetition_model')
+        + theme_fs()
+        + theme(
+            axis_text_x=element_text(rotation=30),
+            aspect_ratio=1,
+        )
+        + ggtitle(f'users records bin: {user_bin}')
     )
-    # + scale_fill_brewer(type='seq', pallette=3)
-)
-p.draw()
+    p.draw()
+    p.save(f'figures/repetition_model_study_reports_{user_bin}.pdf')
 # %%
 '''System report'''
 # daily active users 
@@ -265,6 +275,7 @@ p = (
     )
 )
 p.draw()
+p.save(f'figures/system_activity.pdf')
 # %%
 # scatter plot of number of records vs number of minutes colored by repetition model
 df_left = df.groupby(['user_id', 'repetition_model'])['user_id'].count().reset_index(name='n_records')
@@ -282,11 +293,12 @@ p = (
     + scale_y_log10()
 )
 p.draw()
+p.save(f'figures/users.pdf')
 # %%
 users = session.query(User).all()
 users = sorted(users, key=lambda x: -len(x.records))
-# %
-for i, user in enumerate(users[0:10]):
+# %%
+for i, user in enumerate(users[:30]):
     x_axis_name = 'datetime'
     repetition_model = infer_repetition_model(user.records[-1].scheduler_snapshot)
     leitner_boxes = sorted([i for i in df.leitner_box.unique() if i > 1])
@@ -301,12 +313,23 @@ for i, user in enumerate(users[0:10]):
         value_name='value',
     ).reset_index()
     df_plot.name = df_plot.name.astype(leitner_box_type)
+
+    df_plot['date'] = df_plot['datetime'].apply(lambda x: x.date())
+    df_plot['count'] = 0.1
+
+    df_minutes = df[df.user_id == user.user_id][['datetime', 'elapsed_minutes']]
+    df_plot = pd.merge(df_plot, df_minutes, how='left', on='datetime')
+    # df_1 = df_plot.groupby('date')['index'].count().reset_index(name='count')
+    # df_plot = pd.merge(df_plot, df_1, how='left', on='date')
+    # df_plot['count'] /= 100
+
     p = (
-        ggplot(
-            df_plot,
+        ggplot(df_plot)
+        + geom_line(
             aes(x=x_axis_name, y='value', color='name', fill='name'),
+            alpha=0.75, size=1.5,
         )
-        + geom_line(alpha=0.75, size=1)
+        + geom_bar(aes(x='date', y='elapsed_minutes'), stat='identity', alpha=0.5)
         + theme_fs()
         + theme(
             axis_text_x=element_text(rotation=30)
@@ -315,4 +338,7 @@ for i, user in enumerate(users[0:10]):
         + ggtitle(f'user_id: {user.user_id} repetition_model: {repetition_model}')
     )
     p.draw()
+    Path('figures/user_study_reports').mkdir(parents=True, exist_ok=True)
+    p.save(f'figures/user_study_reports/{user.user_id}.pdf')
+    
 # %%
