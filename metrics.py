@@ -165,8 +165,8 @@ x_axis_name = 'n_minutes_spent_binned'
 metrics = [
     'ratio_new_correct_vs_all',
     'ratio_new_wrong_vs_all',
-    'ratio_old_correct_vs_all',
     'ratio_old_wrong_vs_all',
+    'ratio_old_correct_vs_all',
 ]
 df_plot = df.groupby(['repetition_model', x_axis_name]).mean().reset_index()
 df_plot = pd.melt(
@@ -188,15 +188,15 @@ p = (
     + theme(
         axis_text_x=element_text(rotation=30)
     )
-    + scale_fill_brewer(type='div', palette=4)
-    # + scale_fill_manual(
-    #     values=[
-    #         '#ff1400',  # dark red
-    #         '#ffaca5',  # light red
-    #         '#595bff',  # dark blue
-    #         '#b2b3ff',  # light blue
-    #     ]
-    # )
+    # + scale_fill_brewer(type='div', palette=2)
+    + scale_fill_manual(
+        values=[
+            '#ff1400',  # dark red
+            '#ffaca5',  # light red
+            '#b2b3ff',  # light blue
+            '#595bff',  # dark blue
+        ]
+    )
 )
 p.draw()
 p.save(f'figures/new_old_correct_wrong.pdf')
@@ -286,9 +286,9 @@ p = (
         df_plot,
         aes(x='n_records', y='total_minutes', color='repetition_model', fill='repetition_model')
     )
-    + geom_point(alpha=0.6, size=3)
+    + geom_point(alpha=0.75, size=3)
     + theme_fs()
-    + scale_fill_brewer(type='qual')
+    + scale_fill_brewer(type='qual', palette=0)
     + scale_x_log10()
     + scale_y_log10()
 )
