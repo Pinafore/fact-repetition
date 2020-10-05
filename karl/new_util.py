@@ -215,6 +215,7 @@ class SetParams(BaseModel):
     cool_down_time_wrong: float = 4     # minutes to cool down
     max_recent_facts: int = 10          # num of recent facts to keep record of
 
+
 @dataclass
 class Params:
     qrep: float = 1                     # cosine distance between qreps
@@ -222,7 +223,7 @@ class Params:
     recall: float = 1                   # recall probability
     recall_target: float = 1            # target of recall probability
     category: float = 1                 # change in category from prev
-    answer: float = 1                   # reptition of the same category
+    answer: float = 1                   # reptition of the same answer
     leitner: float = 0                  # hours till leitner scheduled date
     sm2: float = 1                      # hours till sm2 scheduled date
     decay_qrep: float = 0.9             # discount factor

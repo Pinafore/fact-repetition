@@ -117,13 +117,55 @@ def set_params(params: SetParams):
     user_id = params.pop('user_id')
     env = params.pop('env')
     env = 'dev' if env == 'dev' else 'prod'
+    session = sessions[env]
+
     params = Params(**params)
     try:
-        scheduler.set_user_params(sessions[env], user_id, params)
-        sessions[env].commit()
+        scheduler.set_user_params(session, user_id, params)
+        session.commit()
     except SQLAlchemyError as e:
         print(repr(e))
-        sessions[env].rollback()
+        session.rollback()
+
+
+@app.get('/api/karl/set_repetition_model')
+def set_repetition_model(user_id: str, repetition_model: str):
+        if repetition_model == 'sm2':
+            user.params = Params(
+                qrep=0,
+                skill=0,
+                recall=0,
+                category=0,
+                answer=0,
+                leitner=0,
+                sm2=1,
+                cool_down=0,
+            )
+        elif repetition_model == 'leitner':
+            user.params = Params(
+                qrep=0,
+                skill=0,
+                recall=0,
+                category=0,
+                answer=0,
+                leitner=1,
+                sm2=0,
+                cool_down=0,
+            )
+        elif repetition_model.startswith('karl100'):
+            recall_target = float(repetition_model[4:]) / 100
+            user.params = Params(
+                qrep=1,
+                skill=0,
+                recall=1,
+                category=1,
+                answer=1,
+                leitner=1,
+                sm2=0,
+                recall_target=recall_target,
+            )
+        else:
+            pass
 
 
 @app.post('/api/karl/get_fact')
@@ -162,8 +204,7 @@ def status():
     return True
 
 
-@app.get('/api/karl/get_user')
-def get_user(user_id: str, env: str = None):
+@app.get('/api/karl/get_user')def get_user(user_id: str, env: str = None):
     env = 'dev' if env == 'dev' else 'prod'
     user = scheduler.get_user(sessions[env], user_id)
     return json.dumps({

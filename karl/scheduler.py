@@ -1220,7 +1220,7 @@ class MovingAvgScheduler:
             deck_id=fact.deck_id,
             response=request.label,
             judgement=request.label,
-            user_snapshot='',
+            user_snapshot='_place_holder_',  # to be filled in after updates (e.g. leiter)
             scheduler_snapshot=json.dumps(user.params.__dict__),
             fact_ids=json.dumps([x.fact_id for x in facts]),
             scheduler_output='',
@@ -1231,7 +1231,6 @@ class MovingAvgScheduler:
             is_new_fact=int(fact.fact_id not in user.previous_study),
             date=date,
         )
-
 
         # update user and fact
         # (optionally) commit preemptive compute
@@ -1256,7 +1255,7 @@ class MovingAvgScheduler:
         if fact.deck_id is not None:
             self.update_user_stats(session, user, record, deck_id=fact.deck_id)
 
-        # NOTE this is AFTER the user and fact update
+        # NOTE this is AFTER the user and fact update with NEW leitner boxes
         record.user_snapshot = json.dumps({
             'leitner_box': user.leitner_box,
             'count_correct_before': user.count_correct_before,
