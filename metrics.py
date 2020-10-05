@@ -188,15 +188,15 @@ p = (
     + theme(
         axis_text_x=element_text(rotation=30)
     )
-    # + scale_fill_brewer(type='div', pallette=4)
-    + scale_fill_manual(
-        values=[
-            '#ff1400',  # dark red
-            '#ffaca5',  # light red
-            '#595bff',  # dark blue
-            '#b2b3ff',  # light blue
-        ]
-    )
+    + scale_fill_brewer(type='div', palette=4)
+    # + scale_fill_manual(
+    #     values=[
+    #         '#ff1400',  # dark red
+    #         '#ffaca5',  # light red
+    #         '#595bff',  # dark blue
+    #         '#b2b3ff',  # light blue
+    #     ]
+    # )
 )
 p.draw()
 p.save(f'figures/new_old_correct_wrong.pdf')
@@ -334,7 +334,7 @@ for i, user in enumerate(users[:30]):
         + theme(
             axis_text_x=element_text(rotation=30)
         )
-        + scale_fill_brewer(type='seq', pallette=3)
+        + scale_fill_brewer(type='seq', palette=3)
         + ggtitle(f'user_id: {user.user_id} repetition_model: {repetition_model}')
     )
     p.draw()
