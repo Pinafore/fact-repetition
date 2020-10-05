@@ -597,8 +597,7 @@ class MovingAvgScheduler:
             user_skill = copy.deepcopy(self.avg_user_skill_estimate)
         else:
             recent_facts = [record.fact for record in user.records[::-1][:user.params.max_recent_facts]]
-            user_skill = self.get_discounted_average([fact.skill for fact in recent_facts],
-                                                     user.params.decay_skill)
+            user_skill = self.get_discounted_average([fact.skill for fact in recent_facts], user.params.decay_skill)
             user_skill = np.clip(user_skill, a_min=0.0, a_max=1.0)
         topic_idx = np.argmax(fact.qrep)
         d = fact.skill[topic_idx] - user_skill[topic_idx]
@@ -951,37 +950,6 @@ class MovingAvgScheduler:
 
         user, indices = list(user_to_requests.items())[0]
         user = self.get_user(session, user)
-
-        if requests[0].repetition_model is None:
-            repetition_model_name = 'karl100'
-        else:
-            repetition_model_name = requests[0].repetition_model.lower()
-
-        if repetition_model_name in ['sm2', 'sm-2']:
-            user.params = Params(
-                qrep=0,
-                skill=0,
-                recall=0,
-                category=0,
-                leitner=0,
-                sm2=1,
-            )
-        elif repetition_model_name == 'leitner':
-            user.params = Params(
-                qrep=0,
-                skill=0,
-                recall=0,
-                category=0,
-                leitner=1,
-                sm2=0,
-            )
-        elif repetition_model_name in ['karl', 'karl100']:
-            user.params = Params()
-        elif repetition_model_name == 'karl50':
-            user.params = Params(recall_target=0.5)
-        elif repetition_model_name == 'karl85':
-            user.params = Params(recall_target=0.85)
-
         facts = [facts[i] for i in indices]
 
         if not self.preemptive:
@@ -1212,26 +1180,6 @@ class MovingAvgScheduler:
         request = requests[indices[0]]
         fact = facts[indices[0]]
 
-        record = Record(
-            record_id=request.history_id,
-            debug_id=self.debug_id.get(request.user_id, 'null'),
-            user_id=request.user_id,
-            fact_id=fact.fact_id,
-            deck_id=fact.deck_id,
-            response=request.label,
-            judgement=request.label,
-            user_snapshot='_place_holder_',  # to be filled in after updates (e.g. leiter)
-            scheduler_snapshot=json.dumps(user.params.__dict__),
-            fact_ids=json.dumps([x.fact_id for x in facts]),
-            scheduler_output='',
-            elapsed_seconds_text=request.elapsed_seconds_text,
-            elapsed_seconds_answer=request.elapsed_seconds_answer,
-            elapsed_milliseconds_text=request.elapsed_milliseconds_text,
-            elapsed_milliseconds_answer=request.elapsed_milliseconds_answer,
-            is_new_fact=int(fact.fact_id not in user.previous_study),
-            date=date,
-        )
-
         # update user and fact
         # (optionally) commit preemptive compute
         if not self.preemptive:
@@ -1250,17 +1198,35 @@ class MovingAvgScheduler:
         if user.user_id in self.debug_id:
             self.debug_id.pop(user.user_id)
 
+        record = Record(
+            record_id=request.history_id,
+            debug_id=self.debug_id.get(request.user_id, 'null'),
+            user_id=request.user_id,
+            fact_id=fact.fact_id,
+            deck_id=fact.deck_id,
+            response=request.label,
+            judgement=request.label,
+            user_snapshot=json.dumps({
+                'leitner_box': user.leitner_box,
+                'count_correct_before': user.count_correct_before,
+                'count_wrong_before': user.count_wrong_before,
+            }),
+            scheduler_snapshot=json.dumps(user.params.__dict__),
+            fact_ids=json.dumps([x.fact_id for x in facts]),
+            scheduler_output='',  # TODO something
+            elapsed_seconds_text=request.elapsed_seconds_text,
+            elapsed_seconds_answer=request.elapsed_seconds_answer,
+            elapsed_milliseconds_text=request.elapsed_milliseconds_text,
+            elapsed_milliseconds_answer=request.elapsed_milliseconds_answer,
+            is_new_fact=int(fact.fact_id not in user.previous_study),
+            date=date,
+        )
+
         # update user stats
         self.update_user_stats(session, user, record, deck_id='all')
         if fact.deck_id is not None:
             self.update_user_stats(session, user, record, deck_id=fact.deck_id)
 
-        # NOTE this is AFTER the user and fact update with NEW leitner boxes
-        record.user_snapshot = json.dumps({
-            'leitner_box': user.leitner_box,
-            'count_correct_before': user.count_correct_before,
-            'count_wrong_before': user.count_wrong_before,
-        })
         session.add(record)
         session.commit()
 
@@ -1366,8 +1332,8 @@ class MovingAvgScheduler:
 
         # leitner boxes 1~10
         # days[0] = None as placeholder since we don't have box 0
-        # days[9] and days[10] = 9999 to make it never repeat
-        days = [0, 0, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 9999, 9999]
+        # days[9] and days[10] = 999 to make it never repeat
+        days = [0, 0, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 999, 999]
         increment_days = {i: x for i, x in enumerate(days)}
 
         # boxes: 1 ~ 10
@@ -1424,6 +1390,11 @@ class MovingAvgScheduler:
         prev_date, prev_response = user.previous_study[fact.fact_id]
         if isinstance(prev_date, str):
             prev_date = parse_date(prev_date)
+        print('************')
+        inv = max(inv, 100)  # NOTE for debugging
+        print('prev_date', prev_date)
+        print('inv', inv)
+        print('************')
         user.sm2_scheduled_date[fact.fact_id] = str(prev_date + timedelta(days=inv))
 
     def plot_histogram(self, user_qrep: np.ndarray, fact_qrep: np.ndarray, filename: str) -> None:

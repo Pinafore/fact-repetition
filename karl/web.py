@@ -16,7 +16,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 
-from karl.new_util import ScheduleRequest, SetParams, Params
+from karl.new_util import ScheduleRequest, Params
 from karl.scheduler import MovingAvgScheduler
 
 
@@ -103,23 +103,17 @@ def update(requests: List[ScheduleRequest]):
     env = 'dev' if requests[0].env == 'dev' else 'prod'
 
     try:
-        update_results = scheduler.update(sessions[env], requests, date)
+        scheduler.update(sessions[env], requests, date)
         sessions[env].commit()
-        return update_results
     except SQLAlchemyError as e:
         print(repr(e))
         sessions[env].rollback()
 
 
-@app.post('/api/karl/set_params')
-def set_params(params: SetParams):
-    params = params.dict()
-    user_id = params.pop('user_id')
-    env = params.pop('env')
+@app.put('/api/karl/set_params_4')
+def set_params_4(user_id: str, env: str, params: Params):
     env = 'dev' if env == 'dev' else 'prod'
     session = sessions[env]
-
-    params = Params(**params)
     try:
         scheduler.set_user_params(session, user_id, params)
         session.commit()
@@ -130,6 +124,7 @@ def set_params(params: SetParams):
 
 @app.get('/api/karl/set_repetition_model')
 def set_repetition_model(user_id: str, repetition_model: str):
+    # TODO WIP
         if repetition_model == 'sm2':
             user.params = Params(
                 qrep=0,
@@ -182,7 +177,7 @@ def reset_user(user_id: str = None, env: str = None):
     env = 'dev' if env == 'dev' else 'prod'
     try:
         scheduler.reset_user(sessions[env], user_id=user_id)
-        sessions[env].comimit()
+        sessions[env].commit()
     except SQLAlchemyError as e:
         print(repr(e))
         sessions[env].rollback()
