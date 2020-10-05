@@ -204,7 +204,8 @@ def status():
     return True
 
 
-@app.get('/api/karl/get_user')def get_user(user_id: str, env: str = None):
+@app.get('/api/karl/get_user')
+def get_user(user_id: str, env: str = None):
     env = 'dev' if env == 'dev' else 'prod'
     user = scheduler.get_user(sessions[env], user_id)
     return json.dumps({
