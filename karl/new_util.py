@@ -198,6 +198,7 @@ class theme_fs(theme_light):
 
 
 class Params(BaseModel):
+    repetition_model: str = 'karl100'   # name of the repetition model
     qrep: float = 1                     # cosine distance between qreps
     skill: float = 0                    # fact difficulty vs user skill level
     recall: float = 1                   # recall probability

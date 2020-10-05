@@ -1390,11 +1390,6 @@ class MovingAvgScheduler:
         prev_date, prev_response = user.previous_study[fact.fact_id]
         if isinstance(prev_date, str):
             prev_date = parse_date(prev_date)
-        print('************')
-        inv = max(inv, 100)  # NOTE for debugging
-        print('prev_date', prev_date)
-        print('inv', inv)
-        print('************')
         user.sm2_scheduled_date[fact.fact_id] = str(prev_date + timedelta(days=inv))
 
     def plot_histogram(self, user_qrep: np.ndarray, fact_qrep: np.ndarray, filename: str) -> None:

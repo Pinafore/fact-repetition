@@ -1,6 +1,6 @@
 import json
 from tqdm import tqdm
-from karl.new_util import User
+from karl.new_util import User, Record
 from karl.web import get_sessions
 
 
@@ -24,6 +24,7 @@ def leitner_update(leitner_box, fact, response: bool) -> None:
 
 
 def update_user_snapshot(session):
+    '''Fill in missing fields of user snapshots'''
     n_users = session.query(User).count()
     for i, user in enumerate(tqdm(session.query(User), total=n_users)):
         leitner_box = {}  # fact_id -> box (1~10)
@@ -49,6 +50,32 @@ def update_user_snapshot(session):
         session.commit()
 
 
+def infer_repetition_model(params) -> str:
+    if params['qrep'] == 0:
+        if params['leitner'] > 0:
+            return 'leitner'
+        elif params['sm2'] > 0:
+            return 'sm2'
+        else:
+            return 'unknown'
+    else:
+        if 'recall_target' in params:
+            return 'karl-' + str(int(params['recall_target'] * 100))
+        else:
+            return 'karl-100'
+
+
+def update_scheduler_snapshot(session):
+    '''Fill in missing retention model name in the scheduler snapshots in each record'''
+    records = session.query(Record)
+    for record in tqdm(records, total=records.count()):
+        params = json.loads(record.scheduler_snapshot)
+        if params.get('repetition_model', None):
+            continue
+        params['repetition_model'] = infer_repetition_model(params)
+    session.commit()
+
+
 if __name__ == '__main__':
     session = get_sessions()['prod']
-    update_user_snapshot(session)
+    update_scheduler_snapshot(session)

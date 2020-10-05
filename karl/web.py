@@ -110,8 +110,8 @@ def update(requests: List[ScheduleRequest]):
         sessions[env].rollback()
 
 
-@app.put('/api/karl/set_params_4')
-def set_params_4(user_id: str, env: str, params: Params):
+@app.put('/api/karl/set_params')
+def set_params(user_id: str, env: str, params: Params):
     env = 'dev' if env == 'dev' else 'prod'
     session = sessions[env]
     try:
