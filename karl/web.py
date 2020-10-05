@@ -123,44 +123,54 @@ def set_params(user_id: str, env: str, params: Params):
 
 
 @app.get('/api/karl/set_repetition_model')
-def set_repetition_model(user_id: str, repetition_model: str):
-    # TODO WIP
-        if repetition_model == 'sm2':
-            user.params = Params(
-                qrep=0,
-                skill=0,
-                recall=0,
-                category=0,
-                answer=0,
-                leitner=0,
-                sm2=1,
-                cool_down=0,
-            )
-        elif repetition_model == 'leitner':
-            user.params = Params(
-                qrep=0,
-                skill=0,
-                recall=0,
-                category=0,
-                answer=0,
-                leitner=1,
-                sm2=0,
-                cool_down=0,
-            )
-        elif repetition_model.startswith('karl100'):
-            recall_target = float(repetition_model[4:]) / 100
-            user.params = Params(
-                qrep=1,
-                skill=0,
-                recall=1,
-                category=1,
-                answer=1,
-                leitner=1,
-                sm2=0,
-                recall_target=recall_target,
-            )
-        else:
-            pass
+def set_repetition_model(user_id: str, env: str, repetition_model: str):
+    env = 'dev' if env == 'dev' else 'prod'
+    session = sessions[env]
+    if repetition_model == 'sm2':
+        params = Params(
+            repetition_model='sm2',
+            qrep=0,
+            skill=0,
+            recall=0,
+            category=0,
+            answer=0,
+            leitner=0,
+            sm2=1,
+            cool_down=0,
+        )
+        scheduler.set_user_params(session, user_id, params)
+        session.commit()
+    elif repetition_model == 'leitner':
+        params = Params(
+            repetition_model='leitner',
+            qrep=0,
+            skill=0,
+            recall=0,
+            category=0,
+            answer=0,
+            leitner=1,
+            sm2=0,
+            cool_down=0,
+        )
+        scheduler.set_user_params(session, user_id, params)
+        session.commit()
+    elif repetition_model.startswith('karl'):
+        recall_target = int(repetition_model[4:])
+        params = Params(
+            repetition_model=f'karl{recall_target}',
+            qrep=1,
+            skill=0,
+            recall=1,
+            category=1,
+            answer=1,
+            leitner=1,
+            sm2=0,
+            recall_target=float(recall_target) / 100,
+        )
+        scheduler.set_user_params(session, user_id, params)
+        session.commit()
+    else:
+        pass
 
 
 @app.post('/api/karl/get_fact')

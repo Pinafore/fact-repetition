@@ -70,9 +70,10 @@ def update_scheduler_snapshot(session):
     records = session.query(Record)
     for record in tqdm(records, total=records.count()):
         params = json.loads(record.scheduler_snapshot)
-        if params.get('repetition_model', None):
-            continue
+        # if 'repetition_model' in params:
+        #     continue
         params['repetition_model'] = infer_repetition_model(params)
+        record.scheduler_snapshot = json.dumps(params)
     session.commit()
 
 

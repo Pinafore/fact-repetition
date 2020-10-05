@@ -25,10 +25,13 @@ class TestWeb(unittest.TestCase):
 
         # get the simulated user ready
         requests.get(f'{URL}/reset_user?user_id={user_id}&env={env}')
-        requests.put(
-            f'{URL}/set_params?user_id={user_id}&env={env}',
-            data=json.dumps(Params().__dict__),
-        )
+        # requests.put(
+        #     f'{URL}/set_params?user_id={user_id}&env={env}',
+        #     data=json.dumps(Params().__dict__),
+        # )
+
+        requests.get(f'{URL}/set_repetition_model?user_id={user_id}&env={env}&repetition_model=karl76')
+        return
 
         # get some facts ready
         with open('data/diagnostic_questions.pkl', 'rb') as f:

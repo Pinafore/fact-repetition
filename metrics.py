@@ -65,7 +65,8 @@ for user in tqdm(session.query(User), total=session.query(User).count()):
         order_by(Record.date.desc()).first()
     if last_record is None:
         continue
-    repetition_model = infer_repetition_model(last_record.scheduler_snapshot)
+    # repetition_model = infer_repetition_model(last_record.scheduler_snapshot)
+    repetition_model = json.loads(last_record.scheduler_snapshot)['repetition_model']
 
     for record in session.query(Record).\
         filter(Record.user_id == user.user_id).\
@@ -300,7 +301,8 @@ users = sorted(users, key=lambda x: -len(x.records))
 # %%
 for i, user in enumerate(users[:30]):
     x_axis_name = 'datetime'
-    repetition_model = infer_repetition_model(user.records[-1].scheduler_snapshot)
+    # repetition_model = infer_repetition_model(user.records[-1].scheduler_snapshot)
+    repetition_model = json.loads(user.records[-1].scheduler_snapshot)['repetition_model']
     leitner_boxes = sorted([i for i in df.leitner_box.unique() if i > 1])
     # reverse because lower sequential values usually corresponds to darker colors
     leitner_boxes = [f'n_learned_{i}_csum' for i in leitner_boxes][::-1]
