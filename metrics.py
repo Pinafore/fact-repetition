@@ -14,6 +14,7 @@ from typing import Dict
 import altair as alt
 from altair.expr import datum
 alt.data_transformers.disable_max_rows()
+alt.renderers.enable('mimetype')
 from plotnine import ggplot, ggtitle, aes, theme,\
     geom_point, geom_line, geom_area, geom_ribbon, geom_bar, geom_density, \
     facet_grid, facet_wrap,\
@@ -254,7 +255,6 @@ df_plot.name = df_plot.name.astype(CategoricalDtype(categories=leitner_boxes,ord
 # )
 # p.draw()
 # p.save('figures/repetition_model_study_reports_all.pdf')
-
 line = alt.Chart().mark_line().encode(
     x=x_axis_name,
     y='mean',

@@ -222,22 +222,16 @@ def status():
     return True
 
 
-@app.get('/api/karl/get_user', response_model=dict)
+@app.get('/api/karl/get_user')
 def get_user(user_id: str, env: str = None):
     env = 'dev' if env == 'dev' else 'prod'
     user = scheduler.get_user(sessions[env], user_id)
-    return json.dumps({
-        k: v for k, v in user.__dict__.items() if k != '_sa_instance_state'
-    })
-
-
-@app.get('/api/karl/get_all_users', response_model=List[dict])
-def get_all_users(env: str = None):
-    env = 'dev' if env == 'dev' else 'prod'
-    users = scheduler.get_all_users(sessions[env])
-    return [json.dumps({
-        k: v for k, v in user.__dict__.items() if k != '_sa_instance_state'
-    }) for user in users]
+    user_dict = {
+        k: v for k, v in user.__dict__.items()
+        if k != '_sa_instance_state'
+    }
+    user_dict['params'] = user_dict['params'].__dict__
+    return json.dumps(user_dict)
 
 
 # @app.get('/api/karl/get_user_history', response_model=List[dict])

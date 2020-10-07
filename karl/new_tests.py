@@ -1,3 +1,4 @@
+# %%
 import os
 import json
 import copy
@@ -13,7 +14,17 @@ from karl.db import SchedulerDB
 from karl.util import User, Fact, History, Params, ScheduleRequest
 from karl.scheduler import MovingAvgScheduler
 
+# %%
+URL = 'http://127.0.0.1:8000/api/karl'
 
+env = 'dev'
+user_id = '2'
+
+# get the simulated user ready
+user = json.loads(json.loads(requests.get(f'{URL}/get_user?user_id={user_id}&env={env}').text))
+
+
+# %%
 class TestWeb(unittest.TestCase):
 
     def test_user_stats(self):
