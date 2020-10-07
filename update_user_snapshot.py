@@ -74,6 +74,22 @@ def update_scheduler_snapshot(session):
         #     continue
         params['repetition_model'] = infer_repetition_model(params)
         record.scheduler_snapshot = json.dumps(params)
+
+        if record.elapsed_milliseconds_text is None or record.elapsed_milliseconds_text == 0:
+            if record.elapsed_seconds_text is not None:
+                record.elapsed_milliseconds_answer = record.elapsed_seconds_text * 1000
+            else:
+                record.elapsed_milliseconds_text = 0
+        if record.elapsed_milliseconds_answer is None or record.elapsed_milliseconds_answer == 0:
+            if record.elapsed_seconds_answer is not None:
+                record.elapsed_milliseconds_answer = record.elapsed_seconds_answer * 1000
+            else:
+                record.elapsed_milliseconds_answer = 0
+        
+        if record.elapsed_milliseconds_text != 0:
+            record.elapsed_seconds_text = record.elapsed_milliseconds_text / 1000
+        if record.elapsed_milliseconds_answer != 0:
+            record.elapsed_seconds_answer = record.elapsed_milliseconds_answer / 1000
     session.commit()
 
 

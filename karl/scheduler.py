@@ -1198,6 +1198,11 @@ class MovingAvgScheduler:
         if user.user_id in self.debug_id:
             self.debug_id.pop(user.user_id)
 
+        if request.elapsed_seconds_text is None:
+            request.elapsed_seconds_text = request.elapsed_milliseconds_text * 1000
+        if request.elapsed_seconds_answer is None:
+            request.elapsed_seconds_answer = request.elapsed_milliseconds_answer * 1000
+
         record = Record(
             record_id=request.history_id,
             debug_id=self.debug_id.get(request.user_id, 'null'),

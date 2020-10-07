@@ -1,4 +1,5 @@
 # %%
+import os
 import json
 import bisect
 import numpy as np
@@ -10,6 +11,9 @@ from pandas.api.types import CategoricalDtype
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Dict
+import altair as alt
+from altair.expr import datum
+alt.data_transformers.disable_max_rows()
 from plotnine import ggplot, ggtitle, aes, theme,\
     geom_point, geom_line, geom_area, geom_ribbon, geom_bar, geom_density, \
     facet_grid, facet_wrap,\
@@ -19,22 +23,9 @@ from plotnine import ggplot, ggtitle, aes, theme,\
 from karl.new_util import User, Record, parse_date, theme_fs
 from karl.web import get_sessions
 
-
-def infer_repetition_model(scheduler_snapshot) -> str:
-    params = json.loads(scheduler_snapshot)
-    if params['qrep'] == 0:
-        if params['leitner'] > 0:
-            return 'leitner'
-        elif params['sm2'] > 0:
-            return 'sm2'
-        else:
-            return 'unknown'
-    else:
-        if 'recall_target' in params:
-            return 'karl-' + str(int(params['recall_target'] * 100))
-        else:
-            return 'karl-100'
-
+def save_chart_and_pdf(chart, path):
+    chart.save(f'{path}.json')
+    os.system(f'vl2vg {path}.json | vg2pdf > {path}.pdf')
 
 # %%
 '''Gather records into a DataFrame'''
@@ -65,8 +56,7 @@ for user in tqdm(session.query(User), total=session.query(User).count()):
         order_by(Record.date.desc()).first()
     if last_record is None:
         continue
-    # repetition_model = infer_repetition_model(last_record.scheduler_snapshot)
-    repetition_model = json.loads(last_record.scheduler_snapshot)['repetition_model']
+    # repetition_model = json.loads(last_record.scheduler_snapshot)['repetition_model']
 
     for record in session.query(Record).\
         filter(Record.user_id == user.user_id).\
@@ -74,12 +64,11 @@ for user in tqdm(session.query(User), total=session.query(User).count()):
         filter(Record.date <= date_end):
         seconds = record.elapsed_seconds_text if record.elapsed_seconds_text else record.elapsed_milliseconds_text / 1000
         seconds += record.elapsed_seconds_answer if record.elapsed_seconds_answer else record.elapsed_milliseconds_answer / 1000
-
         rows.append({
             'record_id': record.record_id,
             'user_id': user.user_id,
             'fact_id': record.fact_id,
-            'repetition_model': repetition_model,
+            'repetition_model': json.loads(record.scheduler_snapshot)['repetition_model'],
             'is_new_fact': record.is_new_fact,
             'result': record.response,
             'date': record.date.date(),
@@ -178,29 +167,41 @@ df_plot = pd.melt(
     value_name='value',
 )
 df_plot.name = df_plot.name.astype(CategoricalDtype(categories=metrics, ordered=True))
-p = (
-    ggplot(
-        df_plot,
-        aes(x=x_axis_name, y='value', color='name', fill='name'),
-    )
-    + geom_area(alpha=0.75)
-    + facet_wrap('repetition_model')
-    + theme_fs()
-    + theme(
-        axis_text_x=element_text(rotation=30)
-    )
-    # + scale_fill_brewer(type='div', palette=2)
-    + scale_fill_manual(
-        values=[
-            '#ff1400',  # dark red
-            '#ffaca5',  # light red
-            '#b2b3ff',  # light blue
-            '#595bff',  # dark blue
-        ]
-    )
+
+# p = (
+#     ggplot(
+#         df_plot,
+#         aes(x=x_axis_name, y='value', color='name', fill='name'),
+#     )
+#     + geom_area(alpha=0.75)
+#     + facet_wrap('repetition_model')
+#     + theme_fs()
+#     + theme(
+#         axis_text_x=element_text(rotation=30)
+#     )
+#     # + scale_fill_brewer(type='div', palette=2)
+#     + scale_fill_manual(
+#         values=[
+#             '#ff1400',  # dark red
+#             '#ffaca5',  # light red
+#             '#b2b3ff',  # light blue
+#             '#595bff',  # dark blue
+#         ]
+#     )
+# )
+# p.draw()
+# p.save('figures/new_old_correct_wrong.pdf')
+
+chart = alt.Chart(df_plot).mark_area().encode(
+    x='n_minutes_spent_binned',
+    y='sum(value)',
+    color='name',
+).facet(
+    facet='repetition_model:N',
+    columns=2
 )
-p.draw()
-p.save(f'figures/new_old_correct_wrong.pdf')
+save_chart_and_pdf(chart, f'figures/new_old_correct_wrong')
+
 # %%
 # study progress
 n_bins = 10
@@ -223,6 +224,51 @@ extended_metrics = (
     + [f'{metric}_max' for metric in leitner_boxes]
 )
 
+df_plot = pd.melt(
+    df,
+    id_vars=['user_id', 'repetition_model', x_axis_name],
+    value_vars=leitner_boxes,
+    var_name='name',
+    value_name='value',
+)
+
+df_plot = df_plot.groupby(['repetition_model', 'name', x_axis_name]).agg(['mean', 'std']).reset_index()
+df_plot.columns = [l1 if not l2 else l2 for l1, l2 in df_plot.columns]
+df_plot['min'] = df_plot['mean'] - df_plot['std'] / 2
+df_plot['max'] = df_plot['mean'] + df_plot['std'] / 2
+df_plot.name = df_plot.name.astype(CategoricalDtype(categories=leitner_boxes,ordered=True))
+
+# p = (
+#     ggplot(
+#         df_plot,
+#         aes(x=x_axis_name, y='mean', ymin='min', ymax='max', color='name', fill='name'),
+#     )
+#     + geom_line(alpha=0.75, size=1)
+#     + geom_ribbon(alpha=0.5)
+#     + facet_wrap('repetition_model')
+#     + theme_fs()
+#     + theme(
+#         axis_text_x=element_text(rotation=30),
+#         aspect_ratio=1,
+#     )
+# )
+# p.draw()
+# p.save('figures/repetition_model_study_reports_all.pdf')
+
+line = alt.Chart().mark_line().encode(
+    x=x_axis_name,
+    y='mean',
+    color='name',
+)
+band = alt.Chart().mark_area(opacity=0.5, color='gray').encode(
+    x=x_axis_name,
+    y='min',
+    y2='max',
+    color='name',
+)
+chart = alt.layer(band, line, data=df_plot).facet('repetition_model', columns=2)
+save_chart_and_pdf(chart, 'figures/repetition_model_study_reports_all')
+# %%
 df_sub = df.copy()
 df_sub['user_records_binned'] = df_sub['user_id'].apply(lambda x: user_binned_dict[x])
 for user_bin in df_sub['user_records_binned'].unique():
@@ -239,23 +285,46 @@ for user_bin in df_sub['user_records_binned'].unique():
     df_plot['max'] = df_plot['mean'] + df_plot['std'] / 2
     df_plot.name = df_plot.name.astype(CategoricalDtype(categories=leitner_boxes,ordered=True))
     
-    p = (
-        ggplot(
-            df_plot,
-            aes(x=x_axis_name, y='mean', ymin='min', ymax='max', color='name', fill='name'),
-        )
-        + geom_line(alpha=0.75, size=1)
-        + geom_ribbon(alpha=0.5)
-        + facet_wrap('repetition_model')
-        + theme_fs()
-        + theme(
-            axis_text_x=element_text(rotation=30),
-            aspect_ratio=1,
-        )
-        + ggtitle(f'users records bin: {user_bin}')
+    # p = (
+    #     ggplot(
+    #         df_plot,
+    #         aes(x=x_axis_name, y='mean', ymin='min', ymax='max', color='name', fill='name'),
+    #     )
+    #     + geom_line(alpha=0.75, size=1)
+    #     + geom_ribbon(alpha=0.5)
+    #     + facet_wrap('repetition_model')
+    #     + theme_fs()
+    #     + theme(
+    #         axis_text_x=element_text(rotation=30),
+    #         aspect_ratio=1,
+    #     )
+    #     + ggtitle(f'users records bin: {user_bin}')
+    # )
+    # p.draw()
+    # p.save(f'figures/repetition_model_reports/{user_bin}.pdf')
+
+    Path('figures/repetition_model_reports').mkdir(parents=True, exist_ok=True)
+
+    line = alt.Chart().mark_line().encode(
+        x=x_axis_name,
+        y='mean',
+        color='name',
     )
-    p.draw()
-    p.save(f'figures/repetition_model_study_reports_{user_bin}.pdf')
+    band = alt.Chart().mark_area(opacity=0.5, color='gray').encode(
+        x=x_axis_name,
+        y='min',
+        y2='max',
+        color='name',
+    )
+    chart = alt.layer(
+        band, line, data=df_plot
+    ).facet(
+        'repetition_model',
+        columns=2
+    ).properties(
+        title=f'users records bin: {user_bin}'
+    )
+    save_chart_and_pdf(chart, f'figures/repetition_model_reports/{user_bin}')
 # %%
 '''System report'''
 # daily active users 
@@ -264,44 +333,54 @@ df_plot = df_plot.groupby(['repetition_model', 'date_binned'])['user_id'].count(
 total_daily_count = df_plot.groupby('date_binned').sum().to_dict()['n_active_users']
 df_plot['ratio'] = df_plot.apply(lambda x: x['n_active_users'] / total_daily_count[x['date_binned']], axis=1)
 
-p = (
-    ggplot(
-        df_plot,
-        aes(x='date_binned', y='n_active_users', color='repetition_model', fill='repetition_model')
-    )
-    + geom_line(alpha=0.75, size=1)
-    + theme_fs()
-    + theme(
-        axis_text_x=element_text(rotation=30)
-    )
+# p = (
+#     ggplot(
+#         df_plot,
+#         aes(x='date_binned', y='n_active_users', color='repetition_model', fill='repetition_model')
+#     )
+#     + geom_line(alpha=0.75, size=1)
+#     + theme_fs()
+#     + theme(
+#         axis_text_x=element_text(rotation=30)
+#     )
+# )
+# p.draw()
+# p.save('figures/system_activity.pdf')
+chart = alt.Chart(df_plot).mark_line().encode(
+    x='date_binned',
+    y='n_active_users',
+    color='repetition_model',
 )
-p.draw()
-p.save(f'figures/system_activity.pdf')
+save_chart_and_pdf(chart, 'figures/system_activity')
 # %%
 # scatter plot of number of records vs number of minutes colored by repetition model
 df_left = df.groupby(['user_id', 'repetition_model'])['user_id'].count().reset_index(name='n_records')
 df_right = df.groupby(['user_id', 'repetition_model'])['elapsed_minutes'].sum().reset_index(name='total_minutes')
 df_plot = pd.merge(df_left, df_right, how='left', on=['user_id', 'repetition_model'])
-p = (
-    ggplot(
-        df_plot,
-        aes(x='n_records', y='total_minutes', color='repetition_model', fill='repetition_model')
-    )
-    + geom_point(alpha=0.75, size=3)
-    + theme_fs()
-    + scale_fill_brewer(type='qual', palette=0)
-    + scale_x_log10()
-    + scale_y_log10()
+# p = (
+#     ggplot(
+#         df_plot,
+#         aes(x='n_records', y='total_minutes', color='repetition_model', fill='repetition_model')
+#     )
+#     + geom_point(alpha=0.75, size=3)
+#     + theme_fs()
+#     + scale_fill_brewer(type='qual', palette=0)
+#     + scale_x_log10()
+#     + scale_y_log10()
+# )
+# p.draw()
+# p.save('figures/users.pdf')
+alt.Chart(df_plot).mark_point().encode(
+    alt.X('n_records'),
+    alt.Y('total_minutes'),
+    color='repetition_model',
 )
-p.draw()
-p.save(f'figures/users.pdf')
 # %%
 users = session.query(User).all()
 users = sorted(users, key=lambda x: -len(x.records))
 # %%
-for i, user in enumerate(users[:30]):
+for i, user in enumerate(users[:3]):
     x_axis_name = 'datetime'
-    # repetition_model = infer_repetition_model(user.records[-1].scheduler_snapshot)
     repetition_model = json.loads(user.records[-1].scheduler_snapshot)['repetition_model']
     leitner_boxes = sorted([i for i in df.leitner_box.unique() if i > 1])
     # reverse because lower sequential values usually corresponds to darker colors
@@ -317,30 +396,48 @@ for i, user in enumerate(users[:30]):
     df_plot.name = df_plot.name.astype(leitner_box_type)
 
     df_plot['date'] = df_plot['datetime'].apply(lambda x: x.date())
-    df_plot['count'] = 0.1
-
     df_minutes = df[df.user_id == user.user_id][['datetime', 'elapsed_minutes']]
     df_plot = pd.merge(df_plot, df_minutes, how='left', on='datetime')
     # df_1 = df_plot.groupby('date')['index'].count().reset_index(name='count')
     # df_plot = pd.merge(df_plot, df_1, how='left', on='date')
     # df_plot['count'] /= 100
 
-    p = (
-        ggplot(df_plot)
-        + geom_line(
-            aes(x=x_axis_name, y='value', color='name', fill='name'),
-            alpha=0.75, size=1.5,
-        )
-        + geom_bar(aes(x='date', y='elapsed_minutes'), stat='identity', alpha=0.5)
-        + theme_fs()
-        + theme(
-            axis_text_x=element_text(rotation=30)
-        )
-        + scale_fill_brewer(type='seq', palette=3)
-        + ggtitle(f'user_id: {user.user_id} repetition_model: {repetition_model}')
-    )
-    p.draw()
+    # p = (
+    #     ggplot(df_plot)
+    #     + geom_line(
+    #         aes(x=x_axis_name, y='value', color='name', fill='name'),
+    #         alpha=0.75, size=1.5,
+    #     )
+    #     + geom_bar(aes(x='date', y='elapsed_minutes'), stat='identity', alpha=0.5)
+    #     + theme_fs()
+    #     + theme(
+    #         axis_text_x=element_text(rotation=30)
+    #     )
+    #     + scale_fill_brewer(type='seq', palette=3)
+    #     + ggtitle(f'user_id: {user.user_id} repetition_model: {repetition_model}')
+    # )
+    # p.draw()
+    # p.save(f'figures/user_study_reports/{user.user_id}.pdf')
     Path('figures/user_study_reports').mkdir(parents=True, exist_ok=True)
-    p.save(f'figures/user_study_reports/{user.user_id}.pdf')
-    
+
+    df_plot.date = pd.to_datetime(df_plot.date)
+    df_plot.datetime = pd.to_datetime(df_plot.datetime)
+
+    base = alt.Chart(df_plot).encode(
+        alt.X('date', axis=alt.Axis(title='Date'))
+    )
+    bar = base.mark_bar(opacity=0.4, color='#57A44C').encode(
+        alt.Y(
+            'sum(elapsed_minutes)',
+            axis=alt.Axis(title='Minutes spent', titleColor='#57A44C'),
+        )
+    )
+    line = base.mark_line().encode(
+        alt.Y('value', axis=alt.Axis(title='Familiarity')),
+        color='name',
+    )
+    chart = alt.layer(bar, line).resolve_scale(
+        y='independent',
+    )
+    save_chart_and_pdf(f'figures/user_study_reports/{user.user_id}')
 # %%
