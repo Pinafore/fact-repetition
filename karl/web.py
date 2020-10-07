@@ -6,7 +6,7 @@ import json
 import atexit
 import socket
 import logging
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime
@@ -36,8 +36,10 @@ def get_sessions():
         'prod': create_engine(f'postgresql+psycopg2://shifeng@localhost:5433/karl-prod?host={db_host}'),
         'dev': create_engine(f'postgresql+psycopg2://shifeng@localhost:5433/karl-dev?host={db_host}'),
     }
-
-    return {env: sessionmaker(bind=engine, autoflush=False)() for env, engine in engines.items()}
+    return {
+        env: sessionmaker(bind=engine, autoflush=False)()
+        for env, engine in engines.items()
+    }
 
 
 sessions = get_sessions()
@@ -89,10 +91,11 @@ def schedule(requests: List[ScheduleRequest]):
     except SQLAlchemyError as e:
         print(repr(e))
         sessions[env].rollback()
+        raise HTTPException(status_code=404, detail='Scheduling failed due to SQLAlchemyError.')
 
 
 @app.post('/api/karl/update')
-def update(requests: List[ScheduleRequest]):
+def update(requests: List[ScheduleRequest], response_model=bool):
     logger.info(f'/karl/update with {len(requests)} facts and env={requests[0].env}')
 
     # NOTE assuming single user single date
@@ -105,24 +108,28 @@ def update(requests: List[ScheduleRequest]):
     try:
         scheduler.update(sessions[env], requests, date)
         sessions[env].commit()
+        return True
     except SQLAlchemyError as e:
         print(repr(e))
         sessions[env].rollback()
+        raise HTTPException(status_code=404, detail='Update failed due to SQLAlchemyError.')
 
 
-@app.put('/api/karl/set_params')
+@app.put('/api/karl/set_params', response_model=Params)
 def set_params(user_id: str, env: str, params: Params):
     env = 'dev' if env == 'dev' else 'prod'
     session = sessions[env]
     try:
         scheduler.set_user_params(session, user_id, params)
         session.commit()
+        return params
     except SQLAlchemyError as e:
         print(repr(e))
         session.rollback()
+        raise HTTPException(status_code=404, detail='Set_params failed due to SQLAlchemyError.')
 
 
-@app.get('/api/karl/set_repetition_model')
+@app.put('/api/karl/set_repetition_model', response_model=Params)
 def set_repetition_model(user_id: str, env: str, repetition_model: str):
     env = 'dev' if env == 'dev' else 'prod'
     session = sessions[env]
@@ -140,6 +147,7 @@ def set_repetition_model(user_id: str, env: str, repetition_model: str):
         )
         scheduler.set_user_params(session, user_id, params)
         session.commit()
+        return params
     elif repetition_model == 'leitner':
         params = Params(
             repetition_model='leitner',
@@ -154,6 +162,7 @@ def set_repetition_model(user_id: str, env: str, repetition_model: str):
         )
         scheduler.set_user_params(session, user_id, params)
         session.commit()
+        return params
     elif repetition_model.startswith('karl'):
         recall_target = int(repetition_model[4:])
         params = Params(
@@ -169,36 +178,40 @@ def set_repetition_model(user_id: str, env: str, repetition_model: str):
         )
         scheduler.set_user_params(session, user_id, params)
         session.commit()
+        return params
     else:
-        pass
+        raise HTTPException(status_code=404, detail='Unrecognized repetition model.')
 
 
-@app.post('/api/karl/get_fact')
-def get_fact(request: ScheduleRequest):
-    env = 'dev' if request.env == 'dev' else 'prod'
+@app.post('/api/karl/get_fact', response_model=dict)
+def get_fact(fact_id: str, env: str):
+    env = 'dev' if env == 'dev' else 'prod'
     fact = scheduler.get_fact(sessions[env], request)
     return json.dumps({
         k: v for k, v in fact.__dict__.items() if k != '_sa_instance_state'
     })
 
 
-@app.get('/api/karl/reset_user')
+@app.get('/api/karl/reset_user', response_model=dict)
 def reset_user(user_id: str = None, env: str = None):
     env = 'dev' if env == 'dev' else 'prod'
     try:
         scheduler.reset_user(sessions[env], user_id=user_id)
         sessions[env].commit()
+        return get_user(user_id, env)
     except SQLAlchemyError as e:
         print(repr(e))
         sessions[env].rollback()
+        raise HTTPException(status_code=404, detail='Reset user failed.')
 
 
-@app.get('/api/karl/reset_fact')
+@app.get('/api/karl/reset_fact', response_model=dict)
 def reset_fact(fact_id: str = None, env: str = None):
     env = 'dev' if env == 'dev' else 'prod'
     try:
         scheduler.reset_fact(sessions[env], fact_id=fact_id)
         sessions[env].commit()
+        return get_fact(fact_id, env)
     except SQLAlchemyError as e:
         print(repr(e))
         sessions[env].rollback()
@@ -209,7 +222,7 @@ def status():
     return True
 
 
-@app.get('/api/karl/get_user')
+@app.get('/api/karl/get_user', response_model=dict)
 def get_user(user_id: str, env: str = None):
     env = 'dev' if env == 'dev' else 'prod'
     user = scheduler.get_user(sessions[env], user_id)
@@ -218,7 +231,7 @@ def get_user(user_id: str, env: str = None):
     })
 
 
-@app.get('/api/karl/get_all_users')
+@app.get('/api/karl/get_all_users', response_model=List[dict])
 def get_all_users(env: str = None):
     env = 'dev' if env == 'dev' else 'prod'
     users = scheduler.get_all_users(sessions[env])
@@ -227,14 +240,14 @@ def get_all_users(env: str = None):
     }) for user in users]
 
 
-@app.get('/api/karl/get_user_history')
+# @app.get('/api/karl/get_user_history', response_model=List[dict])
 def get_user_history(user_id: str, env: str = None, deck_id: str = None,
                      date_start: str = None, date_end: str = None):
     env = 'dev' if env == 'dev' else 'prod'
     return scheduler.get_records(sessions[env], user_id, deck_id, date_start, date_end)
 
 
-@app.get('/api/karl/get_user_stats')
+@app.get('/api/karl/get_user_stats', response_model=dict)
 # @cached(cache=TTLCache(maxsize=1024, ttl=600))
 def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
                    date_start: str = None, date_end: str = None):
@@ -282,7 +295,7 @@ class Leaderboard(BaseModel):
     limit: Optional[int] = None
 
 
-@app.get('/api/karl/leaderboard')
+@app.get('/api/karl/leaderboard', response_model=Leaderboard)
 # @cached(cache=TTLCache(maxsize=1024, ttl=1800))
 def leaderboard(
         user_id: str = None,

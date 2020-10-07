@@ -60,9 +60,9 @@ def infer_repetition_model(params) -> str:
             return 'unknown'
     else:
         if 'recall_target' in params:
-            return 'karl-' + str(int(params['recall_target'] * 100))
+            return 'karl' + str(int(params['recall_target'] * 100))
         else:
-            return 'karl-100'
+            return 'karl100'
 
 
 def update_scheduler_snapshot(session):
