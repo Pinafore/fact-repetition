@@ -1180,6 +1180,13 @@ class MovingAvgScheduler:
         request = requests[indices[0]]
         fact = facts[indices[0]]
 
+        # save user snapshot before update
+        user_snapshot = json.dumps({
+                'leitner_box': user.leitner_box,
+                'count_correct_before': user.count_correct_before,
+                'count_wrong_before': user.count_wrong_before,
+            })
+
         # update user and fact
         # (optionally) commit preemptive compute
         if not self.preemptive:
@@ -1211,11 +1218,7 @@ class MovingAvgScheduler:
             deck_id=fact.deck_id,
             response=request.label,
             judgement=request.label,
-            user_snapshot=json.dumps({
-                'leitner_box': user.leitner_box,
-                'count_correct_before': user.count_correct_before,
-                'count_wrong_before': user.count_wrong_before,
-            }),
+            user_snapshot=user_snapshot,
             scheduler_snapshot=json.dumps(user.params.__dict__),
             fact_ids=json.dumps([x.fact_id for x in facts]),
             scheduler_output='',  # TODO something

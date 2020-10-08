@@ -26,27 +26,28 @@ def leitner_update(leitner_box, fact, response: bool) -> None:
 def update_user_snapshot(session):
     '''Fill in missing fields of user snapshots'''
     n_users = session.query(User).count()
-    for i, user in enumerate(tqdm(session.query(User), total=n_users)):
+    for _, user in enumerate(tqdm(session.query(User), total=n_users)):
         leitner_box = {}  # fact_id -> box (1~10)
         count_correct_before = {}  # fact_id -> number of times answered correctly before
         count_wrong_before = {}  # fact_id -> number of times answered incorrectly before
-        for j, record in enumerate(user.records):
-            fact = record.fact
-            leitner_update(leitner_box, fact, record.response)
-            if fact.fact_id not in count_correct_before:
-                count_correct_before[fact.fact_id] = 0
-            if fact.fact_id not in count_wrong_before:
-                count_wrong_before[fact.fact_id] = 0
-            if record.response:
-                count_correct_before[fact.fact_id] += 1
-            else:
-                count_wrong_before[fact.fact_id] += 1
-            user_snapshot = {
+        for _, record in enumerate(user.records):
+            record.user_snapshot = json.dumps({
                 'leitner_box': leitner_box,
                 'count_correct_before': count_correct_before,
                 'count_wrong_before': count_wrong_before,
-            }
-            record.user_snapshot = json.dumps(user_snapshot)
+            })
+
+            leitner_update(leitner_box, record.fact, record.response)
+
+            if record.fact_id not in count_correct_before:
+                count_correct_before[record.fact_id] = 0
+            if record.fact_id not in count_wrong_before:
+                count_wrong_before[record.fact_id] = 0
+            if record.response:
+                count_correct_before[record.fact_id] += 1
+            else:
+                count_wrong_before[record.fact_id] += 1
+
         session.commit()
 
 
@@ -95,4 +96,4 @@ def update_scheduler_snapshot(session):
 
 if __name__ == '__main__':
     session = get_sessions()['prod']
-    update_scheduler_snapshot(session)
+    update_user_snapshot(session)
