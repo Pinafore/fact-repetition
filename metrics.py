@@ -203,10 +203,24 @@ band = alt.Chart().mark_area(opacity=0.5, color='gray').encode(
     x=x_axis_name,
     y='min',
     y2='max',
-    color='name',
+    color='level',
+    stroke='type',
 )
 chart = alt.layer(band, line, data=df_plot).facet('repetition_model', columns=2)
 save_chart_and_pdf(chart, 'figures/repetition_model_study_reports_all')
+# %%
+x_axis_name = 'n_minutes_spent_binned'
+
+df_plot = pd.melt(
+    df,
+    id_vars=[x_axis_name, 'repetition_model', 'user_id'],
+    value_vars=progress_names,
+    var_name='name',
+    value_name='value',
+)
+
+df_plot['type'] = df_plot.name.apply(lambda x: 'Correct' if x[-1] == 'O' else 'Wrong')
+df_plot['level'] = df_plot.name.apply(lambda x: x[:-2])
 # %%
 n_bins = 10
 n_facts_bin_size = (df['n_facts_shown'].max()) // (n_bins - 1)
