@@ -24,10 +24,12 @@ def save_chart_and_pdf(chart, path):
 
 session = get_sessions()['prod']
 
-for user in tqdm(session.query(User), total=session.query(User).count()):
-    if len(user.records) < 100:
-        continue
-
+# for user in tqdm(session.query(User), total=session.query(User).count()):
+user = session.query(User).get('45')
+print(user.user_id)
+if True:
+    # if len(user.records) < 100:
+    #     continue
 
     correct_on_first_try = {}
     rows = []
@@ -50,22 +52,28 @@ for user in tqdm(session.query(User), total=session.query(User).count()):
             'datetime': record.date,
             'elapsed_minutes': elapsed_minutes,
             'is_known_fact': correct_on_first_try[record.fact_id],
-            'leitner_box': leitner_box.get(record.fact_id, 1),
+            'leitner_box': leitner_box.get(record.fact_id, 0),
         })
     df = pd.DataFrame(rows).sort_values('datetime', axis=0)
 
-    names = []
+    df[f'initial_O_'] = df.apply(lambda x: (x.leitner_box == 0) & x.result, axis=1)
+    df[f'initial_X_'] = df.apply(lambda x: (x.leitner_box == 0) & ~x.result, axis=1)
+    df[f'initial_O'] = df[f'initial_O_'].cumsum()
+    df[f'initial_X'] = df[f'initial_X_'].cumsum()
+    progress_names = [f'initial_O', f'initial_X']
     for i in df.leitner_box.unique():
-        df[f'level_{i - 1}_O_'] = df.apply(lambda x: (x.leitner_box == i) & (x.result), axis=1)
-        df[f'level_{i - 1}_X_'] = df.apply(lambda x: (x.leitner_box == i) & (~x.result), axis=1)
-        df[f'level_{i - 1}_O'] = df[f'level_{i - 1}_O_'].cumsum()
-        df[f'level_{i - 1}_X'] = df[f'level_{i - 1}_X_'].cumsum()
-        names += [f'level_{i - 1}_O', f'level_{i - 1}_X']
+        if i == 0:
+            continue
+        df[f'level_{i}_O_'] = df.apply(lambda x: (x.leitner_box == i) & x.result & (~x.is_known_fact), axis=1)
+        df[f'level_{i}_X_'] = df.apply(lambda x: (x.leitner_box == i) & (~x.result) & (~x.is_known_fact), axis=1)
+        df[f'level_{i}_O'] = df[f'level_{i}_O_'].cumsum()
+        df[f'level_{i}_X'] = df[f'level_{i}_X_'].cumsum()
+        progress_names += [f'level_{i}_O', f'level_{i}_X']
 
     df_plot = pd.melt(
         df,
         id_vars='datetime',
-        value_vars=names,
+        value_vars=progress_names,
         var_name='name',
         value_name='value',
     ).reset_index()
@@ -86,16 +94,11 @@ for user in tqdm(session.query(User), total=session.query(User).count()):
         alt.X('date', axis=alt.Axis(title='Date'))
     )
     bar = base.mark_bar(opacity=0.4, color='#57A44C').encode(
-        alt.Y(
-            'sum(elapsed_minutes)',
-            axis=alt.Axis(title='Minutes spent', titleColor='#57A44C'),
-        )
+        alt.Y('sum(elapsed_minutes)',
+        axis=alt.Axis(title='Minutes spent', titleColor='#57A44C'))
     )
     line = base.mark_line().encode(
-        alt.Y(
-            'value',
-            axis=alt.Axis(title='Familiarity'),
-        ),
+        alt.Y('value', axis=alt.Axis(title='Familiarity')),
         color='level',
         strokeDash='type',
     )

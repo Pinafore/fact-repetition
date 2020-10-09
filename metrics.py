@@ -15,11 +15,6 @@ import altair as alt
 from altair.expr import datum
 alt.data_transformers.disable_max_rows()
 alt.renderers.enable('mimetype')
-from plotnine import ggplot, ggtitle, aes, theme,\
-    geom_point, geom_line, geom_area, geom_ribbon, geom_bar, geom_density, \
-    facet_grid, facet_wrap,\
-    element_text, scale_fill_brewer, scale_fill_manual,\
-    scale_x_log10, scale_y_log10
 
 from karl.new_util import User, Record, parse_date, theme_fs
 from karl.web import get_sessions
@@ -57,14 +52,15 @@ for user in tqdm(session.query(User), total=session.query(User).count()):
         order_by(Record.date.desc()).first()
     if last_record is None:
         continue
-    # repetition_model = json.loads(last_record.scheduler_snapshot)['repetition_model']
 
     for record in session.query(Record).\
         filter(Record.user_id == user.user_id).\
         filter(Record.date >= date_start).\
         filter(Record.date <= date_end):
-        seconds = record.elapsed_seconds_text if record.elapsed_seconds_text else record.elapsed_milliseconds_text / 1000
-        seconds += record.elapsed_seconds_answer if record.elapsed_seconds_answer else record.elapsed_milliseconds_answer / 1000
+        elapsed_seconds = record.elapsed_milliseconds_text / 1000
+        elapsed_seconds += record.elapsed_milliseconds_answer / 1000
+        elapsed_minutes = elapsed_seconds / 60
+        leitner_box = json.loads(record.user_snapshot)['leitner_box']
         rows.append({
             'record_id': record.record_id,
             'user_id': user.user_id,
@@ -72,17 +68,16 @@ for user in tqdm(session.query(User), total=session.query(User).count()):
             'repetition_model': json.loads(record.scheduler_snapshot)['repetition_model'],
             'is_new_fact': record.is_new_fact,
             'result': record.response,
-            'date': record.date.date(),
             'datetime': record.date,
-            'elapsed_minutes': seconds / 60,
+            'elapsed_minutes': elapsed_minutes,
             'user_start_date': user_start_date[user.user_id],
             'is_known_fact': correct_on_first_try[user.user_id][record.fact_id],
-            'leitner_box': json.loads(record.user_snapshot)['leitner_box'][record.fact_id],
+            'leitner_box': leitner_box.get(record.fact_id, 0),
         })
 raw_df = pd.DataFrame(rows).sort_values('datetime', axis=0)
-
 # %%
 df = raw_df.copy()
+df['date'] = df['datetime'].apply(lambda x: x.date())
 '''Compute x-axis'''
 # number of total facts shown since start
 df['n_facts_shown'] = df.groupby('user_id').cumcount() + 1
@@ -130,26 +125,27 @@ df['n_new_facts_correct'] = df.groupby('user_id', group_keys=False).apply(lambda
 df['n_new_facts_wrong'] = df.groupby('user_id', group_keys=False).apply(lambda x: x.is_new_fact & ~x.result)
 df['n_old_facts_correct'] = df.groupby('user_id', group_keys=False).apply(lambda x: ~x.is_new_fact & x.result)
 df['n_old_facts_wrong'] = df.groupby('user_id', group_keys=False).apply(lambda x: ~x.is_new_fact & ~x.result)
-for i in df.leitner_box.unique():
-    if i > 1:
-        # initial box means first occurrence; it doesn't count
-        # not previously-known facts that got improved to level-i familiarity 
-        df[f'n_learned_{i}'] = df.groupby('user_id', group_keys=False).apply(lambda x: (x.leitner_box == i) & x.result & ~x.is_known_fact)
-
 df['n_new_facts_correct_csum'] = df.groupby('user_id')['n_new_facts_correct'].cumsum()
 df['n_new_facts_wrong_csum'] = df.groupby('user_id')['n_new_facts_wrong'].cumsum()
 df['n_old_facts_correct_csum'] = df.groupby('user_id')['n_old_facts_correct'].cumsum()
 df['n_old_facts_wrong_csum'] = df.groupby('user_id')['n_old_facts_wrong'].cumsum()
-for i in df.leitner_box.unique():
-    if i > 1:
-        # initial box means first occurrence; it doesn't count
-        df[f'n_learned_{i}_csum'] = df.groupby('user_id')[f'n_learned_{i}'].cumsum()
-
-# [new, old] x [correct, wrong] vs all
 df['ratio_new_correct_vs_all'] = df.n_new_facts_correct_csum / df.n_facts_shown
 df['ratio_new_wrong_vs_all'] = df.n_new_facts_wrong_csum / df.n_facts_shown
 df['ratio_old_correct_vs_all'] = df.n_old_facts_correct_csum / df.n_facts_shown
 df['ratio_old_wrong_vs_all'] = df.n_old_facts_wrong_csum / df.n_facts_shown
+
+df[f'initial_O_'] = df.apply(lambda x: (x.leitner_box == 0) & x.result, axis=1)
+df[f'initial_X_'] = df.apply(lambda x: (x.leitner_box == 0) & (~x.result), axis=1)
+df[f'initial_O'] = df.groupby('user_id')[f'initial_O_'].cumsum()
+df[f'initial_X'] = df.groupby('user_id')[f'initial_X_'].cumsum()
+progress_names = [f'initial_O', f'initial_X']
+for i in df.leitner_box.unique():
+    if i > 0:
+        df[f'level_{i}_O_'] = df.apply(lambda x: (x.leitner_box == i) & x.result & (~x.is_known_fact), axis=1)
+        df[f'level_{i}_X_'] = df.apply(lambda x: (x.leitner_box == i) & (~x.result) & (~x.is_known_fact), axis=1)
+        df[f'level_{i}_O'] = df.groupby('user_id')[f'level_{i}_O_'].cumsum()
+        df[f'level_{i}_X'] = df.groupby('user_id')[f'level_{i}_X_'].cumsum()
+        progress_names += [f'level_{i}_O', f'level_{i}_X']
 # %%
 # [new, old] x [correct, wrong]
 x_axis_name = 'n_minutes_spent_binned'
@@ -169,30 +165,6 @@ df_plot = pd.melt(
 )
 df_plot.name = df_plot.name.astype(CategoricalDtype(categories=metrics, ordered=True))
 
-# p = (
-#     ggplot(
-#         df_plot,
-#         aes(x=x_axis_name, y='value', color='name', fill='name'),
-#     )
-#     + geom_area(alpha=0.75)
-#     + facet_wrap('repetition_model')
-#     + theme_fs()
-#     + theme(
-#         axis_text_x=element_text(rotation=30)
-#     )
-#     # + scale_fill_brewer(type='div', palette=2)
-#     + scale_fill_manual(
-#         values=[
-#             '#ff1400',  # dark red
-#             '#ffaca5',  # light red
-#             '#b2b3ff',  # light blue
-#             '#595bff',  # dark blue
-#         ]
-#     )
-# )
-# p.draw()
-# p.save('figures/new_old_correct_wrong.pdf')
-
 chart = alt.Chart(df_plot).mark_area().encode(
     x='n_minutes_spent_binned',
     y='sum(value)',
@@ -202,63 +174,30 @@ chart = alt.Chart(df_plot).mark_area().encode(
     columns=2
 )
 save_chart_and_pdf(chart, f'figures/new_old_correct_wrong')
-
 # %%
-# study progress
-n_bins = 10
-n_facts_bin_size = (df['n_facts_shown'].max()) // (n_bins - 1)
-n_facts_bins = [i * n_facts_bin_size for i in range(n_bins)]
-df_users = df.groupby('user_id')['record_id'].count().reset_index(name='count')
-df_users['count_binned'] = df_users['count'].apply(func(n_facts_bins))
-user_binned = df_users[['user_id', 'count_binned']].to_dict()
-user_binned_dict = {
-    v: user_binned['count_binned'][k] for k, v in user_binned['user_id'].items()
-}
-
 x_axis_name = 'n_minutes_spent_binned'
-leitner_boxes = sorted([i for i in df.leitner_box.unique() if i > 1])
-# reverse because lower sequential values usually corresponds to darker colors
-leitner_boxes = [f'n_learned_{i}_csum' for i in leitner_boxes][::-1]
-extended_metrics = (
-    [f'{metric}_mean' for metric in leitner_boxes]
-    + [f'{metric}_min' for metric in leitner_boxes]
-    + [f'{metric}_max' for metric in leitner_boxes]
-)
 
 df_plot = pd.melt(
     df,
-    id_vars=['user_id', 'repetition_model', x_axis_name],
-    value_vars=leitner_boxes,
+    id_vars=[x_axis_name, 'repetition_model', 'user_id'],
+    value_vars=progress_names,
     var_name='name',
     value_name='value',
 )
 
-df_plot = df_plot.groupby(['repetition_model', 'name', x_axis_name]).agg(['mean', 'std']).reset_index()
+df_plot['type'] = df_plot.name.apply(lambda x: 'Correct' if x[-1] == 'O' else 'Wrong')
+df_plot['level'] = df_plot.name.apply(lambda x: x[:-2])
+df_plot = df_plot.groupby([x_axis_name, 'repetition_model', 'name', 'type', 'level', 'user_id']).mean().reset_index()
+df_plot = df_plot.groupby([x_axis_name, 'repetition_model', 'name', 'type', 'level']).agg(['mean', 'std']).reset_index()
 df_plot.columns = [l1 if not l2 else l2 for l1, l2 in df_plot.columns]
 df_plot['min'] = df_plot['mean'] - df_plot['std'] / 2
 df_plot['max'] = df_plot['mean'] + df_plot['std'] / 2
-df_plot.name = df_plot.name.astype(CategoricalDtype(categories=leitner_boxes,ordered=True))
 
-# p = (
-#     ggplot(
-#         df_plot,
-#         aes(x=x_axis_name, y='mean', ymin='min', ymax='max', color='name', fill='name'),
-#     )
-#     + geom_line(alpha=0.75, size=1)
-#     + geom_ribbon(alpha=0.5)
-#     + facet_wrap('repetition_model')
-#     + theme_fs()
-#     + theme(
-#         axis_text_x=element_text(rotation=30),
-#         aspect_ratio=1,
-#     )
-# )
-# p.draw()
-# p.save('figures/repetition_model_study_reports_all.pdf')
 line = alt.Chart().mark_line().encode(
     x=x_axis_name,
     y='mean',
-    color='name',
+    color='level',
+    strokeDash='type',
 )
 band = alt.Chart().mark_area(opacity=0.5, color='gray').encode(
     x=x_axis_name,
@@ -269,6 +208,16 @@ band = alt.Chart().mark_area(opacity=0.5, color='gray').encode(
 chart = alt.layer(band, line, data=df_plot).facet('repetition_model', columns=2)
 save_chart_and_pdf(chart, 'figures/repetition_model_study_reports_all')
 # %%
+n_bins = 10
+n_facts_bin_size = (df['n_facts_shown'].max()) // (n_bins - 1)
+n_facts_bins = [i * n_facts_bin_size for i in range(n_bins)]
+df_users = df.groupby('user_id')['record_id'].count().reset_index(name='count')
+df_users['count_binned'] = df_users['count'].apply(func(n_facts_bins))
+user_binned = df_users[['user_id', 'count_binned']].to_dict()
+user_binned_dict = {
+    v: user_binned['count_binned'][k] for k, v in user_binned['user_id'].items()
+}
+
 df_sub = df.copy()
 df_sub['user_records_binned'] = df_sub['user_id'].apply(lambda x: user_binned_dict[x])
 for user_bin in df_sub['user_records_binned'].unique():
@@ -284,24 +233,6 @@ for user_bin in df_sub['user_records_binned'].unique():
     df_plot['min'] = df_plot['mean'] - df_plot['std'] / 2
     df_plot['max'] = df_plot['mean'] + df_plot['std'] / 2
     df_plot.name = df_plot.name.astype(CategoricalDtype(categories=leitner_boxes,ordered=True))
-    
-    # p = (
-    #     ggplot(
-    #         df_plot,
-    #         aes(x=x_axis_name, y='mean', ymin='min', ymax='max', color='name', fill='name'),
-    #     )
-    #     + geom_line(alpha=0.75, size=1)
-    #     + geom_ribbon(alpha=0.5)
-    #     + facet_wrap('repetition_model')
-    #     + theme_fs()
-    #     + theme(
-    #         axis_text_x=element_text(rotation=30),
-    #         aspect_ratio=1,
-    #     )
-    #     + ggtitle(f'users records bin: {user_bin}')
-    # )
-    # p.draw()
-    # p.save(f'figures/repetition_model_reports/{user_bin}.pdf')
 
     Path('figures/repetition_model_reports').mkdir(parents=True, exist_ok=True)
 
@@ -326,118 +257,28 @@ for user_bin in df_sub['user_records_binned'].unique():
     )
     save_chart_and_pdf(chart, f'figures/repetition_model_reports/{user_bin}')
 # %%
-'''System report'''
-# daily active users 
-df_plot = df.groupby(['user_id', 'repetition_model', 'date_binned']).mean().reset_index()
-df_plot = df_plot.groupby(['repetition_model', 'date_binned'])['user_id'].count().reset_index(name='n_active_users')
-total_daily_count = df_plot.groupby('date_binned').sum().to_dict()['n_active_users']
-df_plot['ratio'] = df_plot.apply(lambda x: x['n_active_users'] / total_daily_count[x['date_binned']], axis=1)
-
-# p = (
-#     ggplot(
-#         df_plot,
-#         aes(x='date_binned', y='n_active_users', color='repetition_model', fill='repetition_model')
-#     )
-#     + geom_line(alpha=0.75, size=1)
-#     + theme_fs()
-#     + theme(
-#         axis_text_x=element_text(rotation=30)
-#     )
+# '''System report'''
+# # daily active users 
+# df_plot = df.groupby(['user_id', 'repetition_model', 'date_binned']).mean().reset_index()
+# df_plot = df_plot.groupby(['repetition_model', 'date_binned'])['user_id'].count().reset_index(name='n_active_users')
+# total_daily_count = df_plot.groupby('date_binned').sum().to_dict()['n_active_users']
+# df_plot['ratio'] = df_plot.apply(lambda x: x['n_active_users'] / total_daily_count[x['date_binned']], axis=1)
+# 
+# chart = alt.Chart(df_plot).mark_line().encode(
+#     x='date_binned',
+#     y='n_active_users',
+#     color='repetition_model',
 # )
-# p.draw()
-# p.save('figures/system_activity.pdf')
-chart = alt.Chart(df_plot).mark_line().encode(
-    x='date_binned',
-    y='n_active_users',
-    color='repetition_model',
-)
-save_chart_and_pdf(chart, 'figures/system_activity')
+# save_chart_and_pdf(chart, 'figures/system_activity')
 # %%
-# scatter plot of number of records vs number of minutes colored by repetition model
-df_left = df.groupby(['user_id', 'repetition_model'])['user_id'].count().reset_index(name='n_records')
-df_right = df.groupby(['user_id', 'repetition_model'])['elapsed_minutes'].sum().reset_index(name='total_minutes')
-df_plot = pd.merge(df_left, df_right, how='left', on=['user_id', 'repetition_model'])
-# p = (
-#     ggplot(
-#         df_plot,
-#         aes(x='n_records', y='total_minutes', color='repetition_model', fill='repetition_model')
-#     )
-#     + geom_point(alpha=0.75, size=3)
-#     + theme_fs()
-#     + scale_fill_brewer(type='qual', palette=0)
-#     + scale_x_log10()
-#     + scale_y_log10()
+# # scatter plot of number of records vs number of minutes colored by repetition model
+# df_left = df.groupby(['user_id', 'repetition_model'])['user_id'].count().reset_index(name='n_records')
+# df_right = df.groupby(['user_id', 'repetition_model'])['elapsed_minutes'].sum().reset_index(name='total_minutes')
+# df_plot = pd.merge(df_left, df_right, how='left', on=['user_id', 'repetition_model'])
+# 
+# alt.Chart(df_plot).mark_point().encode(
+#     alt.X('n_records'),
+#     alt.Y('total_minutes'),
+#     color='repetition_model',
 # )
-# p.draw()
-# p.save('figures/users.pdf')
-alt.Chart(df_plot).mark_point().encode(
-    alt.X('n_records'),
-    alt.Y('total_minutes'),
-    color='repetition_model',
-)
-# %%
-users = session.query(User).all()
-users = sorted(users, key=lambda x: -len(x.records))
-# %%
-for i, user in enumerate(users[:3]):
-    x_axis_name = 'datetime'
-    repetition_model = json.loads(user.records[-1].scheduler_snapshot)['repetition_model']
-    leitner_boxes = sorted([i for i in df.leitner_box.unique() if i > 1])
-    # reverse because lower sequential values usually corresponds to darker colors
-    leitner_boxes = [f'n_learned_{i}_csum' for i in leitner_boxes][::-1]
-    leitner_box_type = CategoricalDtype(categories=leitner_boxes, ordered=True)
-    df_plot = pd.melt(
-        df[df.user_id == user.user_id],
-        id_vars=x_axis_name,
-        value_vars=leitner_boxes,
-        var_name='name',
-        value_name='value',
-    ).reset_index()
-    df_plot.name = df_plot.name.astype(leitner_box_type)
-
-    df_plot['date'] = df_plot['datetime'].apply(lambda x: x.date())
-    df_minutes = df[df.user_id == user.user_id][['datetime', 'elapsed_minutes']]
-    df_plot = pd.merge(df_plot, df_minutes, how='left', on='datetime')
-    # df_1 = df_plot.groupby('date')['index'].count().reset_index(name='count')
-    # df_plot = pd.merge(df_plot, df_1, how='left', on='date')
-    # df_plot['count'] /= 100
-
-    # p = (
-    #     ggplot(df_plot)
-    #     + geom_line(
-    #         aes(x=x_axis_name, y='value', color='name', fill='name'),
-    #         alpha=0.75, size=1.5,
-    #     )
-    #     + geom_bar(aes(x='date', y='elapsed_minutes'), stat='identity', alpha=0.5)
-    #     + theme_fs()
-    #     + theme(
-    #         axis_text_x=element_text(rotation=30)
-    #     )
-    #     + scale_fill_brewer(type='seq', palette=3)
-    #     + ggtitle(f'user_id: {user.user_id} repetition_model: {repetition_model}')
-    # )
-    # p.draw()
-    # p.save(f'figures/user_study_reports/{user.user_id}.pdf')
-    Path('figures/user_study_reports').mkdir(parents=True, exist_ok=True)
-
-    df_plot.date = pd.to_datetime(df_plot.date)
-    df_plot.datetime = pd.to_datetime(df_plot.datetime)
-
-    base = alt.Chart(df_plot).encode(
-        alt.X('date', axis=alt.Axis(title='Date'))
-    )
-    bar = base.mark_bar(opacity=0.4, color='#57A44C').encode(
-        alt.Y(
-            'sum(elapsed_minutes)',
-            axis=alt.Axis(title='Minutes spent', titleColor='#57A44C'),
-        )
-    )
-    line = base.mark_line().encode(
-        alt.Y('value', axis=alt.Axis(title='Familiarity')),
-        color='name',
-    )
-    chart = alt.layer(bar, line).resolve_scale(
-        y='independent',
-    )
-    save_chart_and_pdf(f'figures/user_study_reports/{user.user_id}')
 # %%
