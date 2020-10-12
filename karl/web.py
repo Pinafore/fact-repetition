@@ -1,4 +1,3 @@
-# %%
 #!/usr/bin/env python
 # coding: utf-8
 
@@ -6,6 +5,7 @@ import json
 import atexit
 import socket
 import logging
+from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from typing import Optional, List
 from pydantic import BaseModel
@@ -16,8 +16,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 
-from karl.new_util import ScheduleRequest, Params
+from karl.new_util import ScheduleRequest, Params, User, Fact
 from karl.scheduler import MovingAvgScheduler
+from user_specific_metrics import get_user_charts, save_chart_and_pdf
 
 
 app = FastAPI()
@@ -186,7 +187,9 @@ def set_repetition_model(user_id: str, env: str, repetition_model: str):
 @app.post('/api/karl/get_fact', response_model=dict)
 def get_fact(fact_id: str, env: str):
     env = 'dev' if env == 'dev' else 'prod'
-    fact = scheduler.get_fact(sessions[env], request)
+    fact = sessions[env].query(Fact).get(fact_id)
+    if fact is None:
+        return
     return json.dumps({
         k: v for k, v in fact.__dict__.items() if k != '_sa_instance_state'
     })
@@ -356,9 +359,19 @@ def leaderboard(
     return leaderboard
 
 
-@atexit.register
-def finalize_db():
-    pass
-    # for scheduler in schedulers.values():
-    #     scheduler.db.commit()
-    #     scheduler.db.close()
+@app.get('/api/karl/user_charts')
+def user_charts(user_id: str, env: str = None):
+    env = 'dev' if env == 'dev' else 'prod'
+    user = sessions[env].query(User).get(user_id)
+    if user is None:
+        return
+
+    charts = get_user_charts(user)  # chart_name -> chart
+    figure_paths = {}
+
+    figure_dir = '/fs/www-users/shifeng/karl/user_charts'
+    for chart_name, chart in charts.items():
+        figure_paths[chart_name] = f'{figure_dir}/{user.user_id}_{chart_name}.json'
+        chart.save(figure_paths[chart_name])
+
+    return json.dumps(figure_paths)

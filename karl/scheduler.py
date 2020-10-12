@@ -245,7 +245,7 @@ class MovingAvgScheduler:
         ix = create_in(self.whoosh_index, schema)
         writer = ix.writer()
 
-        for idx, q in tqdm(self.questions_df.iterrows()):
+        for _, q in tqdm(self.questions_df.iterrows()):
             writer.add_document(
                 question_id=q['question_id'],
                 text=q['text'],
@@ -1355,7 +1355,7 @@ class MovingAvgScheduler:
         # NOTE we increment on top `previous_study`, so it should be updated in
         # `update` before `leitner_update` is called.
         # it should correpond to the latest study date.
-        prev_date, prev_response = user.previous_study[fact.fact_id]
+        prev_date, _ = user.previous_study[fact.fact_id]
         if isinstance(prev_date, str):
             prev_date = parse_date(prev_date)
         user.leitner_scheduled_date[fact.fact_id] = str(prev_date + interval)

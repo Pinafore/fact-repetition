@@ -213,7 +213,7 @@ x_axis_name = 'n_minutes_spent_binned'
 
 df_plot = pd.melt(
     df,
-    id_vars=[x_axis_name, 'repetition_model', 'user_id'],
+    id_vars=[x_axis_name, 'datetime', 'repetition_model', 'user_id'],
     value_vars=progress_names,
     var_name='name',
     value_name='value',
@@ -221,6 +221,35 @@ df_plot = pd.melt(
 
 df_plot['type'] = df_plot.name.apply(lambda x: 'Correct' if x[-1] == 'O' else 'Wrong')
 df_plot['level'] = df_plot.name.apply(lambda x: x[:-2])
+
+df_left = df_plot[df_plot.type == 'Correct'].drop(['name'], axis=1)
+df_right = df_plot[df_plot.type == 'Wrong'].drop(['name'], axis=1)
+df_plot = pd.merge(df_left, df_right, how='left', on=[
+    x_axis_name, 'user_id', 'repetition_model', 'datetime', 'level',
+])
+df_plot['ratio'] = df_plot.value_x / (df_plot.value_x + df_plot.value_y)
+df_plot = df_plot.drop(['value_x', 'type_x', 'value_y', 'type_y'], axis=1)
+# %%
+df_plot = df_plot.groupby([x_axis_name, 'repetition_model', 'level', 'user_id']).mean().reset_index()
+df_plot = df_plot.groupby([x_axis_name, 'repetition_model', 'level']).agg(['mean', 'std']).reset_index()
+df_plot.columns = [l1 if not l2 else l2 for l1, l2 in df_plot.columns]
+df_plot['min'] = df_plot['mean'] - df_plot['std'] / 2
+df_plot['max'] = df_plot['mean'] + df_plot['std'] / 2
+df_plot.fillna(0, inplace=True)
+# %%
+line = alt.Chart().mark_line().encode(
+    x=x_axis_name,
+    y='mean',
+    color='level',
+)
+band = alt.Chart().mark_area(opacity=0.5, color='gray').encode(
+    x=x_axis_name,
+    y='min',
+    y2='max',
+    color='level',
+)
+chart = alt.layer(band, line, data=df_plot).facet('repetition_model', columns=2)
+save_chart_and_pdf(chart, 'figures/repetition_model_ratio')
 # %%
 n_bins = 10
 n_facts_bin_size = (df['n_facts_shown'].max()) // (n_bins - 1)

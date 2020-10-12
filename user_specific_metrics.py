@@ -1,4 +1,3 @@
-# %%
 import os
 import json
 import bisect
@@ -16,21 +15,14 @@ alt.data_transformers.disable_max_rows()
 alt.renderers.enable('mimetype')
 
 from karl.new_util import User, Record, parse_date, theme_fs
-from karl.web import get_sessions
 
 def save_chart_and_pdf(chart, path):
     chart.save(f'{path}.json')
     os.system(f'vl2vg {path}.json | vg2pdf > {path}.pdf')
 
-session = get_sessions()['prod']
 
-# for user in tqdm(session.query(User), total=session.query(User).count()):
-user = session.query(User).get('45')
-print(user.user_id)
-if True:
-    # if len(user.records) < 100:
-    #     continue
-
+def get_user_charts(user: User):
+    '''Gather records into a single dataframe'''
     correct_on_first_try = {}
     rows = []
     for record in user.records:
@@ -70,6 +62,9 @@ if True:
         df[f'level_{i}_X'] = df[f'level_{i}_X_'].cumsum()
         progress_names += [f'level_{i}_O', f'level_{i}_X']
 
+    charts = {}  # chart name -> chart
+
+    '''Progress (count on each level) vs datetime + bars for effort'''
     df_plot = pd.melt(
         df,
         id_vars='datetime',
@@ -104,12 +99,11 @@ if True:
     )
     repetition_model = json.loads(user.records[-1].scheduler_snapshot)['repetition_model']
     chart = alt.layer(bar, line).resolve_scale(
-        y='independent',
-    ).properties(
+        y='independent').properties(
         title=f'user: {user.user_id} {repetition_model}'
     )
-    Path('figures/user_progress_effort').mkdir(parents=True, exist_ok=True)
-    save_chart_and_pdf(chart, f'figures/user_progress_effort/{repetition_model}_{user.user_id}')
+
+    charts['user_level_vs_effort'] = chart
 
     df_left = df_plot[df_plot.type == 'Correct'].drop(['name', 'date'], axis=1)
     df_right = df_plot[df_plot.type == 'Wrong'].drop(['name', 'date'], axis=1)
@@ -127,6 +121,7 @@ if True:
     ).properties(
         title=f'user: {user.user_id} {repetition_model}'
     )
-    Path('figures/user_level_ratio').mkdir(parents=True, exist_ok=True)
-    save_chart_and_pdf(chart, f'figures/user_level_ratio/{repetition_model}_{user.user_id}')
-    # %%
+
+    charts['user_level_ratio'] = chart
+
+    return charts
