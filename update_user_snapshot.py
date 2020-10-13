@@ -95,5 +95,5 @@ def update_scheduler_snapshot(session):
 
 
 if __name__ == '__main__':
-    session = get_sessions()['dev']
+    session = get_sessions()['prod']
     update_user_snapshot(session)

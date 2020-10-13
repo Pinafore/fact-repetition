@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from datetime import datetime
 from dateutil.parser import parse as parse_date
 from cachetools import cached, TTLCache
+from collections import Counter
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
@@ -292,6 +293,63 @@ class Leaderboard(BaseModel):
     limit: Optional[int] = None
 
 
+def n_days_studied(
+    user_id: str = None,
+    env: str = None,
+    skip: int = 0,
+    limit: int = 10,
+    rank_type: str = 'total_seen',
+    min_studied: int = 0,
+    deck_id: str = None,
+    date_start: str = None,
+    date_end: str = None,
+):
+    if date_start is None:
+        date_start = '2008-06-11 08:00:00'
+    if date_end is None:
+        date_end = '2038-06-11 08:00:00'
+    date_start = parse_date(date_start)
+    date_end = parse_date(date_end)
+
+    env = 'dev' if env == 'dev' else 'prod'
+    session = sessions[env]
+
+    stats = {}  # user_id -> number of days studied >= min_studied
+    for user in session.query(User):
+        if not user.user_id.isdigit():
+            continue
+
+        dates = [
+            x.date.date()
+            for x in user.records
+            if x.date >= date_start and x.date <= date_end
+        ]
+        counter = Counter(dates)
+        stats[user.user_id] = len([x for x, c in counter.items() if c >= min_studied])
+    
+    # from high value to low
+    stats = sorted(stats.items(), key=lambda x: x[1])[::-1]
+
+    rankings = []
+    user_place = None
+    for i, (k, v) in enumerate(stats):
+        if user_id == k:
+            user_place = i
+        rankings.append(Ranking(user_id=k, rank=i + 1, value=v))
+
+    leaderboard = Leaderboard(
+        leaderboard=rankings[skip: skip + limit],
+        total=len(rankings),
+        rank_type=rank_type,
+        user_place=user_place,
+        user_id=user_id,
+        skip=skip,
+        limit=limit,
+    )
+
+    return leaderboard
+
+
 @app.get('/api/karl/leaderboard', response_model=Leaderboard)
 # @cached(cache=TTLCache(maxsize=1024, ttl=1800))
 def leaderboard(
@@ -309,6 +367,19 @@ def leaderboard(
     return [(user_id: str, rank_type: 'total_seen', value: 'value')]
     that ranks [skip: skip + limit)
     '''
+    if rank_type == 'n_days_studied':
+        return n_days_studied(
+            user_id,
+            env,
+            skip,
+            limit,
+            rank_type,
+            min_studied,
+            deck_id,
+            date_start,
+            date_end,
+        )
+
     env = 'dev' if env == 'dev' else 'prod'
 
     stats = {}
@@ -323,16 +394,6 @@ def leaderboard(
             date_start=date_start,
             date_end=date_end
         )
-
-    # profile_keys = [
-    #     'profile_get_history_records',
-    #     'profile_compute_stats',
-    #     'profile_n_history_records',
-    # ]
-    # profile = {
-    #     key: np.sum([v[key] for v in stats.values()])
-    #     for key in profile_keys
-    # }
 
     # from high value to low
     stats = sorted(stats.items(), key=lambda x: x[1][rank_type])[::-1]
@@ -355,7 +416,6 @@ def leaderboard(
         limit=limit,
     )
 
-    # pprint(profile)
     return leaderboard
 
 
@@ -369,9 +429,10 @@ def user_charts(user_id: str, env: str = None):
     charts = get_user_charts(user)  # chart_name -> chart
     figure_paths = {}
 
-    figure_dir = '/fs/www-users/shifeng/karl/user_charts'
+    figure_dir_local = '/fs/www-users/shifeng/karl/user_charts'
+    figure_dir_remote = 'umiacs.umd.edu/~shifeng/karl/user_charts'
     for chart_name, chart in charts.items():
-        figure_paths[chart_name] = f'{figure_dir}/{user.user_id}_{chart_name}.json'
-        chart.save(figure_paths[chart_name])
+        chart.save(f'{figure_dir_local}/{user.user_id}_{chart_name}.json')
+        figure_paths[chart_name] = f'{figure_dir_remote}/{user.user_id}_{chart_name}.json'
 
-    return json.dumps(figure_paths)
+    return figure_paths

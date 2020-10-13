@@ -9,10 +9,25 @@ import numpy as np
 from pprint import pprint
 from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_date
+from collections import Counter
 
 from karl.db import SchedulerDB
-from karl.util import User, Fact, History, Params, ScheduleRequest
+from karl.new_util import User, Fact, Params, ScheduleRequest
 from karl.scheduler import MovingAvgScheduler
+from karl.web import get_sessions
+
+
+# %%
+user_id = '45'
+env = 'prod'
+skip = 0
+min_studied = 30
+rank_type = 'n_days_studied'
+
+URL = 'http://127.0.0.1:8000/api/karl'
+req = f'{URL}/leaderboard?user_id={user_id}&env={env}&rank_type={rank_type}&min_studied={min_studied}'
+leaderboard = json.loads(requests.get(req).text)
+print(leaderboard)
 
 # %%
 
