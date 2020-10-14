@@ -23,6 +23,8 @@ def save_chart_and_pdf(chart, path):
     chart.save(f'{path}.json')
     os.system(f'vl2vg {path}.json | vg2pdf > {path}.pdf')
 
+output_path = '/fs/clip-quiz/shifeng/ihsgnef.github.io/images'
+
 # %%
 '''Gather records into a DataFrame'''
 session = get_sessions()['prod']
@@ -174,6 +176,7 @@ chart = alt.Chart(df_plot).mark_area().encode(
     columns=2
 )
 save_chart_and_pdf(chart, f'figures/new_old_correct_wrong')
+chart.save(f'{output_path}/new_old_correct_wrong.json')
 # %%
 x_axis_name = 'n_minutes_spent_binned'
 
@@ -325,3 +328,8 @@ for user_bin in df_sub['user_records_binned'].unique():
 #     color='repetition_model',
 # )
 # %%
+alt.chart(df).mark_point().encode(
+    alt.X('date'),
+    alt.Y('sum(n_facts_shown)'),
+    color='repetition_model',
+)

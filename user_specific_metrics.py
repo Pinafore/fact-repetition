@@ -89,8 +89,10 @@ def get_user_charts(user: User):
         alt.X('date', axis=alt.Axis(title='Date'))
     )
     bar = base.mark_bar(opacity=0.4, color='#57A44C').encode(
-        alt.Y('sum(elapsed_minutes)',
-        axis=alt.Axis(title='Minutes spent', titleColor='#57A44C'))
+        alt.Y(
+            'sum(elapsed_minutes)',
+            axis=alt.Axis(title='Minutes spent', titleColor='#57A44C')
+        )
     )
     line = base.mark_line().encode(
         alt.Y('value', axis=alt.Axis(title='Familiarity')),
@@ -124,4 +126,4 @@ def get_user_charts(user: User):
 
     charts['user_level_ratio'] = chart
 
-    return charts
+    return chart
