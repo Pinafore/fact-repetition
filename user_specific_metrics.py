@@ -143,9 +143,10 @@ def get_user_charts(user: User):
         size=alt.condition(selection, alt.value(3), alt.value(1))
     ).add_selection(
         selection
-    ).properties(
-        title=f'user: {user.user_id} {repetition_model}'
     )
+    # .properties(
+    #     title=f'user: {user.user_id} {repetition_model}'
+    # )
 
     charts['user_level_ratio'] = chart
 
