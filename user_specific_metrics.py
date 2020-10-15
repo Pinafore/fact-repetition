@@ -65,65 +65,119 @@ def get_user_charts(user: User):
     charts = {}  # chart name -> chart
 
     '''Progress (count on each level) vs datetime + bars for effort'''
-    df_plot = pd.melt(
+    source = pd.melt(
         df,
         id_vars='datetime',
         value_vars=progress_names,
         var_name='name',
         value_name='value',
     ).reset_index()
-    df_plot['type'] = df_plot.name.apply(lambda x: 'Correct' if x[-1] == 'O' else 'Wrong')
-    df_plot['level'] = df_plot.name.apply(lambda x: x[:-2])
+    source['type'] = source.name.apply(lambda x: 'Successful' if x[-1] == 'O' else 'Failed')
+    source['level'] = source.name.apply(lambda x: x[:-2])
 
     df_right = df[df.user_id == user.user_id][[
         'datetime',
         'elapsed_minutes',
     ]]
-    df_plot = pd.merge(df_plot, df_right, how='left', on='datetime')
+    source = pd.merge(source, df_right, how='left', on='datetime')
 
-    df_plot['date'] = df_plot['datetime'].apply(lambda x: x.date())
-    df_plot.date = pd.to_datetime(df_plot.date)
-    df_plot.datetime = pd.to_datetime(df_plot.datetime)
+    source['date'] = source['datetime'].apply(lambda x: x.date())
+    source.date = pd.to_datetime(source.date)
+    source.datetime = pd.to_datetime(source.datetime)
 
-    base = alt.Chart(df_plot).encode(
+    source = source.replace({
+        'level': {
+            'initial': 'Initial',
+            'level_1': 'Level.0',
+            'level_2': 'Level.1',
+            'level_3': 'Level.2',
+            'level_4': 'Level.3',
+            'level_5': 'Level.4',
+            'level_6': 'Level.5',
+            'level_7': 'Level.6',
+            'level_8': 'Level.7',
+            'level_9': 'Level.8',
+        },
+    })
+
+    selection = alt.selection_multi(fields=['level'], bind='legend')
+    base = alt.Chart(source).encode(
         alt.X('date', axis=alt.Axis(title='Date'))
     )
-    bar = base.mark_bar(opacity=0.4, color='#57A44C').encode(
+    bar = base.mark_bar(opacity=0.3, color='#57A44C').encode(
         alt.Y(
             'sum(elapsed_minutes)',
-            axis=alt.Axis(title='Minutes spent', titleColor='#57A44C')
+            axis=alt.Axis(title='Minutes spent on app', titleColor='#57A44C')
         )
     )
     line = base.mark_line().encode(
-        alt.Y('value', axis=alt.Axis(title='Familiarity')),
-        color='level',
-        strokeDash='type',
+        alt.Y('value', axis=alt.Axis(title='Number of flashcards')),
+        color=alt.Color('level', title='Level'),
+        strokeDash=alt.StrokeDash('type', title='Result'),
+        size=alt.condition(selection, alt.value(3), alt.value(1))
+    ).add_selection(
+        selection
     )
     repetition_model = json.loads(user.records[-1].scheduler_snapshot)['repetition_model']
     chart = alt.layer(bar, line).resolve_scale(
-        y='independent').properties(
-        title=f'user: {user.user_id} {repetition_model}'
-    )
+        y='independent')
+    # .properties(
+    #     title=f'user: {user.user_id} {repetition_model}'
+    # )
 
     charts['user_level_vs_effort'] = chart
 
-    df_left = df_plot[df_plot.type == 'Correct'].drop(['name', 'date'], axis=1)
-    df_right = df_plot[df_plot.type == 'Wrong'].drop(['name', 'date'], axis=1)
-    df1 = pd.merge(df_left, df_right, how='left', on=[
+    df_left = source[source.type == 'Successful'].drop(['name', 'date'], axis=1)
+    df_right = source[source.type == 'Failed'].drop(['name', 'date'], axis=1)
+    source = pd.merge(df_left, df_right, how='left', on=[
         'datetime', 'level', 'elapsed_minutes',
     ]).drop(['index_x', 'index_y'], axis=1)
-    df1['ratio'] = df1.value_x / (df1.value_x + df1.value_y)
-    df1['date'] = df1['datetime'].apply(lambda x: x.date())
-    df1.date = pd.to_datetime(df1.date)
-    df1.datetime = pd.to_datetime(df1.datetime)
-    chart = alt.Chart(df1).mark_line().encode(
+    source['ratio'] = source.value_x / (source.value_x + source.value_y)
+    source['date'] = source['datetime'].apply(lambda x: x.date())
+    source.date = pd.to_datetime(source.date)
+    source.datetime = pd.to_datetime(source.datetime)
+    chart = alt.Chart(source).mark_line().encode(
         x='date',
         y='mean(ratio)',
         color='level',
+        size=alt.condition(selection, alt.value(3), alt.value(1))
+    ).add_selection(
+        selection
     ).properties(
         title=f'user: {user.user_id} {repetition_model}'
     )
 
     charts['user_level_ratio'] = chart
 
-    return chart
+    return charts
+
+
+def get_sessions():
+    import socket
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    hostname = socket.gethostname()
+    if hostname.startswith('newspeak'):
+        db_host = '/fs/clip-quiz/shifeng/postgres/run'
+    elif hostname.startswith('lapine'):
+        db_host = '/fs/clip-scratch/shifeng/postgres/run'
+    else:
+        print('unrecognized hostname')
+        exit()
+    engines = {
+        'prod': create_engine(f'postgresql+psycopg2://shifeng@localhost:5433/karl-prod?host={db_host}'),
+        'dev': create_engine(f'postgresql+psycopg2://shifeng@localhost:5433/karl-dev?host={db_host}'),
+    }
+    return {
+        env: sessionmaker(bind=engine, autoflush=False)()
+        for env, engine in engines.items()
+    }
+
+
+if __name__ == '__main__':
+    session = get_sessions()['prod']
+    user = session.query(User).get('463')
+    charts = get_user_charts(user)
+    output_path = '/fs/clip-quiz/shifeng/ihsgnef.github.io/images'
+    charts['user_level_vs_effort'].save(f'{output_path}/{user.user_id}_user_level_vs_effort.json')
+    charts['user_level_ratio'].save(f'{output_path}/{user.user_id}_user_level_ratio.json')

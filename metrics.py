@@ -157,26 +157,56 @@ metrics = [
     'ratio_old_wrong_vs_all',
     'ratio_old_correct_vs_all',
 ]
-df_plot = df.groupby(['repetition_model', x_axis_name]).mean().reset_index()
-df_plot = pd.melt(
-    df_plot,
+source = df.groupby(['repetition_model', x_axis_name]).mean().reset_index()
+source = pd.melt(
+    source ,
     id_vars=['repetition_model', x_axis_name],
     value_vars=metrics,
     var_name='name',
     value_name='value',
 )
-df_plot.name = df_plot.name.astype(CategoricalDtype(categories=metrics, ordered=True))
+source = source[source.repetition_model != 'karl85']
+source = source.replace({
+    'name': {
+        'ratio_new_correct_vs_all': 'New, Correct',
+        'ratio_old_correct_vs_all': 'Old, Correct',
+        'ratio_new_wrong_vs_all': 'New, Wrong',
+        'ratio_old_wrong_vs_all': 'Old, Wrong',
+    },
+    'repetition_model': {
+        'karl100': 'KARL',
+        'leitner': 'Leitner',
+        'sm2': 'SM-2',
+    }
+})
 
-chart = alt.Chart(df_plot).mark_area().encode(
-    x='n_minutes_spent_binned',
-    y='sum(value)',
-    color='name',
+selection = alt.selection_multi(fields=['name'], bind='legend')
+
+chart = alt.Chart(source).mark_area().encode(
+    alt.X('n_minutes_spent_binned', axis=alt.Axis(title='Minutes spent on app')),
+    alt.Y('sum(value)', axis=alt.Axis(title='Ratio')),
+    color=alt.Color(
+        'name',
+        legend=alt.Legend(title=None, orient='right'),
+        # scale=alt.Scale(scheme='dark2'),
+        scale=alt.Scale(
+            domain=['New, Correct', 'New, Wrong', 'Old, Correct', 'Old, Wrong'],
+            range=['#DB4437', '#ED9D97', '#4285F4', '#A0C3FF'],
+        )
+    ),
+    opacity=alt.condition(selection, alt.value(1), alt.value(0.2))
+).add_selection(
+    selection
+).properties(
+    width=180,
+    height=180
 ).facet(
-    facet='repetition_model:N',
-    columns=2
+    facet=alt.Facet('repetition_model', title=None),
+    # columns=2
 )
-save_chart_and_pdf(chart, f'figures/new_old_correct_wrong')
+# save_chart_and_pdf(chart, f'figures/new_old_correct_wrong')
 chart.save(f'{output_path}/new_old_correct_wrong.json')
+# chart.save('test.json')
 # %%
 x_axis_name = 'n_minutes_spent_binned'
 

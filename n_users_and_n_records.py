@@ -47,8 +47,8 @@ lines = alt.Chart().mark_line().encode(
     y='value:Q',
     color='variable:N'
 ).properties(
-    height=200,
-    width=400,
+    height=180,
+    width=360,
 )
 
 nearest = alt.selection(type='single', nearest=True, on='mouseover',
@@ -83,4 +83,5 @@ chart = alt.layer(lines, selectors, points, text, rules).facet(
 
 output_path = '/fs/clip-quiz/shifeng/ihsgnef.github.io/images'
 chart.save(f'{output_path}/n_users_and_n_records.json')
+# chart.save('test.json')
 # %%
