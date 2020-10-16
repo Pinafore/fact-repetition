@@ -78,6 +78,7 @@ for user in tqdm(session.query(User), total=session.query(User).count()):
         })
 raw_df = pd.DataFrame(rows).sort_values('datetime', axis=0)
 # %%
+'''Computer varoius x-axis and metrics'''
 df = raw_df.copy()
 df['date'] = df['datetime'].apply(lambda x: x.date())
 '''Compute x-axis'''
@@ -149,7 +150,7 @@ for i in df.leitner_box.unique():
         df[f'level_{i}_X'] = df.groupby('user_id')[f'level_{i}_X_'].cumsum()
         progress_names += [f'level_{i}_O', f'level_{i}_X']
 # %%
-# [new, old] x [correct, wrong]
+''' breakdown by [new, old] x [successful, failed] '''
 x_axis_name = 'n_minutes_spent_binned'
 metrics = [
     'ratio_new_correct_vs_all',
@@ -208,6 +209,7 @@ chart = alt.Chart(source).mark_area().encode(
 chart.save(f'{output_path}/new_old_correct_wrong.json')
 # chart.save('test.json')
 # %%
+'''repetition model level vs effort'''
 x_axis_name = 'n_minutes_spent_binned'
 
 source = pd.melt(
@@ -282,6 +284,7 @@ chart = alt.layer(
 chart.save(f'{output_path}/repetition_model_level_vs_effort.json')
 # chart.save('test.json')
 # %%
+'''repetition model level ratio'''
 x_axis_name = 'n_minutes_spent_binned'
 
 source = pd.melt(
@@ -337,7 +340,7 @@ selection = alt.selection_multi(fields=['level'], bind='legend')
 
 line = alt.Chart().mark_line().encode(
     alt.X(x_axis_name, title='Minutes spent on app'),
-    alt.Y('mean', title='Number of flashcards'),
+    alt.Y('mean', title='Recall rate'),
     color=alt.Color('level', title='Level'),
     size=alt.condition(selection, alt.value(3), alt.value(1)),
     opacity=alt.condition(selection, alt.value(0.8), alt.value(0.2))
@@ -362,8 +365,91 @@ chart = alt.layer(
     selection
 )
 # save_chart_and_pdf(chart, 'figures/repetition_model_ratio')
-# chart.save(f'{output_path}/repetition_model_level_ratio.json')
-chart.save('test.json')
+chart.save(f'{output_path}/repetition_model_level_ratio.json')
+# chart.save('test.json')
+# %%
+'''karl100 vs karl85 level ratio'''
+x_axis_name = 'n_minutes_spent_binned'
+
+source = pd.melt(
+    df,
+    id_vars=[x_axis_name, 'datetime', 'repetition_model', 'user_id'],
+    value_vars=progress_names,
+    var_name='name',
+    value_name='value',
+)
+
+source = source[source.repetition_model.isin(['karl100', 'karl85'])]
+
+source['type'] = source.name.apply(lambda x: 'Successful' if x[-1] == 'O' else 'Failed')
+source['level'] = source.name.apply(lambda x: x[:-2])
+
+df_left = source[source.type == 'Successful'].drop(['name'], axis=1)
+df_right = source[source.type == 'Failed'].drop(['name'], axis=1)
+source = pd.merge(df_left, df_right, how='left', on=[
+    x_axis_name, 'user_id', 'repetition_model', 'datetime', 'level',
+])
+source['ratio'] = source.value_x / (source.value_x + source.value_y)
+source = source.drop(['value_x', 'type_x', 'value_y', 'type_y'], axis=1)
+
+source = source.groupby([x_axis_name, 'repetition_model', 'level', 'user_id']).mean().reset_index()
+source = source.groupby([x_axis_name, 'repetition_model', 'level']).agg(['mean', 'std']).reset_index()
+source.columns = [l1 if not l2 else l2 for l1, l2 in source.columns]
+source['min'] = source['mean'] - source['std'] / 2
+source['max'] = source['mean'] + source['std'] / 2
+source.dropna()
+# source.fillna(0, inplace=True)
+
+source = source.replace({
+    'level': {
+        'initial': 'Initial',
+        'level_1': 'Level.0',
+        'level_2': 'Level.1',
+        'level_3': 'Level.2',
+        'level_4': 'Level.3',
+        'level_5': 'Level.4',
+        'level_6': 'Level.5',
+        'level_7': 'Level.6',
+        'level_8': 'Level.7',
+        'level_9': 'Level.8',
+    },
+    'repetition_model': {
+        'karl100': 'KARL Target=100%',
+        'karl85': 'KARL Target=85%',
+    }
+})
+
+selection = alt.selection_multi(fields=['level'], bind='legend')
+
+line = alt.Chart().mark_line().encode(
+    alt.X(x_axis_name, title='Minutes spent on app'),
+    alt.Y('mean', title='Recall rate'),
+    color=alt.Color('level', title='Level'),
+    size=alt.condition(selection, alt.value(3), alt.value(1)),
+    opacity=alt.condition(selection, alt.value(0.8), alt.value(0.2))
+)
+band = alt.Chart().mark_area().encode(
+    x=x_axis_name,
+    y='min',
+    y2='max',
+    color=alt.Color('level', title='Level'),
+    opacity=alt.condition(selection, alt.value(0.5), alt.value(0.2))
+)
+chart = alt.layer(
+    band,
+    line,
+    data=source
+).properties(
+    width=300,
+    height=300
+).facet(
+    facet=alt.Facet('repetition_model', title=None),
+).add_selection(
+    selection
+)
+# save_chart_and_pdf(chart, 'figures/repetition_model_ratio')
+chart.save(f'{output_path}/100vs85_level_ratio.json')
+# chart.save('test.json')
 # %%
 n_bins = 10
 n_facts_bin_size = (df['n_facts_shown'].max()) // (n_bins - 1)

@@ -137,9 +137,9 @@ def get_user_charts(user: User):
     source.date = pd.to_datetime(source.date)
     source.datetime = pd.to_datetime(source.datetime)
     chart = alt.Chart(source).mark_line().encode(
-        x='date',
-        y='mean(ratio)',
-        color='level',
+        alt.X('date', title='Date'),
+        alt.Y('mean(ratio)', title='Recall rate'),
+        color=alt.Color('level', title='Level'),
         size=alt.condition(selection, alt.value(3), alt.value(1))
     ).add_selection(
         selection
