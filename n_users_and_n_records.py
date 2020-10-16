@@ -42,19 +42,31 @@ df.set_index('date', inplace=True)
 # %%
 source = df.reset_index().melt('date')
 
+source = source.replace({
+    'variable': {
+        'n_users': 'Users',
+        'n_records': 'Study records',
+    },
+})
+
 lines = alt.Chart().mark_line().encode(
-    x='date',
-    y='value:Q',
-    color='variable:N'
+    alt.X('date', title='Date'),
+    alt.Y('value:Q', title='Count'),
+    color=alt.Color('variable:N', title=None),
 ).properties(
-    height=180,
-    width=360,
+    height=200,
+    width=200,
 )
 
-nearest = alt.selection(type='single', nearest=True, on='mouseover',
-                        fields=['date'], empty='none')
+nearest = alt.selection(
+    type='single',
+    nearest=True,
+    on='mouseover',
+    fields=['date'],
+    empty='none'
+)
 selectors = alt.Chart().mark_point().encode(
-    x='date',
+    alt.X('date', title='Date'),
     opacity=alt.value(0),
 ).add_selection(
     nearest
@@ -69,19 +81,30 @@ text = lines.mark_text(align='left', dx=5, dy=-5).encode(
 )
 
 rules = alt.Chart().mark_rule(color='gray').encode(
-    x='date',
+    alt.X('date', title='Date'),
 ).transform_filter(
     nearest
 )
 
-chart = alt.layer(lines, selectors, points, text, rules).facet(
-    row='variable:N',
+chart = alt.layer(
+    lines,
+    selectors,
+    points,
+    text,
+    rules,
     data=source,
+).facet(
+    alt.Facet(
+        'variable:N',
+        title=None,
+    )
 ).resolve_scale(
     y='independent'
+).configure_facet(
+    spacing=80
 )
 
 output_path = '/fs/clip-quiz/shifeng/ihsgnef.github.io/images'
 chart.save(f'{output_path}/n_users_and_n_records.json')
-# chart.save('test.json')
+chart.save('test.json')
 # %%
