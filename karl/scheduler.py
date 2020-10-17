@@ -1185,6 +1185,9 @@ class MovingAvgScheduler:
                 'leitner_box': user.leitner_box,
                 'count_correct_before': user.count_correct_before,
                 'count_wrong_before': user.count_wrong_before,
+                'previous_study': user.previous_study,
+                'user_results': user.results,
+                'fact_results': fact.results,
             })
 
         # update user and fact

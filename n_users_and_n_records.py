@@ -102,6 +102,8 @@ chart = alt.layer(
     y='independent'
 ).configure_facet(
     spacing=80
+).configure_legend(
+    labelFontSize=15,
 )
 
 output_path = '/fs/clip-quiz/shifeng/ihsgnef.github.io/images'

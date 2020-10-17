@@ -204,7 +204,10 @@ chart = alt.Chart(source).mark_area().encode(
 ).facet(
     facet=alt.Facet('repetition_model', title=None),
     # columns=2
+).configure_legend(
+    labelFontSize=15,
 )
+
 # save_chart_and_pdf(chart, f'figures/new_old_correct_wrong')
 chart.save(f'{output_path}/new_old_correct_wrong.json')
 # chart.save('test.json')
@@ -279,7 +282,10 @@ chart = alt.layer(
     facet=alt.Facet('repetition_model', title=None),
 ).add_selection(
     selection
+).configure_legend(
+    labelFontSize=15,
 )
+
 # save_chart_and_pdf(chart, 'figures/repetition_model_study_reports_all')
 chart.save(f'{output_path}/repetition_model_level_vs_effort.json')
 # chart.save('test.json')
@@ -363,7 +369,10 @@ chart = alt.layer(
     facet=alt.Facet('repetition_model', title=None),
 ).add_selection(
     selection
+).configure_legend(
+    labelFontSize=15,
 )
+
 # save_chart_and_pdf(chart, 'figures/repetition_model_ratio')
 chart.save(f'{output_path}/repetition_model_level_ratio.json')
 # chart.save('test.json')
@@ -446,11 +455,15 @@ chart = alt.layer(
     facet=alt.Facet('repetition_model', title=None),
 ).add_selection(
     selection
+).configure_legend(
+    labelFontSize=15,
 )
+
 # save_chart_and_pdf(chart, 'figures/repetition_model_ratio')
 chart.save(f'{output_path}/100vs85_level_ratio.json')
 # chart.save('test.json')
 # %%
+"""
 n_bins = 10
 n_facts_bin_size = (df['n_facts_shown'].max()) // (n_bins - 1)
 n_facts_bins = [i * n_facts_bin_size for i in range(n_bins)]
@@ -530,3 +543,4 @@ alt.chart(df).mark_point().encode(
     alt.Y('sum(n_facts_shown)'),
     color='repetition_model',
 )
+"""

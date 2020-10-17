@@ -1,5 +1,6 @@
 import json
 from tqdm import tqdm
+from collections import defaultdict
 from karl.new_util import User, Record
 from karl.web import get_sessions
 
@@ -25,30 +26,52 @@ def leitner_update(leitner_box, fact, response: bool) -> None:
 
 def update_user_snapshot(session):
     '''Fill in missing fields of user snapshots'''
-    n_users = session.query(User).count()
-    for _, user in enumerate(tqdm(session.query(User), total=n_users)):
-        leitner_box = {}  # fact_id -> box (1~10)
-        count_correct_before = {}  # fact_id -> number of times answered correctly before
-        count_wrong_before = {}  # fact_id -> number of times answered incorrectly before
-        for _, record in enumerate(user.records):
-            record.user_snapshot = json.dumps({
-                'leitner_box': leitner_box,
-                'count_correct_before': count_correct_before,
-                'count_wrong_before': count_wrong_before,
-            })
+    leitner_box = {}  # user_id -> fact_id -> box (1~10)
+    count_correct_before = {}  # user_id -> fact_id -> number of times answered correctly before
+    count_wrong_before = {}  # user_id -> fact_id -> number of times answered incorrectly before
+    previous_study = {}  # user_id -> fact_id -> (str(date), response)
+    user_results = {}  # user_id -> list of True/False
+    fact_results = {}  # fact_id -> list of True/False
+    records = session.query(Record).order_by(Record.date)
+    for record in tqdm(records, total=records.count()):
+        if record.user_id not in leitner_box:
+            leitner_box[record.user_id] = {}
+        if record.user_id not in count_correct_before:
+            count_correct_before[record.user_id] = {}
+        if record.user_id not in count_wrong_before:
+            count_wrong_before[record.user_id] = {}
+        if record.user_id not in previous_study:
+            previous_study[record.user_id] = {}
+        if record.user_id not in user_results:
+            user_results[record.user_id] = []
+        if record.fact_id not in fact_results:
+            fact_results[record.fact_id] = []
 
-            leitner_update(leitner_box, record.fact, record.response)
+        record.user_snapshot = json.dumps({
+            'leitner_box': leitner_box[record.user_id],
+            'count_correct_before': count_correct_before[record.user_id],
+            'count_wrong_before': count_wrong_before[record.user_id],
+            'previous_study': previous_study[record.user_id],
+            'user_results': user_results[record.user_id],
+            'fact_results': fact_results[record.fact_id],
+        })
 
-            if record.fact_id not in count_correct_before:
-                count_correct_before[record.fact_id] = 0
-            if record.fact_id not in count_wrong_before:
-                count_wrong_before[record.fact_id] = 0
-            if record.response:
-                count_correct_before[record.fact_id] += 1
-            else:
-                count_wrong_before[record.fact_id] += 1
+        leitner_update(leitner_box[record.user_id], record.fact, record.response)
 
-        session.commit()
+        if record.fact_id not in count_correct_before[record.user_id]:
+            count_correct_before[record.user_id][record.fact_id] = 0
+        if record.fact_id not in count_wrong_before[record.user_id]:
+            count_wrong_before[record.user_id][record.fact_id] = 0
+        if record.response:
+            count_correct_before[record.user_id][record.fact_id] += 1
+        else:
+            count_wrong_before[record.user_id][record.fact_id] += 1
+
+        previous_study[record.user_id][record.fact_id] = (str(record.date), record.response)
+        user_results[record.user_id].append(record.response)
+        fact_results[record.fact_id].append(record.response)
+
+    session.commit()
 
 
 def infer_repetition_model(params) -> str:

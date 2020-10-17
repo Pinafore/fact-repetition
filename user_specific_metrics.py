@@ -119,8 +119,15 @@ def get_user_charts(user: User):
         selection
     )
     repetition_model = json.loads(user.records[-1].scheduler_snapshot)['repetition_model']
-    chart = alt.layer(bar, line).resolve_scale(
-        y='independent')
+    chart = alt.layer(
+        bar,
+        line
+    ).resolve_scale(
+        y='independent'
+    ).configure_legend(
+        labelFontSize=15,
+    )
+
     # .properties(
     #     title=f'user: {user.user_id} {repetition_model}'
     # )
@@ -143,7 +150,10 @@ def get_user_charts(user: User):
         size=alt.condition(selection, alt.value(3), alt.value(1))
     ).add_selection(
         selection
+    ).configure_legend(
+        labelFontSize=15,
     )
+
     # .properties(
     #     title=f'user: {user.user_id} {repetition_model}'
     # )
@@ -182,3 +192,4 @@ if __name__ == '__main__':
     output_path = '/fs/clip-quiz/shifeng/ihsgnef.github.io/images'
     charts['user_level_vs_effort'].save(f'{output_path}/{user.user_id}_user_level_vs_effort.json')
     charts['user_level_ratio'].save(f'{output_path}/{user.user_id}_user_level_ratio.json')
+    charts['user_level_ratio'].save('test.json')

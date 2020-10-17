@@ -146,49 +146,67 @@ class RetentionModel:
         self.model = Net(n_input=n_input).to(self.device)
         self.model.load_state_dict(torch.load('checkpoints/retention_model.pt'))
         self.model.eval()
+    
+    def compute_features(
+        self,
+        user: User,
+        fact: Fact,
+        date: datetime,
+    ):
 
-    def predict(self, user: User, facts: List[Fact], date: datetime = None) -> np.ndarray:
+        uq_correct = user.count_correct_before.get(fact.fact_id, 0)
+        uq_wrong = user.count_wrong_before.get(fact.fact_id, 0)
+        uq_total = uq_correct + uq_wrong
+        if fact.fact_id in user.previous_study:
+            prev_date, prev_response = user.previous_study[fact.fact_id]
+        else:
+            # TODO this really shouldn't be the current date.
+            # the default prev_date should be something much earlier
+            prev_date = date
+        if isinstance(prev_date, str):
+            prev_date = parse_date(prev_date)
+        if fact.results is None:
+            fact.results = []
+        features = [
+            uq_correct,  # user_count_correct
+            uq_wrong,  # user_count_wrong
+            uq_total,  # user_count_total
+            0 if len(user.results) == 0 else np.mean(user.results),  # user_average_overall_accuracy
+            0 if uq_total == 0 else uq_correct / uq_total,  # user_average_question_accuracy
+            0 if len(user.results) == 0 else user.results[-1],  # user_previous_result
+            (date - prev_date).seconds / (60 * 60),  # user_gap_from_previous
+            0 if len(fact.results) == 0 else np.mean(fact.results),  # question_average_overall_accuracy
+            len(fact.results),  # question_count_total
+            sum(fact.results),  # question_count_correct
+            len(fact.results) - sum(fact.results),  # question_count_wrong
+            1  # bias
+        ]
+        feature_names = [
+            'user_count_correct',
+            'user_count_wrong',
+            'user_count_total',
+            'user_average_overall_accuracy',
+            'user_average_question_accuracy',
+            'user_previous_result',
+            'user_gap_from_previous',
+            'question_average_overall_accuracy',
+            'question_count_total',
+            'question_count_correct',
+            'question_count_wrong',
+            'bias',
+        ]
+        feature_dict = {k: v for k, v in zip(feature_names, features)}
+        return features, feature_dict
+
+    def predict(
+        self,
+        user: User,
+        facts: List[Fact],
+        date: datetime = None,
+    ) -> np.ndarray:
         if date is None:
             date = parse_date(datetime.now().strftime('%Y-%m-%dT%H:%M:%S%z'))
-        # user_count_correct
-        # user_count_wrong
-        # user_count_total
-        # user_average_overall_accuracy
-        # user_average_question_accuracy
-        # user_previous_result
-        # user_gap_from_previous
-        # question_average_overall_accuracy
-        # question_count_total
-        # question_count_correct
-        # question_count_wrong
-        # bias
-        xs = []
-        for fact in facts:
-            uq_correct = user.count_correct_before.get(fact.fact_id, 0)
-            uq_wrong = user.count_wrong_before.get(fact.fact_id, 0)
-            uq_total = uq_correct + uq_wrong
-            if fact.fact_id in user.previous_study:
-                prev_date, prev_response = user.previous_study[fact.fact_id]
-            else:
-                prev_date = date
-            if isinstance(prev_date, str):
-                prev_date = parse_date(prev_date)
-            if fact.results is None:
-                fact.results = []
-            xs.append([
-                uq_correct,  # user_count_correct
-                uq_wrong,  # user_count_wrong
-                uq_total,  # user_count_total
-                0 if len(user.results) == 0 else np.mean(user.results),  # user_average_overall_accuracy
-                0 if uq_total == 0 else uq_correct / uq_total,  # user_average_question_accuracy
-                0 if len(user.results) == 0 else user.results[-1],  # user_previous_result
-                (date - prev_date).seconds / (60 * 60),  # user_gap_from_previous
-                0 if len(fact.results) == 0 else np.mean(fact.results),  # question_average_overall_accuracy
-                len(fact.results),  # question_count_total
-                sum(fact.results),  # question_count_correct
-                len(fact.results) - sum(fact.results),  # question_count_wrong
-                1  # bias
-            ])
+        xs = [self.compute_features(user, fact, date)[0] for fact in facts]
         xs = np.array(xs).astype(np.float32)
         xs = (xs - self.dataset.mean) / self.dataset.std
         ys = []
@@ -202,9 +220,14 @@ class RetentionModel:
             ys.append(y)
         return np.concatenate(ys)
 
-    def predict_one(self, user: User, fact: Fact) -> float:
+    def predict_one(
+        self,
+        user: User,
+        fact: Fact,
+        date: datetime
+    ) -> float:
         '''recall probability of a single fact'''
-        return self.predict(user, [fact])[0]  # batch size is 1
+        return self.predict(user, [fact], date)[0]  # batch size is 1
 
 
 def test_wrapper():
