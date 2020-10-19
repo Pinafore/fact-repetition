@@ -24,6 +24,25 @@ from plotnine import theme, theme_light, \
 Base = declarative_base()
 
 
+def get_sessions():
+    hostname = socket.gethostname()
+    if hostname.startswith('newspeak'):
+        db_host = '/fs/clip-quiz/shifeng/postgres/run'
+    elif hostname.startswith('lapine'):
+        db_host = '/fs/clip-scratch/shifeng/postgres/run'
+    else:
+        print('unrecognized hostname')
+        exit()
+    engines = {
+        'prod': create_engine(f'postgresql+psycopg2://shifeng@localhost:5433/karl-prod?host={db_host}'),
+        'dev': create_engine(f'postgresql+psycopg2://shifeng@localhost:5433/karl-dev?host={db_host}'),
+    }
+    return {
+        env: sessionmaker(bind=engine, autoflush=False)()
+        for env, engine in engines.items()
+    }
+
+
 class JSONEncoded(types.TypeDecorator):
 
     impl = types.VARCHAR

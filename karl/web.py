@@ -17,32 +17,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 
-from karl.new_util import ScheduleRequest, Params, User, Fact
+from karl.new_util import ScheduleRequest, Params, User, Fact, get_sessions
 from karl.scheduler import MovingAvgScheduler
 from metrics import get_user_charts
 
 
 app = FastAPI()
 scheduler = MovingAvgScheduler(preemptive=False)
-
-def get_sessions():
-    hostname = socket.gethostname()
-    if hostname.startswith('newspeak'):
-        db_host = '/fs/clip-quiz/shifeng/postgres/run'
-    elif hostname.startswith('lapine'):
-        db_host = '/fs/clip-scratch/shifeng/postgres/run'
-    else:
-        print('unrecognized hostname')
-        exit()
-    engines = {
-        'prod': create_engine(f'postgresql+psycopg2://shifeng@localhost:5433/karl-prod?host={db_host}'),
-        'dev': create_engine(f'postgresql+psycopg2://shifeng@localhost:5433/karl-dev?host={db_host}'),
-    }
-    return {
-        env: sessionmaker(bind=engine, autoflush=False)()
-        for env, engine in engines.items()
-    }
-
 
 sessions = get_sessions()
 
