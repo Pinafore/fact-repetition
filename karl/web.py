@@ -17,14 +17,15 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 
-from karl.new_util import ScheduleRequest, Params, User, Fact, get_sessions
+from karl.new_util import ScheduleRequest, Params, Ranking, Leaderboard
+from karl.new_util import get_sessions
+from karl.models import User, Fact
 from karl.scheduler import MovingAvgScheduler
 from metrics import get_user_charts
 
 
 app = FastAPI()
 scheduler = MovingAvgScheduler(preemptive=False)
-
 sessions = get_sessions()
 
 # create logger with 'scheduler'
@@ -243,35 +244,6 @@ def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
     '''
     env = 'dev' if env == 'dev' else 'prod'
     return scheduler.get_user_stats(sessions[env], user_id, deck_id, date_start, date_end)
-
-class IntOrFloat:
-
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
-
-    @classmethod
-    def validate(cls, v):
-        if isinstance(v, float) or isinstance(v, int):
-            return v
-        raise TypeError('int or float required')
-
-
-class Ranking(BaseModel):
-    user_id: int
-    rank: int
-    # value: Union[int, float]  # don't use this
-    value: IntOrFloat
-
-
-class Leaderboard(BaseModel):
-    leaderboard: List[Ranking]
-    total: int
-    rank_type: str
-    user_place: Optional[int] = None
-    user_id: Optional[str] = None
-    skip: Optional[int] = 0
-    limit: Optional[int] = None
 
 
 def n_days_studied(

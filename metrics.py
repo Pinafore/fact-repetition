@@ -10,14 +10,15 @@ from pathlib import Path
 from pandas.api.types import CategoricalDtype
 from collections import defaultdict
 from datetime import datetime, timedelta
+from dateutil.parser import parse as parse_date
 from typing import Dict
 import altair as alt
 from altair.expr import datum
 alt.data_transformers.disable_max_rows()
 alt.renderers.enable('mimetype')
 
-from karl.new_util import User, Record, parse_date, theme_fs
-from karl.web import get_sessions
+from karl.new_util import get_sessions
+from karl.models import User, Record
 
 
 def save_chart_and_pdf(chart, path):
@@ -600,7 +601,7 @@ def get_user_charts(user: User):
     ).add_selection(
         selection
     )
-    repetition_model = json.loads(user.records[-1].scheduler_snapshot)['repetition_model']
+    # repetition_model = json.loads(user.records[-1].scheduler_snapshot)['repetition_model']
     chart = alt.layer(
         bar,
         line

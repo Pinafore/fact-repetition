@@ -17,14 +17,12 @@ from tqdm import tqdm
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import List, Dict
+from dateutil.parser import parse as parse_date
 # from whoosh.qparser import QueryParser
 
-from plotnine import ggplot, aes, geom_bar, coord_flip
-from pandas.api.types import CategoricalDtype
-
 from karl.lda import process_question
-from karl.new_util import ScheduleRequest, Params, User, Fact, Record, UserStat
-from karl.new_util import parse_date, theme_fs
+from karl.new_util import ScheduleRequest, Params
+from karl.models import User, Fact, Record, UserStat
 from karl.retention.baseline import RetentionModel
 # from karl.new_retention import HFRetentionModel as RetentionModel
 
@@ -1424,16 +1422,17 @@ class MovingAvgScheduler:
         })
         df['topics'] = df['topics'].astype(str).astype(topic_type)
 
-        p = (
-            ggplot(df)
-            + geom_bar(
-                aes(x='topics', y='weight', fill='label'),
-                stat='identity',
-                position='identity',
-                alpha=0.3,
-            )
-            + coord_flip()
-            + theme_fs()
-            # + theme(axis_text_x=(element_text(rotation=90)))
-        )
-        p.save(filename, verbose=False)
+        # TODO use altair
+        # p = (
+        #     ggplot(df)
+        #     + geom_bar(
+        #         aes(x='topics', y='weight', fill='label'),
+        #         stat='identity',
+        #         position='identity',
+        #         alpha=0.3,
+        #     )
+        #     + coord_flip()
+        #     # + theme_fs()
+        #     # + theme(axis_text_x=(element_text(rotation=90)))
+        # )
+        # p.save(filename, verbose=False)

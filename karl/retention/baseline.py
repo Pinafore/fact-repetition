@@ -5,6 +5,7 @@ import argparse
 import numpy as np
 from typing import List
 from datetime import datetime
+from dateutil.parser import parse as parse_date
 
 import torch
 import torch.nn as nn
@@ -12,7 +13,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim.lr_scheduler import StepLR
 
-from karl.new_util import User, Fact, parse_date
+from karl.models import User, Fact
 from karl.retention.data import RetentionDataset, apply_parallel, get_split_dfs
 
 
