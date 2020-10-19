@@ -365,13 +365,15 @@ class MovingAvgScheduler:
         session.commit()
         return new_user
 
-    def get_records(self, session, user_id: str, deck_id: str = None,
-                    date_start: str = None, date_end: str = None):
-        if date_start is None:
-            date_start = '2008-06-11 08:00:00'
-        if date_end is None:
-            date_end = '2038-06-11 08:00:00'
-
+    def get_records(
+        self,
+        session,
+        user_id: str,
+        deck_id: str = None,
+        date_start: str = '2008-06-01 08:00:00.000001 -0400',
+        date_end: str = '2038-06-01 08:00:00.000001 -0400',
+    ):
+        '''Get records in interval [date_start, date_end]'''
         date_start = parse_date(date_start)
         date_end = parse_date(date_end)
         records = session.query(Record).filter(Record.user_id == user_id).\
@@ -380,29 +382,40 @@ class MovingAvgScheduler:
             records = records.filter(Record.deck_id == deck_id)
         return records.all()
 
-    def get_user_stats(self, session, user_id: str, deck_id: str = None,
-                       date_start: str = None, date_end: str = None):
-        if date_start is None:
-            date_start = '2008-06-11 08:00:00'
-        if date_end is None:
-            date_end = '2038-06-11 08:00:00'
-
+    def get_user_stats(
+        self,
+        session,
+        user_id: str,
+        deck_id: str = None,
+        date_start: str = '2008-06-01 08:00:00.000001 -0400',
+        date_end: str = '2038-06-01 08:00:00.000001 -0400',
+    ):
+        '''
+        To compute user statistics (e.g. number of facts shown) in the
+        interval of [`date_start`, `date_end`). Instead of the brute-force
+        method of enumerating records in this interval, we find the two user
+        stats at the interval boundaries: the latest user stat before the
+        start date, the latest user stat no later than the end date, and
+        subtract the two.
+        '''
         date_start = parse_date(date_start).date()
         date_end = parse_date(date_end).date() + timedelta(days=1)  # TODO temporary fix, wait for Matthew
 
         if deck_id is None:
             deck_id = 'all'
 
-        # last record no later than start date
+        # last record earlier than start date
         before_stat = session.query(UserStat).\
             filter(UserStat.user_id == user_id).\
             filter(UserStat.deck_id == deck_id).\
-            filter(UserStat.date < date_start).order_by(UserStat.date.desc()).first()
+            filter(UserStat.date < date_start).\
+            order_by(UserStat.date.desc()).first()
         # last record no later than end date
         after_stat = session.query(UserStat).\
             filter(UserStat.user_id == user_id).\
             filter(UserStat.deck_id == deck_id).\
-            filter(UserStat.date <= date_end).order_by(UserStat.date.desc()).first()
+            filter(UserStat.date <= date_end).\
+            order_by(UserStat.date.desc()).first()
         
         if after_stat is None or after_stat.date < date_start:
             return {

@@ -19,9 +19,13 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from karl.util import ScheduleRequest, Params, Ranking, Leaderboard
 from karl.util import get_sessions
-from karl.models import User, Fact
+from karl.models import User, Fact, Record, UserStat
 from karl.scheduler import MovingAvgScheduler
 from karl.metrics import get_user_charts
+
+
+default_start_date = '2008-06-01 08:00:00.000001 -0400'
+default_end_date = '2038-06-01 08:00:00.000001 -0400'
 
 
 app = FastAPI()
@@ -221,16 +225,32 @@ def get_user(user_id: str, env: str = None):
 
 
 # @app.get('/api/karl/get_user_history', response_model=List[dict])
-def get_user_history(user_id: str, env: str = None, deck_id: str = None,
-                     date_start: str = None, date_end: str = None):
+def get_user_history(
+    user_id: str,
+    env: str = None,
+    deck_id: str = None,
+    date_start: str = '2008-06-01 08:00:00.000001 -0400',
+    date_end: str = '2038-06-01 08:00:00.000001 -0400',
+):
     env = 'dev' if env == 'dev' else 'prod'
-    return scheduler.get_records(sessions[env], user_id, deck_id, date_start, date_end)
+    return scheduler.get_records(
+        sessions[env],
+        user_id,
+        deck_id,
+        date_start,
+        date_end
+    )
 
 
 @app.get('/api/karl/get_user_stats', response_model=dict)
 # @cached(cache=TTLCache(maxsize=1024, ttl=600))
-def get_user_stats(user_id: str, env: str = None, deck_id: str = None,
-                   date_start: str = None, date_end: str = None):
+def get_user_stats(
+    user_id: str,
+    env: str = None,
+    deck_id: str = None,
+    date_start: str = '2008-06-01 08:00:00.000001 -0400',
+    date_end: str = '2038-06-01 08:00:00.000001 -0400',
+):
     '''
     Return in a dictionary the following user stats within given date range.
 
@@ -254,38 +274,55 @@ def n_days_studied(
     rank_type: str = 'total_seen',
     min_studied: int = 0,
     deck_id: str = None,
-    date_start: str = None,
-    date_end: str = None,
+    date_start: str = '2008-06-01 08:00:00.000001 -0400',
+    date_end: str = '2038-06-01 08:00:00.000001 -0400',
 ):
-    if date_start is None:
-        date_start = '2008-06-11 08:00:00'
-    if date_end is None:
-        date_end = '2038-06-11 08:00:00'
-    date_start = parse_date(date_start)
-    date_end = parse_date(date_end)
-
     env = 'dev' if env == 'dev' else 'prod'
     session = sessions[env]
 
-    stats = {}  # user_id -> number of days studied >= min_studied
+    date_start = parse_date(date_start)
+    date_end = parse_date(date_end)
+
+    deck_id = 'all' if deck_id is None else deck_id
+
+    n_days = {}  # user_id -> (number of days studied #cards >= min_studied)
     for user in session.query(User):
         if not user.user_id.isdigit():
             continue
 
-        dates = [
-            x.date.date()
-            for x in user.records
-            if x.date >= date_start and x.date <= date_end
-        ]
-        counter = Counter(dates)
-        stats[user.user_id] = len([x for x, c in counter.items() if c >= min_studied])
-    
+        # find all UserStats from the interval [date_start, date_end),
+        # there should be one on each day the user studied > 0 cards.
+        # enumerate through those UserStats, and subtract the `total_seen` from
+        # the previous one to check if the user studied >= min_studied cards.
+
+        # the last user stat before the interval
+        before_stat = session.query(UserStat).\
+            filter(UserStat.user_id == user_id).\
+            filter(UserStat.deck_id == deck_id).\
+            filter(UserStat.date < date_start).\
+            order_by(UserStat.date.desc()).first()
+
+        prev_total_seen = 0 if before_stat is None else before_stat.total_seen
+        n_days[user.user_id] = 0
+
+        # all user stats within the interval
+        for user_stat in session.query(UserStat).\
+            filter(UserStat.user_id == user.user_id).\
+            filter(UserStat.deck_id == deck_id).\
+            filter(UserStat.date >= date_start, UserStat.date < date_end).\
+            order_by(UserStat.date):
+            if user_stat.total_seen - prev_total_seen >= min_studied:
+                n_days[user.user_id] += 1
+            prev_total_seen = user_stat.total_seen
+            
     # from high value to low
-    stats = sorted(stats.items(), key=lambda x: x[1])[::-1]
+    n_days = sorted(n_days.items(), key=lambda x: x[1])[::-1]
+    # remove users with 0 days studied
+    n_days = [(k, v) for k, v in n_days if v > 0]
 
     rankings = []
     user_place = None
-    for i, (k, v) in enumerate(stats):
+    for i, (k, v) in enumerate(n_days):
         if user_id == k:
             user_place = i
         rankings.append(Ranking(user_id=k, rank=i + 1, value=v))
@@ -306,15 +343,15 @@ def n_days_studied(
 @app.get('/api/karl/leaderboard', response_model=Leaderboard)
 # @cached(cache=TTLCache(maxsize=1024, ttl=1800))
 def leaderboard(
-        user_id: str = None,
-        env: str = None,
-        skip: int = 0,
-        limit: int = 10,
-        rank_type: str = 'total_seen',
-        min_studied: int = 0,
-        deck_id: str = None,
-        date_start: str = None,
-        date_end: str = None,
+    user_id: str = None,
+    env: str = None,
+    skip: int = 0,
+    limit: int = 10,
+    rank_type: str = 'total_seen',
+    min_studied: int = 0,
+    deck_id: str = None,
+    date_start: str = '2008-06-01 08:00:00.000001 -0400',
+    date_end: str = '2038-06-01 08:00:00.000001 -0400',
 ):
     '''
     return [(user_id: str, rank_type: 'total_seen', value: 'value')]
