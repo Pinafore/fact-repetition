@@ -19,7 +19,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from karl.new_util import ScheduleRequest, Params, User, Fact
 from karl.scheduler import MovingAvgScheduler
-from user_specific_metrics import get_user_charts, save_chart_and_pdf
+from metrics import get_user_charts
 
 
 app = FastAPI()
