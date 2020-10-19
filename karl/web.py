@@ -17,11 +17,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 
-from karl.new_util import ScheduleRequest, Params, Ranking, Leaderboard
-from karl.new_util import get_sessions
+from karl.util import ScheduleRequest, Params, Ranking, Leaderboard
+from karl.util import get_sessions
 from karl.models import User, Fact
 from karl.scheduler import MovingAvgScheduler
-from metrics import get_user_charts
+from karl.metrics import get_user_charts
 
 
 app = FastAPI()

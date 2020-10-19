@@ -17,7 +17,7 @@ from altair.expr import datum
 alt.data_transformers.disable_max_rows()
 alt.renderers.enable('mimetype')
 
-from karl.new_util import get_sessions
+from karl.util import get_sessions
 from karl.models import User, Record
 
 

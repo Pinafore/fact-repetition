@@ -21,7 +21,7 @@ from dateutil.parser import parse as parse_date
 # from whoosh.qparser import QueryParser
 
 from karl.lda import process_question
-from karl.new_util import ScheduleRequest, Params
+from karl.util import ScheduleRequest, Params
 from karl.models import User, Fact, Record, UserStat
 from karl.retention.baseline import RetentionModel
 # from karl.new_retention import HFRetentionModel as RetentionModel
