@@ -9,7 +9,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from typing import Optional, List
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_date
 from cachetools import cached, TTLCache
 from collections import Counter
@@ -262,6 +262,9 @@ def get_user_stats(
     new_known_rate: float
     review_known_rate: float
     '''
+    print('-----------------')
+    print(date_start, date_end)
+    print('-----------------')
     env = 'dev' if env == 'dev' else 'prod'
     return scheduler.get_user_stats(sessions[env], user_id, deck_id, date_start, date_end)
 
@@ -280,8 +283,8 @@ def n_days_studied(
     env = 'dev' if env == 'dev' else 'prod'
     session = sessions[env]
 
-    date_start = parse_date(date_start)
-    date_end = parse_date(date_end)
+    date_start = parse_date(date_start).date()
+    date_end = parse_date(date_end).date() + timedelta(days=1)  # TODO temporary fix
 
     deck_id = 'all' if deck_id is None else deck_id
 
@@ -305,7 +308,7 @@ def n_days_studied(
         prev_total_seen = 0 if before_stat is None else before_stat.total_seen
         n_days[user.user_id] = 0
 
-        # all user stats within the interval
+        # go through user stats within the interval
         for user_stat in session.query(UserStat).\
             filter(UserStat.user_id == user.user_id).\
             filter(UserStat.deck_id == deck_id).\

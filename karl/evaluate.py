@@ -52,6 +52,6 @@ for user in tqdm(users, total=users.count()):
         rows.append(row)
     # %%
 df = pd.DataFrame(rows)
-# %%
 df['prediction_binary'] = df.prediction.apply(lambda x: x > 0.5)
+df['accuracy'] = (df.prediction_binary == df.result)
 # %%

@@ -373,7 +373,7 @@ class MovingAvgScheduler:
         date_start: str = '2008-06-01 08:00:00.000001 -0400',
         date_end: str = '2038-06-01 08:00:00.000001 -0400',
     ):
-        '''Get records in interval [date_start, date_end]'''
+        '''Get records in interval [`date_start`, `date_end`]'''
         date_start = parse_date(date_start)
         date_end = parse_date(date_end)
         records = session.query(Record).filter(Record.user_id == user_id).\
@@ -392,7 +392,7 @@ class MovingAvgScheduler:
     ):
         '''
         To compute user statistics (e.g. number of facts shown) in the
-        interval of [`date_start`, `date_end`). Instead of the brute-force
+        interval of [`date_start`, `date_end`]. Instead of the brute-force
         method of enumerating records in this interval, we find the two user
         stats at the interval boundaries: the latest user stat before the
         start date, the latest user stat no later than the end date, and
@@ -404,12 +404,13 @@ class MovingAvgScheduler:
         if deck_id is None:
             deck_id = 'all'
 
-        # last record earlier than start date
+        # last record before start date
         before_stat = session.query(UserStat).\
             filter(UserStat.user_id == user_id).\
             filter(UserStat.deck_id == deck_id).\
             filter(UserStat.date < date_start).\
             order_by(UserStat.date.desc()).first()
+
         # last record no later than end date
         after_stat = session.query(UserStat).\
             filter(UserStat.user_id == user_id).\
@@ -436,16 +437,16 @@ class MovingAvgScheduler:
                 'known_rate': 0,
                 'new_known_rate': 0,
                 'review_known_rate': 0,
+                'n_days_studied': 0,
             }
 
         if before_stat is None:
-            user_stat_id = json.dumps({
-                'user_id': user_id,
-                'date': str(date_start),
-                'deck_id': deck_id,
-            })
             before_stat = UserStat(
-                user_stat_id=user_stat_id,
+                user_stat_id=json.dumps({
+                    'user_id': user_id,
+                    'date': str(date_start),
+                    'deck_id': deck_id,
+                }),
                 user_id=user_id,
                 deck_id=deck_id,
                 date=date_start,
@@ -463,21 +464,35 @@ class MovingAvgScheduler:
                 elapsed_seconds_answer=0,
                 elapsed_minutes_text=0,
                 elapsed_minutes_answer=0,
+                n_days_studied=0,
             )
 
-        total_correct = (after_stat.new_correct + after_stat.reviewed_correct) - (before_stat.new_correct + before_stat.reviewed_correct)
+        total_correct = (
+            after_stat.new_correct
+            + after_stat.reviewed_correct
+            - before_stat.new_correct
+            - before_stat.reviewed_correct
+        )
 
         known_rate = 0
         if after_stat.total_seen > before_stat.total_seen:
-            known_rate = total_correct / (after_stat.total_seen - before_stat.total_seen)
+            known_rate = (
+                total_correct / (after_stat.total_seen - before_stat.total_seen)
+            )
 
         new_known_rate = 0
         if after_stat.new_facts > before_stat.new_facts:
-            new_known_rate = (after_stat.new_correct - before_stat.new_correct) / (after_stat.new_facts - before_stat.new_facts)
+            new_known_rate = (
+                (after_stat.new_correct - before_stat.new_correct)
+                / (after_stat.new_facts - before_stat.new_facts)
+            )
 
         review_known_rate = 0
         if after_stat.reviewed_facts > before_stat.reviewed_facts:
-            review_known_rate = (after_stat.reviewed_correct - before_stat.reviewed_correct) / (after_stat.reviewed_facts - before_stat.reviewed_facts)
+            review_known_rate = (
+                (after_stat.reviewed_correct - before_stat.reviewed_correct)
+                / (after_stat.reviewed_facts - before_stat.reviewed_facts)
+            )
 
         return {
             'new_facts': after_stat.new_facts - before_stat.new_facts,
@@ -497,6 +512,7 @@ class MovingAvgScheduler:
             'known_rate': round(known_rate * 100, 2),
             'new_known_rate': round(new_known_rate * 100, 2),
             'review_known_rate': round(review_known_rate * 100, 2),
+            'n_days_studied': after_stat.n_days_studied - before_stat.n_days_studied,
         }
 
     # def retrieve(self, fact: dict) -> Tuple[List[dict], List[float]]:
@@ -1253,6 +1269,7 @@ class MovingAvgScheduler:
         session.commit()
 
     def update_user_stats(self, session, user: User, record: Record, deck_id: str):
+        # get the latest user_stat ordered by date
         curr_stat = session.query(UserStat).\
             filter(UserStat.user_id == user.user_id).\
             filter(UserStat.deck_id == deck_id).\

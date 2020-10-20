@@ -131,6 +131,7 @@ class UserStat(Base):
     elapsed_seconds_answer = Column(Integer, default=0)
     elapsed_minutes_text = Column(Integer, default=0)
     elapsed_minutes_answer = Column(Integer, default=0)
+    n_days_studied = Column(Integer, default=0)
     # known_rate = Column(Float)
     # new_known_rate = Column(Float)
     # review_known_rate = Column(Float)
