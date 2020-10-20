@@ -21,7 +21,7 @@ from dateutil.parser import parse as parse_date
 # from whoosh.qparser import QueryParser
 
 from karl.lda import process_question
-from karl.util import ScheduleRequest, Params
+from karl.util import ScheduleRequest, Params, UserStatSchema
 from karl.models import User, Fact, Record, UserStat
 from karl.retention.baseline import RetentionModel
 # from karl.new_retention import HFRetentionModel as RetentionModel
@@ -419,26 +419,13 @@ class MovingAvgScheduler:
             order_by(UserStat.date.desc()).first()
         
         if after_stat is None or after_stat.date < date_start:
-            return {
-                'new_facts': 0,
-                'reviewed_facts': 0,
-                'new_correct': 0,
-                'reviewed_correct': 0,
-                'total_seen': 0,
-                'total_milliseconds': 0,
-                'total_seconds': 0,
-                'total_minutes': 0,
-                'elapsed_milliseconds_text': 0,
-                'elapsed_milliseconds_answer': 0,
-                'elapsed_seconds_text': 0,
-                'elapsed_seconds_answer': 0,
-                'elapsed_minutes_text': 0,
-                'elapsed_minutes_answer': 0,
-                'known_rate': 0,
-                'new_known_rate': 0,
-                'review_known_rate': 0,
-                'n_days_studied': 0,
-            }
+            return UserStatSchema(
+                user_id=user_id,
+                deck_id=deck_id,
+                date_start=str(date_start),
+                date_end=str(date_end),
+                # zero for all other fields
+            )
 
         if before_stat is None:
             before_stat = UserStat(
@@ -494,26 +481,30 @@ class MovingAvgScheduler:
                 / (after_stat.reviewed_facts - before_stat.reviewed_facts)
             )
 
-        return {
-            'new_facts': after_stat.new_facts - before_stat.new_facts,
-            'reviewed_facts': after_stat.reviewed_facts - before_stat.reviewed_facts,
-            'new_correct': after_stat.new_correct - before_stat.new_correct,
-            'reviewed_correct': after_stat.reviewed_correct - before_stat.reviewed_correct,
-            'total_seen': after_stat.total_seen - before_stat.total_seen,
-            'total_milliseconds': after_stat.total_milliseconds - before_stat.total_milliseconds,
-            'total_seconds': after_stat.total_seconds - before_stat.total_seconds,
-            'total_minutes': after_stat.total_minutes - before_stat.total_minutes,
-            'elapsed_milliseconds_text': after_stat.elapsed_milliseconds_text - before_stat.elapsed_milliseconds_text,
-            'elapsed_milliseconds_answer': after_stat.elapsed_milliseconds_answer - before_stat.elapsed_milliseconds_answer,
-            'elapsed_seconds_text': after_stat.elapsed_seconds_text - before_stat.elapsed_seconds_text,
-            'elapsed_seconds_answer': after_stat.elapsed_seconds_answer - before_stat.elapsed_seconds_answer,
-            'elapsed_minutes_text': after_stat.elapsed_minutes_text - before_stat.elapsed_minutes_text,
-            'elapsed_minutes_answer': after_stat.elapsed_minutes_answer - before_stat.elapsed_minutes_answer,
-            'known_rate': round(known_rate * 100, 2),
-            'new_known_rate': round(new_known_rate * 100, 2),
-            'review_known_rate': round(review_known_rate * 100, 2),
-            'n_days_studied': after_stat.n_days_studied - before_stat.n_days_studied,
-        }
+        return UserStatSchema(
+            user_id=user_id,
+            deck_id=deck_id,
+            date_start=str(date_start),
+            date_end=str(date_end),
+            new_facts=after_stat.new_facts - before_stat.new_facts,
+            reviewed_facts=after_stat.reviewed_facts - before_stat.reviewed_facts,
+            new_correct=after_stat.new_correct - before_stat.new_correct,
+            reviewed_correct=after_stat.reviewed_correct - before_stat.reviewed_correct,
+            total_seen=after_stat.total_seen - before_stat.total_seen,
+            total_milliseconds=after_stat.total_milliseconds - before_stat.total_milliseconds,
+            total_seconds=after_stat.total_seconds - before_stat.total_seconds,
+            total_minutes=after_stat.total_minutes - before_stat.total_minutes,
+            elapsed_milliseconds_text=after_stat.elapsed_milliseconds_text - before_stat.elapsed_milliseconds_text,
+            elapsed_milliseconds_answer=after_stat.elapsed_milliseconds_answer - before_stat.elapsed_milliseconds_answer,
+            elapsed_seconds_text=after_stat.elapsed_seconds_text - before_stat.elapsed_seconds_text,
+            elapsed_seconds_answer=after_stat.elapsed_seconds_answer - before_stat.elapsed_seconds_answer,
+            elapsed_minutes_text=after_stat.elapsed_minutes_text - before_stat.elapsed_minutes_text,
+            elapsed_minutes_answer=after_stat.elapsed_minutes_answer - before_stat.elapsed_minutes_answer,
+            known_rate=round(known_rate * 100, 2),
+            new_known_rate=round(new_known_rate * 100, 2),
+            review_known_rate=round(review_known_rate * 100, 2),
+            n_days_studied=after_stat.n_days_studied - before_stat.n_days_studied,
+        )
 
     # def retrieve(self, fact: dict) -> Tuple[List[dict], List[float]]:
     #     record_id = self.karl_to_question_id[int(fact['question_id'])]

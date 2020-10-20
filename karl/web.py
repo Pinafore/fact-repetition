@@ -17,7 +17,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 
-from karl.util import ScheduleRequest, Params, Ranking, Leaderboard
+from karl.util import ScheduleRequest, Params, \
+    Ranking, Leaderboard, UserStatSchema
 from karl.util import get_sessions
 from karl.models import User, Fact, Record, UserStat
 from karl.scheduler import MovingAvgScheduler
@@ -250,7 +251,7 @@ def get_user_stats(
     deck_id: str = None,
     date_start: str = '2008-06-01 08:00:00.000001 -0400',
     date_end: str = '2038-06-01 08:00:00.000001 -0400',
-):
+) -> UserStatSchema:
     '''
     Return in a dictionary the following user stats within given date range.
 
@@ -262,9 +263,6 @@ def get_user_stats(
     new_known_rate: float
     review_known_rate: float
     '''
-    print('-----------------')
-    print(date_start, date_end)
-    print('-----------------')
     env = 'dev' if env == 'dev' else 'prod'
     return scheduler.get_user_stats(sessions[env], user_id, deck_id, date_start, date_end)
 
@@ -355,7 +353,7 @@ def leaderboard(
     deck_id: str = None,
     date_start: str = '2008-06-01 08:00:00.000001 -0400',
     date_end: str = '2038-06-01 08:00:00.000001 -0400',
-):
+) -> Leaderboard:
     '''
     return [(user_id: str, rank_type: 'total_seen', value: 'value')]
     that ranks [skip: skip + limit)
@@ -389,15 +387,19 @@ def leaderboard(
         )
 
     # from high value to low
-    stats = sorted(stats.items(), key=lambda x: x[1][rank_type])[::-1]
-    stats = [(k, v) for k, v in stats if v['total_seen'] >= min_studied]
+    stats = sorted(stats.items(), key=lambda x: x[1].__dict__[rank_type])[::-1]
+    stats = [(k, v) for k, v in stats if v.total_seen >= min_studied]
 
     rankings = []
     user_place = None
     for i, (k, v) in enumerate(stats):
         if user_id == k:
             user_place = i
-        rankings.append(Ranking(user_id=k, rank=i + 1, value=v[rank_type]))
+        rankings.append(Ranking(
+            user_id=k,
+            rank=i + 1,
+            value=v.__dict__[rank_type]
+        ))
 
     leaderboard = Leaderboard(
         leaderboard=rankings[skip: skip + limit],
