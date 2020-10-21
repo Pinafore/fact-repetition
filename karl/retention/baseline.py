@@ -4,7 +4,7 @@
 import argparse
 import numpy as np
 from typing import List
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_date
 
 import torch
@@ -33,6 +33,26 @@ class Net(nn.Module):
         # x = self.fc2(x)
         # return x
         return self.fc1(x)
+
+
+class TemperatureScaledNet(nn.Module):
+    
+    def __init__(self, n_input):
+        super(TemperatureScaledNet, self).__init__()
+        self.net = Net(n_input)
+        self.temperature = nn.Parameter(torch.ones(1) * 1.5)
+    
+    def forward(self, x):
+        logits = self.net(x)
+        return self.temperature_scale(logits)
+
+    def temperature_scale(self, logits):
+        """
+        Perform temperature scaling on logits
+        """
+        # Expand temperature to match the size of logits
+        temperature = self.temperature.unsqueeze(1).expand(logits.size(0), logits.size(1))
+        return logits / temperature
 
 
 def train(args, model, device, train_loader, optimizer, epoch):
@@ -76,6 +96,46 @@ def test(args, model, device, test_loader):
     return test_loss, predictions
 
 
+def set_temperature(args, model, device, test_loader):
+    """
+    Tune the tempearature of the model (using the validation set).
+    We're going to set it to optimize NLL.
+    valid_loader (DataLoader): validation set loader
+    """
+    model.train()
+    loss_func = nn.CrossEntropyLoss(reduction='sum')
+
+    # First: collect all the logits and labels for the validation set
+    # do not pass through temperature_scale here
+    logits_list = []
+    labels_list = []
+    with torch.no_grad():
+        for input, label in test_loader:
+            input, label = input.to(device), label.to(device)
+            logits = model.net(input)
+            logits_list.append(logits)
+            labels_list.append(label)
+        logits = torch.cat(logits_list).cuda()
+        labels = torch.cat(labels_list).cuda()
+    
+    before_temperature_nll = loss_func(model.temperature_scale(logits), labels).item()
+
+    # Next: optimize the temperature w.r.t. NLL
+    def eval():
+        loss = loss_func(model.temperature_scale(logits), labels)
+        loss.backward()
+        return loss
+
+    optimizer = optim.LBFGS([model.temperature], lr=0.01, max_iter=50)
+    optimizer.step(eval)
+
+    after_temperature_nll = loss_func(model.temperature_scale(logits), labels).item()
+
+    print('Optimal temperature: %.3f' % model.temperature.item())
+    print('Before NLL: %.3f' % before_temperature_nll)
+    print('After NLL: %.3f' % after_temperature_nll)
+
+
 def main():
     parser = argparse.ArgumentParser(description='Retention model')
     parser.add_argument('--batch-size', type=int, default=1024, metavar='N',
@@ -113,7 +173,7 @@ def main():
         batch_size=args.test_batch_size, shuffle=False, **kwargs)
 
     n_input = train_dataset.x.shape[1]
-    model = Net(n_input=n_input).to(device)
+    model = TemperatureScaledNet(n_input=n_input).to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     checkpoint_dir = "checkpoints/retention_model.pt"
@@ -123,6 +183,7 @@ def main():
         model.load_state_dict(torch.load('checkpoints/retention_model.pt'))
         model.eval()
         test_loss, predictions = test(args, model, device, test_loader)
+        set_temperature(args, model, device, test_loader)
         return
 
     best_test_loss = 9999
@@ -135,7 +196,7 @@ def main():
             torch.save(model.state_dict(), checkpoint_dir)
             print('save model checkpoint to', checkpoint_dir)
             best_test_loss = test_loss
-
+    
 
 class RetentionModel:
 
@@ -154,7 +215,6 @@ class RetentionModel:
         fact: Fact,
         date: datetime,
     ):
-
         uq_correct = user.count_correct_before.get(fact.fact_id, 0)
         uq_wrong = user.count_wrong_before.get(fact.fact_id, 0)
         uq_total = uq_correct + uq_wrong
@@ -164,17 +224,17 @@ class RetentionModel:
             # TODO this really shouldn't be the current date.
             # the default prev_date should be something much earlier
             prev_date = date
-        if isinstance(prev_date, str):
-            prev_date = parse_date(prev_date)
-        if fact.results is None:
-            fact.results = []
+            # prev_date = str(date - timedelta(days=10))
+            # prev_date = '2020-06-01'
+        prev_date = parse_date(prev_date)
+
         features = [
             uq_correct,  # user_count_correct
             uq_wrong,  # user_count_wrong
             uq_total,  # user_count_total
             0 if len(user.results) == 0 else np.mean(user.results),  # user_average_overall_accuracy
             0 if uq_total == 0 else uq_correct / uq_total,  # user_average_question_accuracy
-            0 if len(user.results) == 0 else user.results[-1],  # user_previous_result
+            0 if len(user.results) == 0 else int(user.results[-1]),  # TODO seems wrong user_previous_result
             (date - prev_date).seconds / (60 * 60),  # user_gap_from_previous
             0 if len(fact.results) == 0 else np.mean(fact.results),  # question_average_overall_accuracy
             len(fact.results),  # question_count_total
@@ -260,8 +320,8 @@ def test_wrapper():
     )
 
     model = RetentionModel()
-    print(1 - model.predict(user, [fact, fact, fact]))
-    print(model.predict_one(user, fact))
+    print(1 - model.predict(user, [fact, fact, fact], datetime.now()))
+    print(model.predict_one(user, fact, datetime.now()))
 
 
 def test_majority():

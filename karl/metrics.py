@@ -283,7 +283,7 @@ def figure_model_level_vs_effort(
         size=alt.condition(selection, alt.value(3), alt.value(1)),
         opacity=alt.condition(selection, alt.value(0.8), alt.value(0.2))
     )
-    band = alt.Chart().mark_area().encode(
+    band = alt.Chart().mark_area(strokeOpacity=0).encode(
         x=x_axis_name,
         y='min',
         y2='max',
@@ -292,8 +292,8 @@ def figure_model_level_vs_effort(
         opacity=alt.condition(selection, alt.value(0.5), alt.value(0.2))
     )
     chart = alt.layer(
-        band,
         line,
+        band,
         data=source
     ).properties(
         width=180,
@@ -679,7 +679,6 @@ def figure_n_users_and_records(session, output_path):
     df.n_records = df.n_records.cumsum()
 
     df.set_index('date', inplace=True)
-    # %%
     source = df.reset_index().melt('date')
 
     source = source.replace({
@@ -760,6 +759,11 @@ def figures():
     figure_karl100_vs_karl85_level_ratio(df, output_path)
 
     user = session.query(User).get('463')
+    charts = get_user_charts(user)
+    charts['user_level_vs_effort'].save(f'{output_path}/{user.user_id}_user_level_vs_effort.json')
+    charts['user_level_ratio'].save(f'{output_path}/{user.user_id}_user_level_ratio.json')
+
+    user = session.query(User).get('85')
     charts = get_user_charts(user)
     charts['user_level_vs_effort'].save(f'{output_path}/{user.user_id}_user_level_vs_effort.json')
     charts['user_level_ratio'].save(f'{output_path}/{user.user_id}_user_level_ratio.json')

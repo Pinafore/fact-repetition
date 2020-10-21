@@ -1,14 +1,14 @@
 <head>
-    <meta charset="utf-8">
-    <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
-      <script src="https://cdn.jsdelivr.net/npm/vega-lite@4"></script>
-      <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
+  <meta charset="utf-8">
+  <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
+	<script src="https://cdn.jsdelivr.net/npm/vega-lite@4"></script>
+	<script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
 </head>
 
-<div id="vis"></div>
-<script>
-  const spec = "test.json";
-	vegaEmbed("#vis", spec)
-    .then(result => console.log(result))
-    .catch(console.warn);
-</script>
+<body>  
+  <div id="vis"></div>
+
+  <script>
+  	vegaEmbed("#vis", "test.json");
+  </script>
+</body>
