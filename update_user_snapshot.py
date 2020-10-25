@@ -1,8 +1,8 @@
 import json
 from tqdm import tqdm
 from collections import defaultdict
-from karl.new_util import User, Record
-from karl.web import get_sessions
+from karl.models import User, Record, Fact
+from karl.util import Params, get_sessions
 
 
 def leitner_update(leitner_box, fact, response: bool) -> None:
@@ -98,25 +98,39 @@ def update_scheduler_snapshot(session):
         #     continue
         params['repetition_model'] = infer_repetition_model(params)
         record.scheduler_snapshot = json.dumps(params)
+        record.elapsed_seconds_text = record.elapsed_milliseconds_text / 1000
+        record.elapsed_seconds_answer = record.elapsed_milliseconds_answer / 1000
+    session.commit()
 
-        if record.elapsed_milliseconds_text is None or record.elapsed_milliseconds_text == 0:
-            if record.elapsed_seconds_text is not None:
-                record.elapsed_milliseconds_answer = record.elapsed_seconds_text * 1000
-            else:
-                record.elapsed_milliseconds_text = 0
-        if record.elapsed_milliseconds_answer is None or record.elapsed_milliseconds_answer == 0:
-            if record.elapsed_seconds_answer is not None:
-                record.elapsed_milliseconds_answer = record.elapsed_seconds_answer * 1000
-            else:
-                record.elapsed_milliseconds_answer = 0
-        
-        if record.elapsed_milliseconds_text != 0:
-            record.elapsed_seconds_text = record.elapsed_milliseconds_text / 1000
-        if record.elapsed_milliseconds_answer != 0:
-            record.elapsed_seconds_answer = record.elapsed_milliseconds_answer / 1000
+    for user in session.query(User):
+        new_params = Params(
+            repetition_model=infer_repetition_model(user.params.__dict__),
+            qrep=user.params.qrep,
+            skill=user.params.skill,
+            recall=user.params.recall,
+            recall_target=user.params.recall_target,
+            category=user.params.category,
+            answer=user.params.answer,
+            leitner=user.params.leitner,
+            sm2=user.params.sm2,
+            decay_qrep=user.params.decay_qrep,
+            decay_skill=user.params.decay_skill,
+            cool_down=user.params.cool_down,
+            cool_down_time_correct=user.params.cool_down_time_correct,
+            cool_down_time_wrong=user.params.cool_down_time_wrong,
+            max_recent_facts=user.params.max_recent_facts,
+        )
+        user.params = new_params
+    session.commit()
+
+
+def update_fact_results(session):
+    for fact in session.query(Fact):
+        if fact.results is None:
+            fact.results = []
     session.commit()
 
 
 if __name__ == '__main__':
     session = get_sessions()['prod']
-    update_user_snapshot(session)
+    update_fact_results(session)

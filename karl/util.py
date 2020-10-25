@@ -1,6 +1,4 @@
-import json
 import socket
-import datetime
 from typing import Optional, List
 from pydantic import BaseModel
 from sqlalchemy import create_engine
@@ -98,6 +96,15 @@ class UserStatSchema(BaseModel):
     new_known_rate: Optional[float] = 0
     review_known_rate: Optional[float] = 0
 
+
+class Visualization(BaseModel):
+    name: str
+    specs: str
+    user_id: str
+    env: Optional[str] = None
+    deck_id: Optional[str] = None
+    date_start: Optional[str] = None
+    date_end: Optional[str] = None
 
 def get_sessions():
     hostname = socket.gethostname()

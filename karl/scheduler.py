@@ -173,7 +173,9 @@ class MovingAvgScheduler:
                 answer=c['answer'],
                 category=c['category'],
                 qrep=None,
-                skill=None)
+                skill=None,
+                results=[],
+            )
             for c in facts
         ]
 
@@ -287,6 +289,7 @@ class MovingAvgScheduler:
             deck_id=request.deck_id,
             qrep=None,
             skill=None,
+            results=[],
         )
 
         self.embed([fact])
@@ -323,7 +326,8 @@ class MovingAvgScheduler:
                     deck_name=r.deck_name,
                     deck_id=r.deck_id,
                     qrep=None,  # placeholder
-                    skill=None  # placeholder
+                    skill=None,  # placeholder
+                    results=[],  # placeholder
                 )
                 new_facts.append(fact)
             facts.append(fact)
@@ -417,7 +421,7 @@ class MovingAvgScheduler:
             filter(UserStat.deck_id == deck_id).\
             filter(UserStat.date <= date_end).\
             order_by(UserStat.date.desc()).first()
-        
+
         if after_stat is None or after_stat.date < date_start:
             return UserStatSchema(
                 user_id=user_id,
@@ -453,6 +457,12 @@ class MovingAvgScheduler:
                 elapsed_minutes_answer=0,
                 n_days_studied=0,
             )
+        
+        print('user_id', user_id)
+        print('before_stat.date', before_stat.date)
+        print('after_stat.date', after_stat.date)
+        print('before_stat.n_days_studied', before_stat.n_days_studied)
+        print('after_stat.n_days_studied', after_stat.n_days_studied)
 
         total_correct = (
             after_stat.new_correct
@@ -1200,13 +1210,13 @@ class MovingAvgScheduler:
 
         # save user snapshot before update
         user_snapshot = json.dumps({
-                'leitner_box': user.leitner_box,
-                'count_correct_before': user.count_correct_before,
-                'count_wrong_before': user.count_wrong_before,
-                'previous_study': user.previous_study,
-                'user_results': user.results,
-                'fact_results': fact.results,
-            })
+            'leitner_box': user.leitner_box,
+            'count_correct_before': user.count_correct_before,
+            'count_wrong_before': user.count_wrong_before,
+            'previous_study': user.previous_study,
+            'user_results': user.results,
+            'fact_results': fact.results,
+        })
 
         # update user and fact
         # (optionally) commit preemptive compute
@@ -1292,6 +1302,7 @@ class MovingAvgScheduler:
                 elapsed_seconds_answer=0,
                 elapsed_minutes_text=0,
                 elapsed_minutes_answer=0,
+                n_days_studied=0,
             )
             is_new_stat = True
 
@@ -1322,6 +1333,7 @@ class MovingAvgScheduler:
                 elapsed_seconds_answer=curr_stat.elapsed_seconds_answer,
                 elapsed_minutes_text=curr_stat.elapsed_minutes_text,
                 elapsed_minutes_answer=curr_stat.elapsed_minutes_answer,
+                n_days_studied=curr_stat.n_days_studied + 1,
             )
             curr_stat = new_stat
             is_new_stat = True
@@ -1348,7 +1360,6 @@ class MovingAvgScheduler:
         if is_new_stat:
             session.add(curr_stat)
             session.commit()
-
 
     def leitner_update(self, user: User, fact: Fact, response: bool) -> None:
         """
@@ -1435,13 +1446,13 @@ class MovingAvgScheduler:
         fact_qrep = np.array(fact_qrep)[top_topics].tolist()
         user_qrep = np.array(user_qrep)[top_topics].tolist()
         top_topic_words = [self.topic_words[i] for i in top_topics]
-        topic_type = CategoricalDtype(categories=top_topic_words, ordered=True)
+        # topic_type = CategoricalDtype(categories=top_topic_words, ordered=True)
         df = pd.DataFrame({
             'topics': top_topic_words * 2,
             'weight': fact_qrep + user_qrep,
             'label': ['fact' for _ in top_topics] + ['user' for _ in top_topics]
         })
-        df['topics'] = df['topics'].astype(str).astype(topic_type)
+        # df['topics'] = df['topics'].astype(str).astype(topic_type)
 
         # TODO use altair
         # p = (

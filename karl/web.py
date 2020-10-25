@@ -2,25 +2,18 @@
 # coding: utf-8
 
 import json
-import atexit
-import socket
 import logging
-from pathlib import Path
 from fastapi import FastAPI, HTTPException
-from typing import Optional, List
-from pydantic import BaseModel
+from typing import List
 from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_date
 from cachetools import cached, TTLCache
-from collections import Counter
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 
 from karl.util import ScheduleRequest, Params, \
-    Ranking, Leaderboard, UserStatSchema
+    Ranking, Leaderboard, UserStatSchema, Visualization
 from karl.util import get_sessions
-from karl.models import User, Fact, Record, UserStat
+from karl.models import User, Fact, UserStat
 from karl.scheduler import MovingAvgScheduler
 from karl.metrics import get_user_charts
 
@@ -315,7 +308,7 @@ def n_days_studied(
             if user_stat.total_seen - prev_total_seen >= min_studied:
                 n_days[user.user_id] += 1
             prev_total_seen = user_stat.total_seen
-            
+
     # from high value to low
     n_days = sorted(n_days.items(), key=lambda x: x[1])[::-1]
     # remove users with 0 days studied
@@ -415,19 +408,32 @@ def leaderboard(
 
 
 @app.get('/api/karl/user_charts')
-def user_charts(user_id: str, env: str = None):
+def user_charts(
+    user_id: str = None,
+    env: str = None,
+    deck_id: str = None,
+    date_start: str = '2008-06-01 08:00:00.000001 -0400',
+    date_end: str = '2038-06-01 08:00:00.000001 -0400',
+) -> List[Visualization]:
     env = 'dev' if env == 'dev' else 'prod'
     user = sessions[env].query(User).get(user_id)
     if user is None:
         return
 
     charts = get_user_charts(user)  # chart_name -> chart
-    figure_paths = {}
-
-    figure_dir_local = '/fs/www-users/shifeng/karl/user_charts'
-    figure_dir_remote = 'umiacs.umd.edu/~shifeng/karl/user_charts'
+    visualizations = []
     for chart_name, chart in charts.items():
-        chart.save(f'{figure_dir_local}/{user.user_id}_{chart_name}.json')
-        figure_paths[chart_name] = f'{figure_dir_remote}/{user.user_id}_{chart_name}.json'
-
-    return figure_paths
+        chart_path = f'figures/test_user_charts/{user_id}_{chart_name}.json'
+        chart.save(chart_path)
+        visualizations.append(
+            Visualization(
+                name=chart_name,
+                specs=json.load(chart_path),
+                user_id=user_id,
+                env=env,
+                deck_id=deck_id,
+                date_start=date_start,
+                date_end=date_end,
+            )
+        )
+    return visualizations

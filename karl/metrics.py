@@ -5,15 +5,9 @@ import bisect
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from typing import List
-from pathlib import Path
-from pandas.api.types import CategoricalDtype
-from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import timedelta
 from dateutil.parser import parse as parse_date
-from typing import Dict
 import altair as alt
-from altair.expr import datum
 alt.data_transformers.disable_max_rows()
 alt.renderers.enable('mimetype')
 
@@ -142,11 +136,11 @@ def get_processed_df(session):
     df['ratio_old_correct_vs_all'] = df.n_old_facts_correct_csum / df.n_facts_shown
     df['ratio_old_wrong_vs_all'] = df.n_old_facts_wrong_csum / df.n_facts_shown
 
-    df[f'initial_O_'] = df.apply(lambda x: (x.leitner_box == 0) & x.result, axis=1)
-    df[f'initial_X_'] = df.apply(lambda x: (x.leitner_box == 0) & (~x.result), axis=1)
-    df[f'initial_O'] = df.groupby('user_id')[f'initial_O_'].cumsum()
-    df[f'initial_X'] = df.groupby('user_id')[f'initial_X_'].cumsum()
-    progress_names = [f'initial_O', f'initial_X']
+    df['initial_O_'] = df.apply(lambda x: (x.leitner_box == 0) & x.result, axis=1)
+    df['initial_X_'] = df.apply(lambda x: (x.leitner_box == 0) & (~x.result), axis=1)
+    df['initial_O'] = df.groupby('user_id')['initial_O_'].cumsum()
+    df['initial_X'] = df.groupby('user_id')['initial_X_'].cumsum()
+    progress_names = ['initial_O', 'initial_X']
     for i in df.leitner_box.unique():
         if i > 0:
             df[f'level_{i}_O_'] = df.apply(lambda x: (x.leitner_box == i) & x.result & (~x.is_known_fact), axis=1)
@@ -170,7 +164,7 @@ def figure_new_old_successful_failed(
     ]
     source = df.groupby(['repetition_model', x_axis_name]).mean().reset_index()
     source = pd.melt(
-        source ,
+        source,
         id_vars=['repetition_model', x_axis_name],
         value_vars=metrics,
         var_name='name',
@@ -230,7 +224,7 @@ def figure_model_level_vs_effort(
     '''repetition model level vs effort'''
     x_axis_name = 'n_minutes_spent_binned'
 
-    progress_names = [f'initial_O', f'initial_X']
+    progress_names = ['initial_O', 'initial_X']
     for i in df.leitner_box.unique():
         if i > 0:
             progress_names += [f'level_{i}_O', f'level_{i}_X']
@@ -256,15 +250,15 @@ def figure_model_level_vs_effort(
     source = source.replace({
         'level': {
             'initial': 'Initial',
-            'level_1': 'Level.0',
-            'level_2': 'Level.1',
-            'level_3': 'Level.2',
-            'level_4': 'Level.3',
-            'level_5': 'Level.4',
-            'level_6': 'Level.5',
-            'level_7': 'Level.6',
-            'level_8': 'Level.7',
-            'level_9': 'Level.8',
+            'level_1': 'Level 0',
+            'level_2': 'Level 1',
+            'level_3': 'Level 2',
+            'level_4': 'Level 3',
+            'level_5': 'Level 4',
+            'level_6': 'Level 5',
+            'level_7': 'Level 6',
+            'level_8': 'Level 7',
+            'level_9': 'Level 8',
         },
         'repetition_model': {
             'karl100': 'KARL',
@@ -318,7 +312,7 @@ def figure_model_level_ratio(
     '''repetition model level ratio'''
     x_axis_name = 'n_minutes_spent_binned'
 
-    progress_names = [f'initial_O', f'initial_X']
+    progress_names = ['initial_O', 'initial_X']
     for i in df.leitner_box.unique():
         if i > 0:
             progress_names += [f'level_{i}_O', f'level_{i}_X']
@@ -355,15 +349,15 @@ def figure_model_level_ratio(
     source = source.replace({
         'level': {
             'initial': 'Initial',
-            'level_1': 'Level.0',
-            'level_2': 'Level.1',
-            'level_3': 'Level.2',
-            'level_4': 'Level.3',
-            'level_5': 'Level.4',
-            'level_6': 'Level.5',
-            'level_7': 'Level.6',
-            'level_8': 'Level.7',
-            'level_9': 'Level.8',
+            'level_1': 'Level 0',
+            'level_2': 'Level 1',
+            'level_3': 'Level 2',
+            'level_4': 'Level 3',
+            'level_5': 'Level 4',
+            'level_6': 'Level 5',
+            'level_7': 'Level 6',
+            'level_8': 'Level 7',
+            'level_9': 'Level 8',
         },
         'repetition_model': {
             'karl100': 'KARL',
@@ -415,7 +409,7 @@ def figure_karl100_vs_karl85_level_ratio(
     '''karl100 vs karl85 level ratio'''
     x_axis_name = 'n_minutes_spent_binned'
 
-    progress_names = [f'initial_O', f'initial_X']
+    progress_names = ['initial_O', 'initial_X']
     for i in df.leitner_box.unique():
         if i > 0:
             progress_names += [f'level_{i}_O', f'level_{i}_X']
@@ -452,15 +446,15 @@ def figure_karl100_vs_karl85_level_ratio(
     source = source.replace({
         'level': {
             'initial': 'Initial',
-            'level_1': 'Level.0',
-            'level_2': 'Level.1',
-            'level_3': 'Level.2',
-            'level_4': 'Level.3',
-            'level_5': 'Level.4',
-            'level_6': 'Level.5',
-            'level_7': 'Level.6',
-            'level_8': 'Level.7',
-            'level_9': 'Level.8',
+            'level_1': 'Level 0',
+            'level_2': 'Level 1',
+            'level_3': 'Level 2',
+            'level_4': 'Level 3',
+            'level_5': 'Level 4',
+            'level_6': 'Level 5',
+            'level_7': 'Level 6',
+            'level_8': 'Level 7',
+            'level_9': 'Level 8',
         },
         'repetition_model': {
             'karl100': 'KARL Target=100%',
@@ -504,11 +498,26 @@ def figure_karl100_vs_karl85_level_ratio(
     # chart.save('test.json')
 
 
-def get_user_charts(user: User):
+def get_user_charts(
+    user: User,
+    deck_id: str = None,
+    date_start: str = '2008-06-01 08:00:00.000001 -0400',
+    date_end: str = '2038-06-01 08:00:00.000001 -0400',
+):
     '''Gather records into a single dataframe'''
     correct_on_first_try = {}
     rows = []
-    for record in user.records:
+
+    date_start = parse_date(date_start)
+    date_end = parse_date(date_end)
+
+    records = session.query(Record).\
+        filter(Record.user_id == user.user_id).\
+        filter(Record.date >= date_start).\
+        filter(Record.date <= date_end).\
+        order_by(Record.date)
+
+    for record in records:
         if record.fact_id not in correct_on_first_try:
             correct_on_first_try[record.fact_id] = record.response
         elapsed_seconds = record.elapsed_milliseconds_text / 1000
@@ -531,11 +540,11 @@ def get_user_charts(user: User):
         })
     df = pd.DataFrame(rows).sort_values('datetime', axis=0)
 
-    df[f'initial_O_'] = df.apply(lambda x: (x.leitner_box == 0) & x.result, axis=1)
-    df[f'initial_X_'] = df.apply(lambda x: (x.leitner_box == 0) & ~x.result, axis=1)
-    df[f'initial_O'] = df[f'initial_O_'].cumsum()
-    df[f'initial_X'] = df[f'initial_X_'].cumsum()
-    progress_names = [f'initial_O', f'initial_X']
+    df['initial_O_'] = df.apply(lambda x: (x.leitner_box == 0) & x.result, axis=1)
+    df['initial_X_'] = df.apply(lambda x: (x.leitner_box == 0) & ~x.result, axis=1)
+    df['initial_O'] = df['initial_O_'].cumsum()
+    df['initial_X'] = df['initial_X_'].cumsum()
+    progress_names = ['initial_O', 'initial_X']
     for i in df.leitner_box.unique():
         if i == 0:
             continue
@@ -571,15 +580,15 @@ def get_user_charts(user: User):
     source = source.replace({
         'level': {
             'initial': 'Initial',
-            'level_1': 'Level.0',
-            'level_2': 'Level.1',
-            'level_3': 'Level.2',
-            'level_4': 'Level.3',
-            'level_5': 'Level.4',
-            'level_6': 'Level.5',
-            'level_7': 'Level.6',
-            'level_8': 'Level.7',
-            'level_9': 'Level.8',
+            'level_1': 'Level 0',
+            'level_2': 'Level 1',
+            'level_3': 'Level 2',
+            'level_4': 'Level 3',
+            'level_5': 'Level 4',
+            'level_6': 'Level 5',
+            'level_7': 'Level 6',
+            'level_8': 'Level 7',
+            'level_9': 'Level 8',
         },
     })
 
@@ -651,8 +660,8 @@ def figure_n_users_and_records(session, output_path):
     user_ids = set()  # to check if its new user
     date_start = parse_date('2020-08-23')
     records = session.query(Record).\
-            order_by(Record.date).\
-            filter(Record.date >= date_start)
+        order_by(Record.date).\
+        filter(Record.date >= date_start)
     n_records = 0
     curr_date = records.first().date.date()
     for record in records:
@@ -758,15 +767,11 @@ def figures():
     figure_model_level_ratio(df, output_path)
     figure_karl100_vs_karl85_level_ratio(df, output_path)
 
-    user = session.query(User).get('463')
-    charts = get_user_charts(user)
-    charts['user_level_vs_effort'].save(f'{output_path}/{user.user_id}_user_level_vs_effort.json')
-    charts['user_level_ratio'].save(f'{output_path}/{user.user_id}_user_level_ratio.json')
-
-    user = session.query(User).get('85')
-    charts = get_user_charts(user)
-    charts['user_level_vs_effort'].save(f'{output_path}/{user.user_id}_user_level_vs_effort.json')
-    charts['user_level_ratio'].save(f'{output_path}/{user.user_id}_user_level_ratio.json')
+    for user_id in ['463', '413', '123', '38']:
+        user = session.query(User).get(user_id)
+        charts = get_user_charts(user)
+        charts['user_level_vs_effort'].save(f'{output_path}/{user.user_id}_user_level_vs_effort.json')
+        charts['user_level_ratio'].save(f'{output_path}/{user.user_id}_user_level_ratio.json')
 
 
 if __name__ == '__main__':
@@ -824,12 +829,12 @@ for user_bin in df_sub['user_records_binned'].unique():
     save_chart_and_pdf(chart, f'figures/repetition_model_reports/{user_bin}')
 # %%
 # '''System report'''
-# # daily active users 
+# # daily active users
 # df_plot = df.groupby(['user_id', 'repetition_model', 'date_binned']).mean().reset_index()
 # df_plot = df_plot.groupby(['repetition_model', 'date_binned'])['user_id'].count().reset_index(name='n_active_users')
 # total_daily_count = df_plot.groupby('date_binned').sum().to_dict()['n_active_users']
 # df_plot['ratio'] = df_plot.apply(lambda x: x['n_active_users'] / total_daily_count[x['date_binned']], axis=1)
-# 
+#
 # chart = alt.Chart(df_plot).mark_line().encode(
 #     x='date_binned',
 #     y='n_active_users',
@@ -841,7 +846,7 @@ for user_bin in df_sub['user_records_binned'].unique():
 # df_left = df.groupby(['user_id', 'repetition_model'])['user_id'].count().reset_index(name='n_records')
 # df_right = df.groupby(['user_id', 'repetition_model'])['elapsed_minutes'].sum().reset_index(name='total_minutes')
 # df_plot = pd.merge(df_left, df_right, how='left', on=['user_id', 'repetition_model'])
-# 
+#
 # alt.Chart(df_plot).mark_point().encode(
 #     alt.X('n_records'),
 #     alt.Y('total_minutes'),

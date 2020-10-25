@@ -4,7 +4,7 @@
 import argparse
 import numpy as np
 from typing import List
-from datetime import datetime, timedelta
+from datetime import datetime
 from dateutil.parser import parse as parse_date
 
 import torch
@@ -36,12 +36,12 @@ class Net(nn.Module):
 
 
 class TemperatureScaledNet(nn.Module):
-    
+
     def __init__(self, n_input):
         super(TemperatureScaledNet, self).__init__()
         self.net = Net(n_input)
         self.temperature = nn.Parameter(torch.ones(1) * 1.5)
-    
+
     def forward(self, x):
         logits = self.net(x)
         return self.temperature_scale(logits)
@@ -117,7 +117,7 @@ def set_temperature(args, model, device, test_loader):
             labels_list.append(label)
         logits = torch.cat(logits_list).cuda()
         labels = torch.cat(labels_list).cuda()
-    
+
     before_temperature_nll = loss_func(model.temperature_scale(logits), labels).item()
 
     # Next: optimize the temperature w.r.t. NLL
@@ -196,7 +196,7 @@ def main():
             torch.save(model.state_dict(), checkpoint_dir)
             print('save model checkpoint to', checkpoint_dir)
             best_test_loss = test_loss
-    
+
 
 class RetentionModel:
 
@@ -205,10 +205,10 @@ class RetentionModel:
         n_input = self.dataset.x.shape[1]
         use_cuda = use_cuda and torch.cuda.is_available()
         self.device = torch.device("cuda" if use_cuda else "cpu")
-        self.model = Net(n_input=n_input).to(self.device)
+        self.model = TemperatureScaledNet(n_input=n_input).to(self.device)
         self.model.load_state_dict(torch.load('checkpoints/retention_model.pt'))
         self.model.eval()
-    
+
     def compute_features(
         self,
         user: User,
@@ -223,7 +223,7 @@ class RetentionModel:
         else:
             # TODO this really shouldn't be the current date.
             # the default prev_date should be something much earlier
-            prev_date = date
+            prev_date = str(date)
             # prev_date = str(date - timedelta(days=10))
             # prev_date = '2020-06-01'
         prev_date = parse_date(prev_date)
@@ -235,7 +235,7 @@ class RetentionModel:
             0 if len(user.results) == 0 else np.mean(user.results),  # user_average_overall_accuracy
             0 if uq_total == 0 else uq_correct / uq_total,  # user_average_question_accuracy
             0 if len(user.results) == 0 else int(user.results[-1]),  # TODO seems wrong user_previous_result
-            (date - prev_date).seconds / (60 * 60),  # user_gap_from_previous
+            (date - prev_date).seconds / (60 * 60),  # user_gap_from_previous TODO wrong, total_seconds
             0 if len(fact.results) == 0 else np.mean(fact.results),  # question_average_overall_accuracy
             len(fact.results),  # question_count_total
             sum(fact.results),  # question_count_correct
