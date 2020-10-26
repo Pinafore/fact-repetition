@@ -140,6 +140,7 @@ class Record(Base):
 
 
 class SchedulerOutput(Base):
+    __tablename__ = 'scheduler_outputs'
     debug_id = Column(String, primary_key=True)
     order = Column(MutableDict.as_mutable(JSONEncoded), default=[])
     scores = Column(MutableDict.as_mutable(JSONEncoded), default=[])
@@ -150,6 +151,7 @@ class SchedulerOutput(Base):
 
 
 class FactSnapshot(Base):
+    __tablename__ = 'fact_snapshots'
     id = Column(Integer , primary_key=True , autoincrement=True)
     # fact_id -> list of binary results
     results = Column(MutableDict.as_mutable(JSONEncoded), default={})
