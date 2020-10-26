@@ -11,7 +11,7 @@ from cachetools import cached, TTLCache
 from sqlalchemy.exc import SQLAlchemyError
 
 from karl.util import ScheduleRequest, Params, \
-    Ranking, Leaderboard, UserStatSchema, Visualization
+    Ranking, Leaderboard, UserStatSchema, Visualization, SchedulerOutputSchema
 from karl.util import get_sessions
 from karl.models import User, Fact, UserStat
 from karl.scheduler import MovingAvgScheduler
@@ -45,7 +45,9 @@ logger.addHandler(ch)
 
 
 @app.post('/api/karl/schedule')
-def schedule(requests: List[ScheduleRequest]):
+def schedule(
+    requests: List[ScheduleRequest],
+) -> SchedulerOutputSchema:
     if len(requests) == 0:
         return {
             'order': [],

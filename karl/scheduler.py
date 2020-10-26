@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 import en_core_web_lg
 from tqdm import tqdm
+from copy import deepcopy
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import List, Dict
@@ -21,8 +22,9 @@ from dateutil.parser import parse as parse_date
 # from whoosh.qparser import QueryParser
 
 from karl.lda import process_question
-from karl.util import ScheduleRequest, Params, UserStatSchema
-from karl.models import User, Fact, Record, UserStat
+from karl.util import ScheduleRequest, Params, UserStatSchema, SchedulerOutputSchema
+from karl.models import User, Fact, Record, UserStat,\
+    UserSnapshot, FactSnapshot, SchedulerOutput
 from karl.retention.baseline import RetentionModel
 # from karl.new_retention import HFRetentionModel as RetentionModel
 
@@ -832,8 +834,10 @@ class MovingAvgScheduler:
             rr += row_template.format('topic', self.topic_words[np.argmax(c.qrep)])
             rr += row_template.format('prev_date', prev_date)
             rr += row_template.format('prev_response', prev_response)
+
             for k, v in scores[i].items():
                 rr += row_template_3.format(k, v, user.params.__dict__.get(k, 0))
+
             rr += '<tr><td><b>{}</b></td> <td>{:.4f}</td></tr>'.format('sum', scores[i]['sum'])
             rr += row_template.format('ltn box', user.leitner_box.get(c.fact_id, '-'))
             rr += row_template.format('ltn dat', user.leitner_scheduled_date.get(c.fact_id, '-'))
@@ -887,7 +891,7 @@ class MovingAvgScheduler:
             facts: List[Fact],
             date: datetime,
             plot=False
-    ) -> dict:
+    ) -> SchedulerOutputSchema:
         """
         Score facts for user, rank them, and create rationale & card information.
 
@@ -925,13 +929,13 @@ class MovingAvgScheduler:
             # rr += "<img src='http://users.umiacs.umd.edu/~shifeng/temp/user.jpg'>"
 
         facts_info = self.get_facts_info(user, facts, date, scores, order)
-        output_dict = {
-            'order': order,
-            'rationale': rationale,
-            'facts_info': facts_info,
-            'scores': scores,
-        }
-        return output_dict
+        return SchedulerOutputSchema(
+            order=order,
+            scores=scores,
+            details=facts_info,
+            rationale=rationale,
+            debug_id=self.debug_id[user.user_id],
+        )
 
     def schedule(self, session, requests: List[ScheduleRequest], date: datetime, plot=False) -> dict:
         """
@@ -975,127 +979,142 @@ class MovingAvgScheduler:
         facts = [facts[i] for i in indices]
 
         if not self.preemptive:
-            return self.rank_facts_for_user(user, facts, date, plot=plot)
-        t1 = datetime.now()
-
-        # using preemptived schedules
-        # read confirmed update & corresponding schedule
-        if user.user_id not in self.preemptive_commit:
-            # no existing precomupted schedule, do regular schedule
-            t0 = datetime.now()
-            output_dict = self.rank_facts_for_user(user, facts, date, plot=plot)
-            t1 = datetime.now()
-            schedule_timing_profile['rank_facts_for_user (pre not found)'] = (len(facts), t1 - t0)
-        elif self.preemptive_commit[user.user_id] == 'done':
-            # preemptive threads didn't finish before user responded and is marked as done by update
-            # TODO this might be too conservative
-            t0 = datetime.now()
-            output_dict = self.rank_facts_for_user(user, facts, date, plot=plot)
-            t1 = datetime.now()
-            schedule_timing_profile['rank_facts_for_user (pre marked done)'] = (len(facts), t1 - t0)
+            output = self.rank_facts_for_user(user, facts, date, plot=plot)
+            # TODO is there a faster way to do this?
+            scheduler_output = SchedulerOutput(
+                debug_id=output.debug_id,
+                order=output.order,
+                scores=output.scores,
+                details=output.details,
+                rationale=output.rationale,
+            )
+            session.add(scheduler_output)
+            session.commit()
+            return output
         else:
-            # read preemptived schedule, check if new facts are added
-            # if so, compute score for new facts, re-sort facts
-            # no need to update previous fact / user
-            # since updates does the commit after updating user & fact in db
-            prev_results = self.preemptive_commit[user.user_id]
-            prev_fact_ids = [c.fact_id for c in prev_results['facts']]
-
-            new_facts = []
-            # prev_facts -> facts
-            prev_fact_indices = {}
-            # new_facts -> facts
-            new_fact_indices = {}
-            for i, c in enumerate(facts):
-                if c.fact_id in prev_fact_ids:
-                    prev_idx = prev_fact_ids.index(c.fact_id)
-                    prev_fact_indices[prev_idx] = i
-                else:
-                    new_fact_indices[len(new_facts)] = i
-                    new_facts.append(c)
-
-            if len(new_fact_indices) + len(prev_fact_indices) != len(facts):
-                raise ValueError('len(new_fact_indices) + len(prev_fact_indices) != len(facts)')
-
-            t0 = datetime.now()
-            # gather scores for both new and previous facts
-            scores = [None] * len(facts)
-            if len(new_facts) > 0:
-                new_results = self.rank_facts_for_user(user, new_facts, date, plot=plot)
-                for i, idx in new_fact_indices.items():
-                    scores[idx] = new_results['scores'][i]
-            for i, idx in prev_fact_indices.items():
-                scores[idx] = prev_results['scores'][i]
             t1 = datetime.now()
-            schedule_timing_profile['rank_facts_for_user (new facts)'] = (len(new_facts), t1 - t0)
 
-            t0 = datetime.now()
-            order = np.argsort([s['sum'] for s in scores]).tolist()
-            rationale = self.get_rationale(user, facts, date, scores, order)
-            facts_info = self.get_facts_info(user, facts, date, scores, order)
-            t1 = datetime.now()
-            schedule_timing_profile['get rationale and facts info'] = (len(facts), t1 - t0)
+            # using preemptived schedules
+            # read confirmed update & corresponding schedule
+            if user.user_id not in self.preemptive_commit:
+                # no existing precomupted schedule, do regular schedule
+                t0 = datetime.now()
+                output_dict = self.rank_facts_for_user(user, facts, date, plot=plot)
+                t1 = datetime.now()
+                schedule_timing_profile['rank_facts_for_user (pre not found)'] = (len(facts), t1 - t0)
+            elif self.preemptive_commit[user.user_id] == 'done':
+                # preemptive threads didn't finish before user responded and is marked as done by update
+                # TODO this might be too conservative
+                t0 = datetime.now()
+                output_dict = self.rank_facts_for_user(user, facts, date, plot=plot)
+                t1 = datetime.now()
+                schedule_timing_profile['rank_facts_for_user (pre marked done)'] = (len(facts), t1 - t0)
+            else:
+                # read preemptived schedule, check if new facts are added
+                # if so, compute score for new facts, re-sort facts
+                # no need to update previous fact / user
+                # since updates does the commit after updating user & fact in db
+                prev_results = self.preemptive_commit[user.user_id]
+                prev_fact_ids = [c.fact_id for c in prev_results['facts']]
 
-            output_dict = {
-                'order': order,
-                'scores': scores,
-                'rationale': rationale,
-                'facts_info': facts_info,
-            }
+                new_facts = []
+                # prev_facts -> facts
+                prev_fact_indices = {}
+                # new_facts -> facts
+                new_fact_indices = {}
+                for i, c in enumerate(facts):
+                    if c.fact_id in prev_fact_ids:
+                        prev_idx = prev_fact_ids.index(c.fact_id)
+                        prev_fact_indices[prev_idx] = i
+                    else:
+                        new_fact_indices[len(new_facts)] = i
+                        new_facts.append(c)
 
-        # output_dict generated
-        fact_idx = output_dict['order'][0]
+                if len(new_fact_indices) + len(prev_fact_indices) != len(facts):
+                    raise ValueError('len(new_fact_indices) + len(prev_fact_indices) != len(facts)')
 
-        if user.user_id in self.preemptive_commit:
-            # necessary to remove 'done' marked by update if exists
-            self.preemptive_commit.pop(user.user_id)
+                t0 = datetime.now()
+                # gather scores for both new and previous facts
+                scores = [None] * len(facts)
+                if len(new_facts) > 0:
+                    new_results = self.rank_facts_for_user(user, new_facts, date, plot=plot)
+                    for i, idx in new_fact_indices.items():
+                        scores[idx] = new_results['scores'][i]
+                for i, idx in prev_fact_indices.items():
+                    scores[idx] = prev_results['scores'][i]
+                t1 = datetime.now()
+                schedule_timing_profile['rank_facts_for_user (new facts)'] = (len(new_facts), t1 - t0)
 
-        # CORRECT branch
-        thr_correct = threading.Thread(
-            target=self.branch,
-            args=(
-                copy.deepcopy(user),
-                copy.deepcopy(facts),
-                date,
-                fact_idx,
-                CORRECT,
-                plot,
-            ),
-            kwargs={}
-        )
-        thr_correct.start()
-        # thr_correct.join()
+                t0 = datetime.now()
+                order = np.argsort([s['sum'] for s in scores]).tolist()
 
-        # WRONG branch
-        thr_wrong = threading.Thread(
-            target=self.branch,
-            args=(
-                copy.deepcopy(user),
-                copy.deepcopy(facts),
-                date,
-                fact_idx,
-                WRONG,
-                plot,
-            ),
-            kwargs={}
-        )
-        thr_wrong.start()
-        # thr_wrong.join()
+                # NOTE redo rationale
+                rationale = self.get_rationale(user, facts, date, scores, order)
+                facts_info = self.get_facts_info(user, facts, date, scores, order)
+                t1 = datetime.now()
+                schedule_timing_profile['get rationale and facts info'] = (len(facts), t1 - t0)
 
-        # self.branch(copy.deepcopy(user), copy.deepcopy(facts),
-        #             date, fact_idx, CORRECT, plot=plot)
-        # self.branch(copy.deepcopy(user), copy.deepcopy(facts),
-        #             date, fact_idx, WRONG, plot=plot)
+                output_dict = {
+                    'order': order,
+                    'debug_id': self.debug_id[user.user_id],
+                    'scores': scores,
+                    'rationale': rationale,
+                    'facts_info': facts_info,
+                }
 
-        output_dict['profile'] = schedule_timing_profile
-        logger.info('scheduled fact {}'.format(facts[fact_idx].answer))
-        profile_str = [
-            '{}: {} ({})'.format(k, v, c)
-            for k, (c, v) in schedule_timing_profile.items()
-        ]
-        logger.info('\n' + '\n'.join(profile_str))
+            # output_dict generated
+            fact_idx = output_dict['order'][0]
 
-        return output_dict
+            if user.user_id in self.preemptive_commit:
+                # necessary to remove 'done' marked by update if exists
+                self.preemptive_commit.pop(user.user_id)
+
+            # CORRECT branch
+            thr_correct = threading.Thread(
+                target=self.branch,
+                args=(
+                    copy.deepcopy(user),
+                    copy.deepcopy(facts),
+                    date,
+                    fact_idx,
+                    CORRECT,
+                    plot,
+                ),
+                kwargs={}
+            )
+            thr_correct.start()
+            # thr_correct.join()
+
+            # WRONG branch
+            thr_wrong = threading.Thread(
+                target=self.branch,
+                args=(
+                    copy.deepcopy(user),
+                    copy.deepcopy(facts),
+                    date,
+                    fact_idx,
+                    WRONG,
+                    plot,
+                ),
+                kwargs={}
+            )
+            thr_wrong.start()
+            # thr_wrong.join()
+
+            # self.branch(copy.deepcopy(user), copy.deepcopy(facts),
+            #             date, fact_idx, CORRECT, plot=plot)
+            # self.branch(copy.deepcopy(user), copy.deepcopy(facts),
+            #             date, fact_idx, WRONG, plot=plot)
+
+            output_dict['profile'] = schedule_timing_profile
+            logger.info('scheduled fact {}'.format(facts[fact_idx].answer))
+            profile_str = [
+                '{}: {} ({})'.format(k, v, c)
+                for k, (c, v) in schedule_timing_profile.items()
+            ]
+            logger.info('\n' + '\n'.join(profile_str))
+
+            return output_dict
 
     def branch(
             self,
@@ -1202,15 +1221,35 @@ class MovingAvgScheduler:
         request = requests[indices[0]]
         fact = facts[indices[0]]
 
+        # find the scheduler output saved to the debug_id
+        debug_id = self.debug_id.get(request.user_id, 'null')
+        scheduler_output = session.query(SchedulerOutput).get(debug_id)
+
         # save user snapshot before update
-        user_snapshot = json.dumps({
-            'leitner_box': user.leitner_box,
-            'count_correct_before': user.count_correct_before,
-            'count_wrong_before': user.count_wrong_before,
-            'previous_study': user.previous_study,
-            'user_results': user.results,
-            'fact_results': fact.results,
-        })
+        user_snapshot = UserSnapshot(
+            debug_id=debug_id,
+            user_id=user.user_id,
+            record_id=request.history_id,
+            date=date,
+            recent_facts=[record.fact_id for record in user.records[::-1][:user.params.max_recent_facts]],
+            previous_study=user.previous_study,
+            leitner_box=user.leitner_box,
+            leitner_scheduled_date={k: str(v) for k, v in user.leitner_scheduled_date},
+            sm2_efactor=user.sm2_efactor,
+            sm2_interval=user.sm2_interval,
+            sm2_repetition=user.sm2_repetition,
+            sm2_scheduled_date={k: str(v) for k, v in user.sm2_scheduled_date},
+            results=user.results,
+            count_correct_before=user.count_correct_before,
+            count_wrong_before=user.count_wrong_before,
+            params=user.params,
+        )
+
+        # save fact snapshot before update
+        old_fact_snapshot = session.query(FactSnapshot).order_by(FactSnapshot.id.desc()).first()
+        new_results = deepcopy(old_fact_snapshot.results)
+        new_results[fact.fact_id].append(request.label)
+        new_fact_snapshot = FactSnapshot(results=new_results)
 
         # update user and fact
         # (optionally) commit preemptive compute
@@ -1227,9 +1266,6 @@ class MovingAvgScheduler:
             user = results['user']
             fact = results['fact']
 
-        if user.user_id in self.debug_id:
-            self.debug_id.pop(user.user_id)
-
         if request.elapsed_seconds_text is None:
             request.elapsed_seconds_text = request.elapsed_milliseconds_text * 1000
         if request.elapsed_seconds_answer is None:
@@ -1237,22 +1273,22 @@ class MovingAvgScheduler:
 
         record = Record(
             record_id=request.history_id,
-            debug_id=self.debug_id.get(request.user_id, 'null'),
+            debug_id=debug_id,
             user_id=request.user_id,
             fact_id=fact.fact_id,
             deck_id=fact.deck_id,
             response=request.label,
             judgement=request.label,
-            user_snapshot=user_snapshot,
-            scheduler_snapshot=json.dumps(user.params.__dict__),
             fact_ids=json.dumps([x.fact_id for x in facts]),
-            scheduler_output='',  # TODO something
             elapsed_seconds_text=request.elapsed_seconds_text,
             elapsed_seconds_answer=request.elapsed_seconds_answer,
             elapsed_milliseconds_text=request.elapsed_milliseconds_text,
             elapsed_milliseconds_answer=request.elapsed_milliseconds_answer,
             is_new_fact=int(fact.fact_id not in user.previous_study),
             date=date,
+            user_snapshot=user_snapshot,
+            fact_snapshot=new_fact_snapshot,
+            scheduler_output=scheduler_output,
         )
 
         # update user stats

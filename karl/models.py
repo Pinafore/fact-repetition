@@ -87,6 +87,29 @@ class User(Base):
     params = Column(ParamsType)
 
 
+class UserSnapshot(Base):
+    __tablename__ = 'user_snapshots'
+    debug_id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey('users.user_id'))
+    record_id = Column(String, ForeignKey('record.record_id'))
+    date = Column(DateTime)
+    recent_facts = Column(MutableList.as_mutable(JSONEncoded), default=[])
+    previous_study = Column(MutableDict.as_mutable(JSONEncoded), default={})
+    leitner_box = Column(MutableDict.as_mutable(JSONEncoded), default={})
+    leitner_scheduled_date = Column(MutableDict.as_mutable(JSONEncoded), default={})
+    sm2_efactor = Column(MutableDict.as_mutable(JSONEncoded), default={})
+    sm2_interval = Column(MutableDict.as_mutable(JSONEncoded), default={})
+    sm2_repetition = Column(MutableDict.as_mutable(JSONEncoded), default={})
+    sm2_scheduled_date = Column(MutableDict.as_mutable(JSONEncoded), default={})
+    results = Column(MutableList.as_mutable(JSONEncoded), default=[])
+    count_correct_before = Column(MutableDict.as_mutable(JSONEncoded), default={})
+    count_wrong_before = Column(MutableDict.as_mutable(JSONEncoded), default={})
+    params = Column(ParamsType)
+
+    user = relationship("User", back_populates="user_snapshots")
+    record = relationship("Record", back_populates="user_snapshot")
+
+
 class Record(Base):
     __tablename__ = 'records'
     record_id = Column(String, primary_key=True)
@@ -96,10 +119,7 @@ class Record(Base):
     deck_id = Column(String)
     response = Column(Boolean)
     judgement = Column(String)
-    user_snapshot = Column(String)
-    scheduler_snapshot = Column(String)
     fact_ids = Column(String)
-    scheduler_output = Column(String)
     elapsed_seconds_text = Column(Integer)
     elapsed_seconds_answer = Column(Integer)
     elapsed_milliseconds_text = Column(Integer)
@@ -109,6 +129,32 @@ class Record(Base):
 
     user = relationship("User", back_populates="records")
     fact = relationship("Fact", back_populates="records")
+
+    # NOTE we store the following snapshots so that we can jump to anywhere in time 
+    # to conduct an intervention on the scheduler 
+    # 1) without having to re-compute the whole history of each user, and
+    # 2) compare with the scheduler output before the intervention
+    user_snapshot = relationship("UserSnapshot", uselist=False, back_populates="record")
+    fact_snapshot = relationship("FactSnapshot", uselist=False, back_populates="record")
+    scheduler_output = relationship("SchedulerOutput", uselist=False, back_populates="record")
+
+
+class SchedulerOutput(Base):
+    debug_id = Column(String, primary_key=True)
+    order = Column(MutableDict.as_mutable(JSONEncoded), default=[])
+    scores = Column(MutableDict.as_mutable(JSONEncoded), default=[])
+    details = Column(MutableDict.as_mutable(JSONEncoded), default={})
+    rationale = Column(String)
+
+    record = relationship('Record', back_populates='scheduler_output')
+
+
+class FactSnapshot(Base):
+    id = Column(Integer , primary_key=True , autoincrement=True)
+    # fact_id -> list of binary results
+    results = Column(MutableDict.as_mutable(JSONEncoded), default={})
+    
+    record = relationship('Record', back_populates='fact_snapshot')
 
 
 class UserStat(Base):
@@ -132,9 +178,6 @@ class UserStat(Base):
     elapsed_minutes_text = Column(Integer, default=0)
     elapsed_minutes_answer = Column(Integer, default=0)
     n_days_studied = Column(Integer, default=0)
-    # known_rate = Column(Float)
-    # new_known_rate = Column(Float)
-    # review_known_rate = Column(Float)
 
     user = relationship("User", back_populates="user_stats")
 
@@ -142,3 +185,4 @@ class UserStat(Base):
 User.records = relationship("Record", order_by=Record.date, back_populates="user")
 Fact.records = relationship("Record", order_by=Record.date, back_populates="fact")
 User.user_stats = relationship("UserStat", order_by=UserStat.date, back_populates="user")
+User.user_snapshots = relationship("UserSnapshot", order_by=UserSnapshot.date, back_populates="user")

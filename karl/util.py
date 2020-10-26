@@ -1,5 +1,6 @@
 import socket
-from typing import Optional, List
+from typing import Optional, List, Dict, Tuple
+from datetime import datetime
 from pydantic import BaseModel
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -22,6 +23,14 @@ class ScheduleRequest(BaseModel):
     elapsed_seconds_answer: Optional[int]
     elapsed_milliseconds_text: Optional[int]
     elapsed_milliseconds_answer: Optional[int]
+
+
+class SchedulerOutputSchema(BaseModel):
+    order: List
+    scores: List
+    details: Dict
+    rationale: str
+    debug_id: str
 
 
 class Params(BaseModel):
@@ -105,6 +114,7 @@ class Visualization(BaseModel):
     deck_id: Optional[str] = None
     date_start: Optional[str] = None
     date_end: Optional[str] = None
+
 
 def get_sessions():
     hostname = socket.gethostname()
