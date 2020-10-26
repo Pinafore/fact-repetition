@@ -458,12 +458,6 @@ class MovingAvgScheduler:
                 n_days_studied=0,
             )
         
-        print('user_id', user_id)
-        print('before_stat.date', before_stat.date)
-        print('after_stat.date', after_stat.date)
-        print('before_stat.n_days_studied', before_stat.n_days_studied)
-        print('after_stat.n_days_studied', after_stat.n_days_studied)
-
         total_correct = (
             after_stat.new_correct
             + after_stat.reviewed_correct
