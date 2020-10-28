@@ -49,9 +49,9 @@ def get_record_df(session):
             continue
 
         for record in session.query(Record).\
-            filter(Record.user_id == user.user_id).\
-            filter(Record.date >= date_start).\
-            filter(Record.date <= date_end):
+                filter(Record.user_id == user.user_id).\
+                filter(Record.date >= date_start).\
+                filter(Record.date <= date_end):
             elapsed_seconds = record.elapsed_milliseconds_text / 1000
             elapsed_seconds += record.elapsed_milliseconds_answer / 1000
             elapsed_minutes = elapsed_seconds / 60
@@ -499,6 +499,7 @@ def figure_karl100_vs_karl85_level_ratio(
 
 
 def get_user_charts(
+    session,
     user: User,
     deck_id: str = None,
     date_start: str = '2008-06-01 08:00:00.000001 -0400',
@@ -769,7 +770,7 @@ def figures():
 
     for user_id in ['463', '413', '123', '38']:
         user = session.query(User).get(user_id)
-        charts = get_user_charts(user)
+        charts = get_user_charts(session, user)
         charts['user_level_vs_effort'].save(f'{output_path}/{user.user_id}_user_level_vs_effort.json')
         charts['user_level_ratio'].save(f'{output_path}/{user.user_id}_user_level_ratio.json')
 

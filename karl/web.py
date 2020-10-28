@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException
 from typing import List
 from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_date
-from cachetools import cached, TTLCache
+# from cachetools import cached, TTLCache
 from sqlalchemy.exc import SQLAlchemyError
 
 from karl.util import ScheduleRequest, Params, \
@@ -303,10 +303,10 @@ def n_days_studied(
 
         # go through user stats within the interval
         for user_stat in session.query(UserStat).\
-            filter(UserStat.user_id == user.user_id).\
-            filter(UserStat.deck_id == deck_id).\
-            filter(UserStat.date >= date_start, UserStat.date < date_end).\
-            order_by(UserStat.date):
+                filter(UserStat.user_id == user.user_id).\
+                filter(UserStat.deck_id == deck_id).\
+                filter(UserStat.date >= date_start, UserStat.date < date_end).\
+                order_by(UserStat.date):
             if user_stat.total_seen - prev_total_seen >= min_studied:
                 n_days[user.user_id] += 1
             prev_total_seen = user_stat.total_seen

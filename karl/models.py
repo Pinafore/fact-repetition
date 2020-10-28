@@ -2,10 +2,9 @@ import json
 import numpy as np
 import msgpack
 import msgpack_numpy
-from sqlalchemy import create_engine
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date
 from sqlalchemy import ForeignKey
-from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.mutable import MutableDict, MutableList
 import sqlalchemy.types as types
@@ -91,7 +90,7 @@ class UserSnapshot(Base):
     __tablename__ = 'user_snapshots'
     debug_id = Column(String, primary_key=True)
     user_id = Column(String, ForeignKey('users.user_id'))
-    record_id = Column(String, ForeignKey('record.record_id'))
+    record_id = Column(String, ForeignKey('records.record_id'))
     date = Column(DateTime)
     recent_facts = Column(MutableList.as_mutable(JSONEncoded), default=[])
     previous_study = Column(MutableDict.as_mutable(JSONEncoded), default={})
@@ -105,9 +104,6 @@ class UserSnapshot(Base):
     count_correct_before = Column(MutableDict.as_mutable(JSONEncoded), default={})
     count_wrong_before = Column(MutableDict.as_mutable(JSONEncoded), default={})
     params = Column(ParamsType)
-
-    user = relationship("User", back_populates="user_snapshots")
-    record = relationship("Record", back_populates="user_snapshot")
 
 
 class Record(Base):
@@ -127,16 +123,10 @@ class Record(Base):
     is_new_fact = Column(Boolean)
     date = Column(DateTime)
 
-    user = relationship("User", back_populates="records")
-    fact = relationship("Fact", back_populates="records")
-
-    # NOTE we store the following snapshots so that we can jump to anywhere in time 
-    # to conduct an intervention on the scheduler 
-    # 1) without having to re-compute the whole history of each user, and
-    # 2) compare with the scheduler output before the intervention
-    user_snapshot = relationship("UserSnapshot", uselist=False, back_populates="record")
-    fact_snapshot = relationship("FactSnapshot", uselist=False, back_populates="record")
-    scheduler_output = relationship("SchedulerOutput", uselist=False, back_populates="record")
+    # TODO 1. remove
+    user_snapshot = Column(String)
+    scheduler_snapshot = Column(String)
+    scheduler_output = Column(String)
 
 
 class SchedulerOutput(Base):
@@ -147,16 +137,13 @@ class SchedulerOutput(Base):
     details = Column(MutableDict.as_mutable(JSONEncoded), default={})
     rationale = Column(String)
 
-    record = relationship('Record', back_populates='scheduler_output')
-
 
 class FactSnapshot(Base):
     __tablename__ = 'fact_snapshots'
-    id = Column(Integer , primary_key=True , autoincrement=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     # fact_id -> list of binary results
     results = Column(MutableDict.as_mutable(JSONEncoded), default={})
-    
-    record = relationship('Record', back_populates='fact_snapshot')
+    record_id = Column(String, ForeignKey('records.record_id'))
 
 
 class UserStat(Base):
@@ -181,10 +168,25 @@ class UserStat(Base):
     elapsed_minutes_answer = Column(Integer, default=0)
     n_days_studied = Column(Integer, default=0)
 
-    user = relationship("User", back_populates="user_stats")
-
 
 User.records = relationship("Record", order_by=Record.date, back_populates="user")
-Fact.records = relationship("Record", order_by=Record.date, back_populates="fact")
 User.user_stats = relationship("UserStat", order_by=UserStat.date, back_populates="user")
+UserStat.user = relationship("User", back_populates="user_stats")
+Fact.records = relationship("Record", order_by=Record.date, back_populates="fact")
+Record.user = relationship("User", back_populates="records")
+Record.fact = relationship("Fact", back_populates="records")
+
+# TODO 2. add
+# NOTE we store the following snapshots so that we can jump to anywhere in time
+# to conduct an intervention on the scheduler
+# 1) without having to re-compute the whole history of each user, and
+# 2) compare with the scheduler output before the intervention
 User.user_snapshots = relationship("UserSnapshot", order_by=UserSnapshot.date, back_populates="user")
+Record.user_snapshot = relationship("UserSnapshot", uselist=False, back_populates="record")
+Record.fact_snapshot = relationship("FactSnapshot", uselist=False, back_populates="record")
+UserSnapshot.user = relationship("User", back_populates="user_snapshots")
+UserSnapshot.record = relationship("Record", back_populates="user_snapshot")
+FactSnapshot.record = relationship("Record", back_populates="fact_snapshot")
+
+# Record.scheduler_output = relationship("SchedulerOutput", uselist=False, back_populates="record")
+# SchedulerOutput.record = relationship('Record', back_populates='scheduler_output')

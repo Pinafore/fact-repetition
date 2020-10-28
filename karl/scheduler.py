@@ -11,7 +11,7 @@ import hashlib
 import logging
 import threading
 import numpy as np
-import pandas as pd
+# import pandas as pd
 import en_core_web_lg
 from tqdm import tqdm
 from copy import deepcopy
@@ -117,7 +117,7 @@ class MovingAvgScheduler:
         self.lda_model = gensim.models.ldamulticore.LdaMulticore.load(os.path.join(lda_dir, 'lda'))
         self.vocab = gensim.corpora.Dictionary.load_from_text(os.path.join(lda_dir, 'vocab.txt'))
         with open(os.path.join(lda_dir, 'topic_words.txt'), 'r') as f:
-            self.topic_words = [l.strip() for l in f.readlines()]
+            self.topic_words = [line.strip() for line in f.readlines()]
         with open(os.path.join(lda_dir, 'args.json'), 'r') as f:
             self.n_topics = json.load(f)['n_topics']
         logger.info(self.topic_words)
@@ -459,7 +459,7 @@ class MovingAvgScheduler:
                 elapsed_minutes_answer=0,
                 n_days_studied=0,
             )
-        
+
         total_correct = (
             after_stat.new_correct
             + after_stat.reviewed_correct
@@ -937,7 +937,13 @@ class MovingAvgScheduler:
             debug_id=self.debug_id[user.user_id],
         )
 
-    def schedule(self, session, requests: List[ScheduleRequest], date: datetime, plot=False) -> dict:
+    def schedule(
+        self,
+        session,
+        requests: List[ScheduleRequest],
+        date: datetime,
+        plot=False
+    ) -> SchedulerOutputSchema:
         """
         The main schedule function.
         1. Load user and fact from database, insert if new.
@@ -1234,11 +1240,11 @@ class MovingAvgScheduler:
             recent_facts=[record.fact_id for record in user.records[::-1][:user.params.max_recent_facts]],
             previous_study=user.previous_study,
             leitner_box=user.leitner_box,
-            leitner_scheduled_date={k: str(v) for k, v in user.leitner_scheduled_date},
+            leitner_scheduled_date={k: str(v) for k, v in user.leitner_scheduled_date.items()},
             sm2_efactor=user.sm2_efactor,
             sm2_interval=user.sm2_interval,
             sm2_repetition=user.sm2_repetition,
-            sm2_scheduled_date={k: str(v) for k, v in user.sm2_scheduled_date},
+            sm2_scheduled_date={k: str(v) for k, v in user.sm2_scheduled_date.items()},
             results=user.results,
             count_correct_before=user.count_correct_before,
             count_wrong_before=user.count_wrong_before,
@@ -1471,17 +1477,18 @@ class MovingAvgScheduler:
         :param user_qrep: the accumulated question representation of the user.
         :param filename: save figure to this path.
         """
-        max_qrep = np.max((fact_qrep, user_qrep), axis=0)
-        top_topics = np.argsort(-max_qrep)[:10]
-        fact_qrep = np.array(fact_qrep)[top_topics].tolist()
-        user_qrep = np.array(user_qrep)[top_topics].tolist()
-        top_topic_words = [self.topic_words[i] for i in top_topics]
+        pass
+        # max_qrep = np.max((fact_qrep, user_qrep), axis=0)
+        # top_topics = np.argsort(-max_qrep)[:10]
+        # fact_qrep = np.array(fact_qrep)[top_topics].tolist()
+        # user_qrep = np.array(user_qrep)[top_topics].tolist()
+        # top_topic_words = [self.topic_words[i] for i in top_topics]
         # topic_type = CategoricalDtype(categories=top_topic_words, ordered=True)
-        df = pd.DataFrame({
-            'topics': top_topic_words * 2,
-            'weight': fact_qrep + user_qrep,
-            'label': ['fact' for _ in top_topics] + ['user' for _ in top_topics]
-        })
+        # df = pd.DataFrame({
+        #     'topics': top_topic_words * 2,
+        #     'weight': fact_qrep + user_qrep,
+        #     'label': ['fact' for _ in top_topics] + ['user' for _ in top_topics]
+        # })
         # df['topics'] = df['topics'].astype(str).astype(topic_type)
 
         # TODO use altair

@@ -33,9 +33,9 @@ def upgrade():
             prev_total_seen = 0
 
             for user_stat in session.query(UserStat).\
-                filter(UserStat.user_id == user.user_id).\
-                filter(UserStat.deck_id == deck_id).\
-                order_by(UserStat.date):
+                    filter(UserStat.user_id == user.user_id).\
+                    filter(UserStat.deck_id == deck_id).\
+                    order_by(UserStat.date):
                 if user_stat.total_seen - prev_total_seen > 0:
                     n_days_studied += 1
                 user_stat.n_days_studied = n_days_studied
