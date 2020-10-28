@@ -11,7 +11,7 @@ from karl.retention.baseline import RetentionModel
 
 
 session = get_sessions()['prod']
-retention_model = RetentionModel()
+retention_model = RetentionModel('checkpoint/retention_model.pt')
 # %%
 rows = []
 users = session.query(User)
@@ -45,6 +45,7 @@ for user in tqdm(users, total=users.count()):
             'record_id': record.record_id,
             'result': record.response,
             'prediction': prob,
+            'leitner_box': record.user_snapshot.leitner_box.get(fact.fact_id, 0),
         }
         row.update(features_dict)
         rows.append(row)
@@ -66,7 +67,7 @@ bar = alt.Chart().mark_bar(opacity=0.3).encode(
     alt.Y('count()')
 )
 
-source = df[df.user_gap_from_previous < 1500]
+# source = df[df.user_gap_from_previous < 1500]
 
 chart = alt.layer(
     line, diag, bar, data=source,
@@ -75,7 +76,8 @@ chart = alt.layer(
 ).properties(
     height=180, width=300,
 ).facet(
-    alt.Facet('user_gap_from_previous', bin=alt.Bin(maxbins=10)),
+    # alt.Facet('user_gap_from_previous', bin=alt.Bin(maxbins=10)),
+    alt.Facet('leitner_box'),
     columns=2,
 ).resolve_scale(
     y='shared'

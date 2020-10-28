@@ -176,11 +176,10 @@ def main():
     model = TemperatureScaledNet(n_input=n_input).to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
-    checkpoint_dir = "checkpoints/retention_model.pt"
+    checkpoint_dir = "checkpoints/retention_model_20201028.pt"
 
     if args.evaluate:
-        checkpoint_dir = "checkpoints/retention_model.pt"
-        model.load_state_dict(torch.load('checkpoints/retention_model.pt'))
+        model.load_state_dict(torch.load(checkpoint_dir))
         model.eval()
         test_loss, predictions = test(args, model, device, test_loader)
         set_temperature(args, model, device, test_loader)
@@ -200,13 +199,17 @@ def main():
 
 class RetentionModel:
 
-    def __init__(self, use_cuda=True):
+    def __init__(
+        self, 
+        use_cuda=True,
+        checkpoint_dir='checkpoints/retention_model.pt',
+    ):
         self.dataset = RetentionDataset()
         n_input = self.dataset.x.shape[1]
         use_cuda = use_cuda and torch.cuda.is_available()
         self.device = torch.device("cuda" if use_cuda else "cpu")
         self.model = TemperatureScaledNet(n_input=n_input).to(self.device)
-        self.model.load_state_dict(torch.load('checkpoints/retention_model.pt'))
+        self.model.load_state_dict(torch.load(checkpoint_dir))
         self.model.eval()
 
     def compute_features(
@@ -223,8 +226,9 @@ class RetentionModel:
         else:
             # TODO this really shouldn't be the current date.
             # the default prev_date should be something much earlier
-            prev_date = str(date)
-            # prev_date = str(date - timedelta(days=10))
+            # prev_date = str(date)
+            prev_response = False
+            prev_date = str(date - timedelta(days=10))
             # prev_date = '2020-06-01'
         prev_date = parse_date(prev_date)
 
@@ -234,8 +238,8 @@ class RetentionModel:
             uq_total,  # user_count_total
             0 if len(user.results) == 0 else np.mean(user.results),  # user_average_overall_accuracy
             0 if uq_total == 0 else uq_correct / uq_total,  # user_average_question_accuracy
-            0 if len(user.results) == 0 else int(user.results[-1]),  # TODO seems wrong user_previous_result
-            (date - prev_date).seconds / (60 * 60),  # user_gap_from_previous TODO wrong, total_seconds
+            prev_response,
+            (date - prev_date).total_seconds() / (60 * 60),  # user_gap_from_previous TODO wrong, total_seconds
             0 if len(fact.results) == 0 else np.mean(fact.results),  # question_average_overall_accuracy
             len(fact.results),  # question_count_total
             sum(fact.results),  # question_count_correct

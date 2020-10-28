@@ -139,7 +139,7 @@ def get_filtered_df(data_dir=DATA_DIR):
         index_to_drop = []
         for row in group.itertuples(index=True):
             date = row.date.replace(tzinfo=None)
-            if (date - current_date).seconds <= time_window:
+            if (date - current_date).total_seconds() <= time_window:
                 index_to_drop.append(row.Index)
             else:
                 current_date = date
@@ -190,7 +190,7 @@ def _user_features(group):
             count_total.append(count_total_of_qid[row.qid])
             average_question_accuracy.append(np.mean(question_results[row.qid]))
             previous_result.append(question_results[row.qid][-1])
-            gap_from_previous.append((row.date - previous_date[row.qid]).seconds / (60 * 60))
+            gap_from_previous.append((row.date - previous_date[row.qid]).total_seconds() / (60 * 60))
 
         if len(overall_results) == 0:
             average_overall_accuracy.append(0)
