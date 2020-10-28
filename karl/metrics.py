@@ -1,18 +1,16 @@
 # %%
 import os
-import json
 import bisect
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from typing import List
 from datetime import timedelta
 from dateutil.parser import parse as parse_date
 import altair as alt
 alt.data_transformers.disable_max_rows()
 alt.renderers.enable('mimetype')
 
-from karl.util import get_sessions, Visualization
+from karl.util import get_sessions
 from karl.models import User, Record
 
 
@@ -56,12 +54,12 @@ def get_record_df(session):
             elapsed_seconds = record.elapsed_milliseconds_text / 1000
             elapsed_seconds += record.elapsed_milliseconds_answer / 1000
             elapsed_minutes = elapsed_seconds / 60
-            leitner_box = json.loads(record.user_snapshot)['leitner_box']
+            leitner_box = record.user_snapshot.leitner_box
             rows.append({
                 'record_id': record.record_id,
                 'user_id': user.user_id,
                 'fact_id': record.fact_id,
-                'repetition_model': json.loads(record.scheduler_snapshot)['repetition_model'],
+                'repetition_model': record.user_snapshot.params.repetition_model,
                 'is_new_fact': record.is_new_fact,
                 'result': record.response,
                 'datetime': record.date,
@@ -530,14 +528,12 @@ def get_user_charts(
         elapsed_seconds = record.elapsed_milliseconds_text / 1000
         elapsed_seconds += record.elapsed_milliseconds_answer / 1000
         elapsed_minutes = elapsed_seconds / 60
-
-        leitner_box = json.loads(record.user_snapshot)['leitner_box']
-
+        leitner_box = record.user_snapshot.leitner_box
         rows.append({
             'record_id': record.record_id,
             'user_id': user_id,
             'fact_id': record.fact_id,
-            'repetition_model': json.loads(record.scheduler_snapshot)['repetition_model'],
+            'repetition_model': record.user_snapshot.params.repetition_model,
             'is_new_fact': record.is_new_fact,
             'result': record.response,
             'datetime': record.date,
@@ -617,7 +613,7 @@ def get_user_charts(
     ).add_selection(
         selection
     )
-    # repetition_model = json.loads(user.records[-1].scheduler_snapshot)['repetition_model']
+    # repetition_model = user.records[-1].user_snapshot.params.repetition_model
     chart = alt.layer(
         bar,
         line
@@ -765,7 +761,8 @@ def figure_n_users_and_records(session, output_path):
 
 
 def figures():
-    output_path = '/fs/clip-quiz/shifeng/ihsgnef.github.io/images'
+    # output_path = '/fs/clip-quiz/shifeng/ihsgnef.github.io/images'
+    output_path = 'figures/'
     session = get_sessions()['prod']
     df = get_processed_df(session)
     figure_n_users_and_records(session, output_path)

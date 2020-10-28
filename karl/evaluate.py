@@ -1,42 +1,37 @@
-#%%
+# %%
 '''Use collected data (stored in PostgreSQL) to evaluate retention model'''
-import json
 import pandas as pd
 import altair as alt
 from tqdm import tqdm
-from sqlalchemy import inspect
-from dateutil.parser import parse as parse_date
+import sqlalchemy as sa
 
 from karl.web import get_sessions
-from karl.models import User, Fact, Record
+from karl.models import User
 from karl.retention.baseline import RetentionModel
 
 
 session = get_sessions()['prod']
 retention_model = RetentionModel()
-#%%
+# %%
 rows = []
 users = session.query(User)
 for user in tqdm(users, total=users.count()):
-    session.expunge(user)
-    # since user is expunged from session, cannot read user.records
-    records = session.query(Record).\
-        filter(Record.user_id == user.user_id).\
-        order_by(Record.date)
-    for record in records:
-        snapshot = json.loads(record.user_snapshot)
-
-        # restore parts of the user state that are relevant to retention
-        user.previous_study = snapshot['previous_study']
-        user.results = snapshot['user_results']
-        user.count_correct_before = snapshot['count_correct_before']
-        user.count_wrong_before = snapshot['count_wrong_before']
-
-        # restore parts of the fact state that are relevant to retention
+    user_records = user.records
+    if not sa.inspect(user).detached:
+        session.expunge(user)
+    user.records = user_records
+    for record in user.records:
         fact = record.fact
-        if not inspect(fact).detached:
+        if not sa.inspect(fact).detached:
             session.expunge(fact)
-        fact.results = snapshot['fact_results']
+
+        fact.results = record.fact_snapshot.results.get(fact.fact_id, [])
+
+        user.previous_study = record.user_snapshot.previous_study
+        user.results = record.user_snapshot.results
+        user.count_correct_before = record.user_snapshot.count_correct_before
+        user.count_wrong_before = record.user_snapshot.count_wrong_before
+        user.params = record.user_snapshot.params
 
         # predict
         prob = retention_model.predict_one(user, fact, record.date)
@@ -62,7 +57,7 @@ line = alt.Chart().mark_line().encode(
     alt.X('prediction:Q', bin=alt.Bin(maxbins=20)),
     alt.Y('mean(result):Q')
 )
-diag = alt.Chart().mark_line(strokeDash=[1,1]).encode(
+diag = alt.Chart().mark_line(strokeDash=[1, 1]).encode(
     alt.X('prediction:Q', bin=alt.Bin(maxbins=20)),
     alt.Y('prediction:Q', bin=alt.Bin(maxbins=20), title=None, axis=None),
 )

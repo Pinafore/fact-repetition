@@ -870,14 +870,17 @@ class MovingAvgScheduler:
         """
         facts_info = []
         for i in order[:top_n_facts]:
-            fact_info = copy.deepcopy(facts[i].__dict__)
+            fact_info = copy.deepcopy({
+                k: v for k, v in facts[i].__dict__.items()
+                if k != '_sa_instance_state'
+            })
             fact_info['scores'] = scores[i]
             prev_date, prev_response = user.previous_study.get(fact_info['fact_id'], ('-', '-'))
             fact_info.update({
-                'current date': date,
+                'current date': str(date),
                 'topic': self.topic_words[np.argmax(fact_info['qrep'])],
                 'prev_response': prev_response,
-                'prev_date': prev_date
+                'prev_date': str(prev_date),
             })
             fact_info.pop('qrep')
             fact_info.pop('skill')
