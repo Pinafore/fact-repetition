@@ -5,13 +5,14 @@ import bisect
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+from typing import List
 from datetime import timedelta
 from dateutil.parser import parse as parse_date
 import altair as alt
 alt.data_transformers.disable_max_rows()
 alt.renderers.enable('mimetype')
 
-from karl.util import get_sessions
+from karl.util import get_sessions, Visualization
 from karl.models import User, Record
 
 
@@ -500,11 +501,13 @@ def figure_karl100_vs_karl85_level_ratio(
 
 def get_user_charts(
     session,
-    user: User,
+    user_id: str,
     deck_id: str = None,
     date_start: str = '2008-06-01 08:00:00.000001 -0400',
     date_end: str = '2038-06-01 08:00:00.000001 -0400',
 ):
+    # returns a dict of chart_name -> chart
+
     '''Gather records into a single dataframe'''
     correct_on_first_try = {}
     rows = []
@@ -513,7 +516,10 @@ def get_user_charts(
     date_end = parse_date(date_end)
 
     records = session.query(Record).\
-        filter(Record.user_id == user.user_id).\
+        filter(Record.user_id == user_id)
+    if deck_id is not None:
+        records = records.filter(Record.deck_id == deck_id)
+    records = records.\
         filter(Record.date >= date_start).\
         filter(Record.date <= date_end).\
         order_by(Record.date)
@@ -529,7 +535,7 @@ def get_user_charts(
 
         rows.append({
             'record_id': record.record_id,
-            'user_id': user.user_id,
+            'user_id': user_id,
             'fact_id': record.fact_id,
             'repetition_model': json.loads(record.scheduler_snapshot)['repetition_model'],
             'is_new_fact': record.is_new_fact,
@@ -568,7 +574,7 @@ def get_user_charts(
     source['type'] = source.name.apply(lambda x: 'Successful' if x[-1] == 'O' else 'Failed')
     source['level'] = source.name.apply(lambda x: x[:-2])
 
-    df_right = df[df.user_id == user.user_id][[
+    df_right = df[df.user_id == user_id][[
         'datetime',
         'elapsed_minutes',
     ]]
@@ -769,10 +775,9 @@ def figures():
     figure_karl100_vs_karl85_level_ratio(df, output_path)
 
     for user_id in ['463', '413', '123', '38']:
-        user = session.query(User).get(user_id)
-        charts = get_user_charts(session, user)
-        charts['user_level_vs_effort'].save(f'{output_path}/{user.user_id}_user_level_vs_effort.json')
-        charts['user_level_ratio'].save(f'{output_path}/{user.user_id}_user_level_ratio.json')
+        charts = get_user_charts(session, user_id)
+        charts['user_level_vs_effort'].save(f'{output_path}/{user_id}_user_level_vs_effort.json')
+        charts['user_level_ratio'].save(f'{output_path}/{user_id}_user_level_ratio.json')
 
 
 if __name__ == '__main__':

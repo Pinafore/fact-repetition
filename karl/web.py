@@ -418,19 +418,22 @@ def user_charts(
     date_end: str = '2038-06-01 08:00:00.000001 -0400',
 ) -> List[Visualization]:
     env = 'dev' if env == 'dev' else 'prod'
-    user = sessions[env].query(User).get(user_id)
-    if user is None:
-        return
+    session = sessions[env]
 
-    charts = get_user_charts(user)  # chart_name -> chart
+    charts = get_user_charts(
+        session,
+        user_id=user_id,
+        deck_id=deck_id,
+        date_start=date_start,
+        date_end=date_end,
+    )
+
     visualizations = []
     for chart_name, chart in charts.items():
-        chart_path = f'figures/test_user_charts/{user_id}_{chart_name}.json'
-        chart.save(chart_path)
         visualizations.append(
             Visualization(
                 name=chart_name,
-                specs=json.load(chart_path),
+                specs=chart.to_json(),
                 user_id=user_id,
                 env=env,
                 deck_id=deck_id,
