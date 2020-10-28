@@ -761,8 +761,7 @@ def figure_n_users_and_records(session, output_path):
 
 
 def figures():
-    # output_path = '/fs/clip-quiz/shifeng/ihsgnef.github.io/images'
-    output_path = 'figures/'
+    output_path = '/fs/clip-quiz/shifeng/ihsgnef.github.io/images'
     session = get_sessions()['prod']
     df = get_processed_df(session)
     figure_n_users_and_records(session, output_path)
