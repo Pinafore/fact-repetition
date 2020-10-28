@@ -4,7 +4,7 @@
 import argparse
 import numpy as np
 from typing import List
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_date
 
 import torch
@@ -200,7 +200,7 @@ def main():
 class RetentionModel:
 
     def __init__(
-        self, 
+        self,
         use_cuda=True,
         checkpoint_dir='checkpoints/retention_model.pt',
     ):
