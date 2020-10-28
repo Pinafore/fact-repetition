@@ -223,9 +223,9 @@ class RetentionModel:
         else:
             # TODO this really shouldn't be the current date.
             # the default prev_date should be something much earlier
-            # prev_date = str(date)
+            prev_date = str(date)
             # prev_date = str(date - timedelta(days=10))
-            prev_date = '2020-06-01'
+            # prev_date = '2020-06-01'
         prev_date = parse_date(prev_date)
 
         features = [
