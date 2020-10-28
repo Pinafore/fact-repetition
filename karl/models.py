@@ -123,11 +123,6 @@ class Record(Base):
     is_new_fact = Column(Boolean)
     date = Column(DateTime)
 
-    # TODO 1. remove
-    user_snapshot = Column(String)
-    scheduler_snapshot = Column(String)
-    scheduler_output = Column(String)
-
 
 class SchedulerOutput(Base):
     __tablename__ = 'scheduler_outputs'
@@ -177,7 +172,6 @@ Fact.records = relationship("Record", order_by=Record.date, back_populates="fact
 Record.user = relationship("User", back_populates="records")
 Record.fact = relationship("Fact", back_populates="records")
 
-# TODO 2. add
 # NOTE we store the following snapshots so that we can jump to anywhere in time
 # to conduct an intervention on the scheduler
 # 1) without having to re-compute the whole history of each user, and

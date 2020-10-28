@@ -65,13 +65,7 @@ def schedule(
     env = 'dev' if requests[0].env == 'dev' else 'prod'
 
     try:
-        results = scheduler.schedule(sessions[env], requests, date, plot=False)
-        return {
-            'order': results['order'],
-            'rationale': results['rationale'],
-            'facts_info': results['facts_info'],
-            # 'profile': results['profile'],
-        }
+        return scheduler.schedule(sessions[env], requests, date, plot=False)
     except SQLAlchemyError as e:
         print(repr(e))
         sessions[env].rollback()
