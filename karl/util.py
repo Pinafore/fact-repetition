@@ -27,7 +27,7 @@ class ScheduleRequest(BaseModel):
 class SchedulerOutputSchema(BaseModel):
     order: List
     scores: List
-    details: Dict
+    details: List
     rationale: str
     debug_id: str
 

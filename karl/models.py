@@ -132,10 +132,11 @@ class Record(Base):
 class SchedulerOutput(Base):
     __tablename__ = 'scheduler_outputs'
     debug_id = Column(String, primary_key=True)
-    order = Column(MutableDict.as_mutable(JSONEncoded), default=[])
-    scores = Column(MutableDict.as_mutable(JSONEncoded), default=[])
-    details = Column(MutableDict.as_mutable(JSONEncoded), default={})
+    order = Column(MutableList.as_mutable(JSONEncoded))
+    scores = Column(MutableList.as_mutable(JSONEncoded))
+    details = Column(MutableList.as_mutable(JSONEncoded))
     rationale = Column(String)
+    record_id = Column(String, ForeignKey('records.record_id'))
 
 
 class FactSnapshot(Base):
@@ -188,5 +189,5 @@ UserSnapshot.user = relationship("User", back_populates="user_snapshots")
 UserSnapshot.record = relationship("Record", back_populates="user_snapshot")
 FactSnapshot.record = relationship("Record", back_populates="fact_snapshot")
 
-# Record.scheduler_output = relationship("SchedulerOutput", uselist=False, back_populates="record")
-# SchedulerOutput.record = relationship('Record', back_populates='scheduler_output')
+Record.scheduler_output = relationship("SchedulerOutput", uselist=False, back_populates="record")
+SchedulerOutput.record = relationship('Record', back_populates='scheduler_output')
