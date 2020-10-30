@@ -1257,6 +1257,8 @@ class MovingAvgScheduler:
         # save fact snapshot before update
         old_fact_snapshot = session.query(FactSnapshot).order_by(FactSnapshot.id.desc()).first()
         new_results = deepcopy(old_fact_snapshot.results)
+        if fact.fact_id not in new_results:
+            new_results[fact.fact_id] = []
         new_results[fact.fact_id].append(request.label)
         new_fact_snapshot = FactSnapshot(results=new_results)
 

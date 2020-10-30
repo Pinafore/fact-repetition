@@ -50,7 +50,8 @@ def get_record_df(session):
         for record in session.query(Record).\
                 filter(Record.user_id == user.user_id).\
                 filter(Record.date >= date_start).\
-                filter(Record.date <= date_end):
+                filter(Record.date <= date_end).\
+                order_by(Record.date):
             elapsed_seconds = record.elapsed_milliseconds_text / 1000
             elapsed_seconds += record.elapsed_milliseconds_answer / 1000
             elapsed_minutes = elapsed_seconds / 60

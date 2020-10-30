@@ -239,7 +239,7 @@ class RetentionModel:
             0 if len(user.results) == 0 else np.mean(user.results),  # user_average_overall_accuracy
             0 if uq_total == 0 else uq_correct / uq_total,  # user_average_question_accuracy
             prev_response,
-            (date - prev_date).total_seconds() / (60 * 60),  # user_gap_from_previous TODO wrong, total_seconds
+            (date - prev_date).total_seconds() / (60 * 60),  # user_gap_from_previous
             0 if len(fact.results) == 0 else np.mean(fact.results),  # question_average_overall_accuracy
             len(fact.results),  # question_count_total
             sum(fact.results),  # question_count_correct
