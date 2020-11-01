@@ -11,7 +11,7 @@ alt.data_transformers.disable_max_rows()
 alt.renderers.enable('mimetype')
 
 from karl.util import get_sessions
-from karl.models import User, Record
+from karl.models import User, Record, UserSnapshot
 
 
 def save_chart_and_pdf(chart, path):
@@ -40,27 +40,25 @@ def get_record_df(session):
         if len(user.records) == 0:
             continue
 
-        last_record = session.query(Record).\
-            filter(Record.user_id == user.user_id).\
-            filter(Record.date <= date_end).\
-            order_by(Record.date.desc()).first()
-        if last_record is None:
-            continue
-
-        for record in session.query(Record).\
-                filter(Record.user_id == user.user_id).\
-                filter(Record.date >= date_start).\
-                filter(Record.date <= date_end).\
-                order_by(Record.date):
+        # for record in session.query(Record).\
+        #         filter(Record.user_id == user.user_id).\
+        #         filter(Record.date >= date_start).\
+        #         filter(Record.date <= date_end).\
+        #         order_by(Record.date):
+        for record in user.records:
             elapsed_seconds = record.elapsed_milliseconds_text / 1000
             elapsed_seconds += record.elapsed_milliseconds_answer / 1000
             elapsed_minutes = elapsed_seconds / 60
-            leitner_box = record.user_snapshot.leitner_box
+            user_snapshot = session.query(UserSnapshot).get(record.debug_id)
+            leitner_box = user_snapshot.leitner_box
+            repetition_model = user_snapshot.params.repetition_model
+            # leitner_box = {}
+            # repetition_model = 'karl100'
             rows.append({
                 'record_id': record.record_id,
                 'user_id': user.user_id,
                 'fact_id': record.fact_id,
-                'repetition_model': record.user_snapshot.params.repetition_model,
+                'repetition_model': repetition_model,
                 'is_new_fact': record.is_new_fact,
                 'result': record.response,
                 'datetime': record.date,
@@ -73,7 +71,7 @@ def get_record_df(session):
 
 
 def get_processed_df(session):
-    '''Computer varoius x-axis and metrics'''
+    '''Compute varoius x-axis and metrics'''
 
     date_start = session.query(Record).order_by(Record.date).first().date.date()
     date_end = session.query(Record).order_by(Record.date.desc()).first().date.date()
