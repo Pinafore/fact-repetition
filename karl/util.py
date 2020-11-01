@@ -117,9 +117,9 @@ class Visualization(BaseModel):
 
 def get_sessions():
     hostname = socket.gethostname()
-    if hostname.startswith('newspeak'):
+    if hostname.startswith('lapine'):
         db_host = '/fs/clip-quiz/shifeng/postgres/run'
-    elif hostname.startswith('lapine'):
+    elif hostname.startswith('newspeak'):
         db_host = '/fs/clip-scratch/shifeng/postgres/run'
     else:
         print('unrecognized hostname')
