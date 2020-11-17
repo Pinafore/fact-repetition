@@ -178,9 +178,9 @@ Record.fact = relationship("Fact", back_populates="records")
 # 2) compare with the scheduler output before the intervention
 # User.user_snapshots = relationship("UserSnapshot", order_by=UserSnapshot.date, back_populates="user")
 # UserSnapshot.user = relationship("User", back_populates="user_snapshots")
-# Record.user_snapshot = relationship("UserSnapshot", uselist=False, back_populates="record")
+Record.user_snapshot = relationship("UserSnapshot", uselist=False, back_populates="record")
 # Record.fact_snapshot = relationship("FactSnapshot", uselist=False, back_populates="record")
-# UserSnapshot.record = relationship("Record", back_populates="user_snapshot")
+UserSnapshot.record = relationship("Record", back_populates="user_snapshot")
 # FactSnapshot.record = relationship("Record", back_populates="fact_snapshot")
 
 # Record.scheduler_output = relationship("SchedulerOutput", uselist=False, back_populates="record")
