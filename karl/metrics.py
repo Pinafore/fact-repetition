@@ -11,7 +11,7 @@ alt.data_transformers.disable_max_rows()
 alt.renderers.enable('mimetype')
 
 from karl.util import get_sessions
-from karl.models import User, Record
+from karl.models import User, Record, UserSnapshot
 
 
 def save_chart_and_pdf(chart, path):
@@ -19,7 +19,11 @@ def save_chart_and_pdf(chart, path):
     os.system(f'vl2vg {path}.json | vg2pdf > {path}.pdf')
 
 
-def get_record_df(session):
+def get_record_df(
+    session,
+    date_start: str = '2020-08-23',
+    date_end: str = '2024-08-23',
+):
     '''Gather records into a DataFrame'''
     user_start_date = {}  # user_id -> first day of study
     correct_on_first_try = {}  # user_id -> {fact_id -> bool}
@@ -32,8 +36,8 @@ def get_record_df(session):
                 continue
             correct_on_first_try[user.user_id][record.fact_id] = record.response
 
-    date_start = session.query(Record).order_by(Record.date).first().date.date()
-    date_end = session.query(Record).order_by(Record.date.desc()).first().date.date()
+    date_start = parse_date(date_start)
+    date_end = parse_date(date_end)
 
     rows = []
     for user in tqdm(session.query(User), total=session.query(User).count()):
@@ -55,30 +59,30 @@ def get_record_df(session):
             elapsed_seconds = record.elapsed_milliseconds_text / 1000
             elapsed_seconds += record.elapsed_milliseconds_answer / 1000
             elapsed_minutes = elapsed_seconds / 60
-            leitner_box = record.user_snapshot.leitner_box
+            user_snapshot = session.query(UserSnapshot).get(record.debug_id)
             rows.append({
                 'record_id': record.record_id,
                 'user_id': user.user_id,
                 'fact_id': record.fact_id,
-                'repetition_model': record.user_snapshot.params.repetition_model,
+                'repetition_model': user_snapshot.params.repetition_model,
                 'is_new_fact': record.is_new_fact,
                 'result': record.response,
                 'datetime': record.date,
                 'elapsed_minutes': elapsed_minutes,
                 'user_start_date': user_start_date[user.user_id],
                 'is_known_fact': correct_on_first_try[user.user_id][record.fact_id],
-                'leitner_box': leitner_box.get(record.fact_id, 0),
+                'leitner_box': user_snapshot.leitner_box.get(record.fact_id, 0),
             })
     return pd.DataFrame(rows).sort_values('datetime', axis=0)
 
 
-def get_processed_df(session):
+def get_processed_df(
+        session,
+        date_start: str = '2020-08-23',
+        date_end: str = '2024-08-23',
+):
     '''Computer varoius x-axis and metrics'''
-
-    date_start = session.query(Record).order_by(Record.date).first().date.date()
-    date_end = session.query(Record).order_by(Record.date.desc()).first().date.date()
-
-    df = get_record_df(session)
+    df = get_record_df(session, date_start, date_end)
     df['date'] = df['datetime'].apply(lambda x: x.date())
     '''Compute x-axis'''
     # number of total facts shown since start
@@ -105,6 +109,9 @@ def get_processed_df(session):
     n_bins = (df.n_days_since_start.max()) // n_days_bin_size + 1
     n_days_bins = [i * n_days_bin_size for i in range(n_bins)]
     df['n_days_since_start_binned'] = df.n_days_since_start.apply(func(n_days_bins))
+
+    date_start = parse_date(date_start).date()
+    date_end = parse_date(date_end).date()
 
     # bin date
     date_bin_size = 3  # days
@@ -529,19 +536,20 @@ def get_user_charts(
         elapsed_seconds = record.elapsed_milliseconds_text / 1000
         elapsed_seconds += record.elapsed_milliseconds_answer / 1000
         elapsed_minutes = elapsed_seconds / 60
-        leitner_box = record.user_snapshot.leitner_box
-        rows.append({
-            'record_id': record.record_id,
-            'user_id': user_id,
-            'fact_id': record.fact_id,
-            'repetition_model': record.user_snapshot.params.repetition_model,
-            'is_new_fact': record.is_new_fact,
-            'result': record.response,
-            'datetime': record.date,
-            'elapsed_minutes': elapsed_minutes,
-            'is_known_fact': correct_on_first_try[record.fact_id],
-            'leitner_box': leitner_box.get(record.fact_id, 0),
-        })
+        user_snapshot = session.query(UserSnapshot).get(record.debug_id)
+        if user_snapshot is not None:
+            rows.append({
+                'record_id': record.record_id,
+                'user_id': user_id,
+                'fact_id': record.fact_id,
+                'repetition_model': user_snapshot.params.repetition_model,
+                'is_new_fact': record.is_new_fact,
+                'result': record.response,
+                'datetime': record.date,
+                'elapsed_minutes': elapsed_minutes,
+                'is_known_fact': correct_on_first_try[record.fact_id],
+                'leitner_box': user_snapshot.leitner_box.get(record.fact_id, 0),
+            })
     df = pd.DataFrame(rows).sort_values('datetime', axis=0)
 
     df['initial_O_'] = df.apply(lambda x: (x.leitner_box == 0) & x.result, axis=1)
@@ -659,13 +667,20 @@ def get_user_charts(
     return charts
 
 
-def figure_n_users_and_records(session, output_path):
+def figure_n_users_and_records(
+        session, 
+        output_path,
+        date_start: str = '2020-08-23',
+        date_end: str = '2024-08-23',
+):
     rows = []
     user_ids = set()  # to check if its new user
-    date_start = parse_date('2020-08-23')
+    date_start = parse_date(date_start)
+    date_end = parse_date(date_end)
     records = session.query(Record).\
         order_by(Record.date).\
-        filter(Record.date >= date_start)
+        filter(Record.date >= date_start).\
+        filter(Record.date <= date_end)
     n_records = 0
     curr_date = records.first().date.date()
     for record in records:
@@ -764,17 +779,21 @@ def figure_n_users_and_records(session, output_path):
 def figures():
     output_path = '/fs/clip-quiz/shifeng/ihsgnef.github.io/images'
     session = get_sessions()['prod']
-    df = get_processed_df(session)
-    figure_n_users_and_records(session, output_path)
-    figure_new_old_successful_failed(df, output_path)
-    figure_model_level_vs_effort(df, output_path)
-    figure_model_level_ratio(df, output_path)
-    figure_karl100_vs_karl85_level_ratio(df, output_path)
+    date_start = '2020-08-23'
+    date_end = '2020-11-01'
+    chart = figure_n_users_and_records(session, output_path, date_start, date_end)
+    save_chart_and_pdf(chart, f'figures/new_old_correct_wrong')
 
-    for user_id in ['463', '413', '123', '38']:
-        charts = get_user_charts(session, user_id)
-        charts['user_level_vs_effort'].save(f'{output_path}/{user_id}_user_level_vs_effort.json')
-        charts['user_level_ratio'].save(f'{output_path}/{user_id}_user_level_ratio.json')
+    # df = get_processed_df(session, date_start, date_end)
+    # figure_new_old_successful_failed(df, output_path)
+    # figure_model_level_vs_effort(df, output_path)
+    # figure_model_level_ratio(df, output_path)
+    # figure_karl100_vs_karl85_level_ratio(df, output_path)
+
+    # for user_id in ['463', '413', '123', '38']:
+    #     charts = get_user_charts(session, user_id)
+    #     charts['user_level_vs_effort'].save(f'{output_path}/{user_id}_user_level_vs_effort.json')
+    #     charts['user_level_ratio'].save(f'{output_path}/{user_id}_user_level_ratio.json')
 
 
 if __name__ == '__main__':

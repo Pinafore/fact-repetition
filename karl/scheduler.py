@@ -303,7 +303,6 @@ class MovingAvgScheduler:
         fact.skill *= self.get_skill_for_fact(fact)
 
         session.add(fact)
-        session.commit()
         return fact
 
     def get_facts(self, session, requests: List[ScheduleRequest]) -> List[Fact]:
@@ -346,7 +345,6 @@ class MovingAvgScheduler:
             fact.skill[np.argmax(fact.qrep)] = 1
             fact.skill *= fact_skills[i]
         session.bulk_save_objects(new_facts)
-        session.commit()
         return facts
 
     def get_all_users(self, session) -> List[User]:
@@ -368,7 +366,6 @@ class MovingAvgScheduler:
         # create new user and insert to db
         new_user = User(user_id=user_id)
         session.add(new_user)
-        session.commit()
         return new_user
 
     def get_records(
@@ -562,7 +559,6 @@ class MovingAvgScheduler:
         """
         user = self.get_user(session, user_id)
         user.params = params
-        session.commit()
 
     def dist_category(self, user: User, fact: Fact) -> float:
         """
@@ -998,7 +994,6 @@ class MovingAvgScheduler:
                 rationale=output.rationale,
             )
             session.add(scheduler_output)
-            session.commit()
             return output
         else:
             t1 = datetime.now()
@@ -1281,6 +1276,14 @@ class MovingAvgScheduler:
             request.elapsed_seconds_text = request.elapsed_milliseconds_text * 1000
         if request.elapsed_seconds_answer is None:
             request.elapsed_seconds_answer = request.elapsed_milliseconds_answer * 1000
+        
+        is_new_fact = True
+        if session.query(Record).\
+            filter(Record.user_id == request.user_id).\
+            filter(Record.fact_id == fact.fact_id).\
+            filter(Record.deck_id == fact.deck_id).\
+            first() is not None:
+            is_new_fact = False
 
         record = Record(
             record_id=request.history_id,
@@ -1295,11 +1298,11 @@ class MovingAvgScheduler:
             elapsed_seconds_answer=request.elapsed_seconds_answer,
             elapsed_milliseconds_text=request.elapsed_milliseconds_text,
             elapsed_milliseconds_answer=request.elapsed_milliseconds_answer,
-            is_new_fact=int(fact.fact_id not in user.previous_study),
+            is_new_fact=is_new_fact,
             date=date,
-            user_snapshot=user_snapshot,
-            fact_snapshot=new_fact_snapshot,
-            scheduler_output=scheduler_output,
+            # user_snapshot=user_snapshot,
+            # fact_snapshot=new_fact_snapshot,
+            # scheduler_output=scheduler_output,
         )
 
         # update user stats
@@ -1308,7 +1311,6 @@ class MovingAvgScheduler:
             self.update_user_stats(session, user, record, deck_id=fact.deck_id)
 
         session.add(record)
-        session.commit()
 
     def update_user_stats(self, session, user: User, record: Record, deck_id: str):
         # get the latest user_stat ordered by date
@@ -1400,7 +1402,6 @@ class MovingAvgScheduler:
 
         if is_new_stat:
             session.add(curr_stat)
-            session.commit()
 
     def leitner_update(self, user: User, fact: Fact, response: bool) -> None:
         """
