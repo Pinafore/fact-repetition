@@ -74,7 +74,7 @@ def schedule(
 
 @app.post('/api/karl/update')
 def update(requests: List[ScheduleRequest], response_model=bool):
-    logger.info(f'/karl/update with {len(requests)} facts and env={requests[0].env}')
+    logger.info(f'/karl/update with {len(requests)} facts and env={requests[0].env} and debug_id={requests[0].debug_id}')
 
     # NOTE assuming single user single date
     date = parse_date(datetime.now().strftime('%Y-%m-%dT%H:%M:%S%z'))
@@ -122,6 +122,7 @@ def set_repetition_model(user_id: str, env: str, repetition_model: str):
             leitner=0,
             sm2=1,
             cool_down=0,
+            recall_target=1,
         )
         scheduler.set_user_params(session, user_id, params)
         session.commit()
@@ -137,6 +138,7 @@ def set_repetition_model(user_id: str, env: str, repetition_model: str):
             leitner=1,
             sm2=0,
             cool_down=0,
+            recall_target=1,
         )
         scheduler.set_user_params(session, user_id, params)
         session.commit()
