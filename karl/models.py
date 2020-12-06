@@ -112,6 +112,9 @@ class Record(Base):
     debug_id = Column(String)
     user_id = Column(String, ForeignKey('users.user_id'))
     fact_id = Column(String, ForeignKey('facts.fact_id'))
+    user_snapshot_id = Column(String, ForeignKey('user_snapshots.debug_id'))
+    fact_snapshot_id = Column(String, ForeignKey('fact_snapshots.debug_id'))
+    scheduler_output_id = Column(String, ForeignKey('scheduler_outputs.debug_id'))
     deck_id = Column(String)
     response = Column(Boolean)
     judgement = Column(String)
@@ -136,10 +139,11 @@ class SchedulerOutput(Base):
 
 class FactSnapshot(Base):
     __tablename__ = 'fact_snapshots'
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    # fact_id -> list of binary results
-    results = Column(MutableDict.as_mutable(JSONEncoded), default={})
+    debug_id = Column(String, primary_key=True)
+    fact_id = Column(String, ForeignKey('facts.fact_id'))
     record_id = Column(String, ForeignKey('records.record_id'))
+    count_correct_before = Column(Integer)
+    count_wrong_before = Column(Integer)
 
 
 class UserStat(Base):
@@ -182,6 +186,5 @@ Record.fact = relationship("Fact", back_populates="records")
 # UserSnapshot.user = relationship("User", back_populates="user_snapshots")
 # UserSnapshot.record = relationship("Record", back_populates="user_snapshot")
 # FactSnapshot.record = relationship("Record", back_populates="fact_snapshot")
-# 
 # Record.scheduler_output = relationship("SchedulerOutput", uselist=False, back_populates="record")
 # SchedulerOutput.record = relationship('Record', back_populates='scheduler_output')

@@ -147,6 +147,12 @@ class MovingAvgScheduler:
         self.preemptive_future = {CORRECT: {}, WRONG: {}}
         self.preemptive_commit = dict()
 
+        # during a scheduler API call, we generate a SchedulerOutput object,
+        # and then during the update API call, we get the record_id from the front-end
+        # we want to link the record_id to the SchedulerOutput object that we generate during
+        # the previous schedule API call, so we use a debug_id.
+        # the SchedulerOutput will use the debug_id as the key, and the update API call
+        # will return the same debug_id so we can retrieve the corresponding SchedulerOutput
         # user_id -> random hash string that corresponds to the card being shown to the user
         self.debug_id = dict()
 
@@ -386,12 +392,12 @@ class MovingAvgScheduler:
         return records.all()
 
     def get_user_stats(
-        self,
-        session,
-        user_id: str,
-        deck_id: str = None,
-        date_start: str = '2008-06-01 08:00:00.000001 -0400',
-        date_end: str = '2038-06-01 08:00:00.000001 -0400',
+            self,
+            session,
+            user_id: str,
+            deck_id: str = None,
+            date_start: str = '2008-06-01 08:00:00.000001 -0400',
+            date_end: str = '2038-06-01 08:00:00.000001 -0400',
     ):
         '''
         To compute user statistics (e.g. number of facts shown) in the
@@ -625,7 +631,12 @@ class MovingAvgScheduler:
         d *= 1 if d <= 0 else 10
         return abs(d)
 
-    def dist_recall_batch(self, user: User, facts: List[Fact], date: datetime) -> List[float]:
+    def dist_recall_batch(
+            self,
+            user: User, 
+            facts: List[Fact], 
+            date: datetime,
+    ) -> List[float]:
         """
         With recall_target = 1, we basically penalize facts that the user
         likely cannot cannot recall.
@@ -937,11 +948,11 @@ class MovingAvgScheduler:
         )
 
     def schedule(
-        self,
-        session,
-        requests: List[ScheduleRequest],
-        date: datetime,
-        plot=False
+            self,
+            session,
+            requests: List[ScheduleRequest],
+            date: datetime,
+            plot=False
     ) -> SchedulerOutputSchema:
         """
         The main schedule function.
@@ -985,7 +996,6 @@ class MovingAvgScheduler:
 
         if not self.preemptive:
             output = self.rank_facts_for_user(user, facts, date, plot=plot)
-            # TODO is there a faster way to do this?
             scheduler_output = SchedulerOutput(
                 debug_id=output.debug_id,
                 order=output.order,
@@ -1166,7 +1176,13 @@ class MovingAvgScheduler:
             # if done, user already responded, marked as done by update
             self.preemptive_future[response][user.user_id] = pre_schedule
 
-    def update_user_fact(self, user: User, fact: Fact, date: datetime, response: bool) -> None:
+    def update_user_fact(
+            self, 
+            user: User, 
+            fact: Fact, 
+            date: datetime, 
+            response: bool
+    ) -> None:
         """
         Update the user with a response on this fact.
 
@@ -1193,7 +1209,12 @@ class MovingAvgScheduler:
         self.leitner_update(user, fact, response)
         self.sm2_update(user, fact, response)
 
-    def update(self, session, requests: List[ScheduleRequest], date: datetime) -> dict:
+    def update(
+            self,
+            session, 
+            requests: List[ScheduleRequest], 
+            date: datetime
+    ) -> dict:
         """
         The main update function.
         1. Read user and facts from database.
@@ -1226,7 +1247,9 @@ class MovingAvgScheduler:
         fact = facts[indices[0]]
 
         # find the scheduler output saved to the debug_id
-        debug_id = self.debug_id.get(request.user_id, 'null')
+        debug_id = requests[0].debug_id
+        if debug_id is None:
+            debug_id = self.debug_id[request.user_id]
         scheduler_output = session.query(SchedulerOutput).get(debug_id)
 
         # save user snapshot before update
@@ -1251,11 +1274,14 @@ class MovingAvgScheduler:
 
         # save fact snapshot before update
         old_fact_snapshot = session.query(FactSnapshot).order_by(FactSnapshot.id.desc()).first()
-        new_results = deepcopy(old_fact_snapshot.results)
-        if fact.fact_id not in new_results:
-            new_results[fact.fact_id] = []
-        new_results[fact.fact_id].append(request.label)
-        new_fact_snapshot = FactSnapshot(results=new_results)
+        old_record = session.query(Record).get(old_fact_snapshot.record_id)
+        new_fact_snapshot = FactSnapshot(
+            debug_id=debug_id,
+            fact_id=record.fact_id,
+            record_id=record.record_id,
+            count_correct_before=old_fact_snapshot.count_correct_before + old_record.response,
+            count_wrong_before=old_fact_snapshot.count_wrong_before + 1 - old_record.response,
+        )
 
         # update user and fact
         # (optionally) commit preemptive compute
@@ -1300,9 +1326,9 @@ class MovingAvgScheduler:
             elapsed_milliseconds_answer=request.elapsed_milliseconds_answer,
             is_new_fact=is_new_fact,
             date=date,
-            # user_snapshot=user_snapshot,
-            # fact_snapshot=new_fact_snapshot,
-            # scheduler_output=scheduler_output,
+            user_snapshot_id=user_snapshot.debug_id,
+            fact_snapshot_id=new_fact_snapshot.debug_id,
+            scheduler_output_id=scheduler_output.debug_id,
         )
 
         # update user stats
