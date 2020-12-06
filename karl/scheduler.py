@@ -361,6 +361,19 @@ class MovingAvgScheduler:
         # retrieve from db if exists
         user = session.query(User).get(user_id)
         if user is not None:
+            if user.params is None:
+                user.params = Params(
+                    repetition_model=f'karl{recall_target}',
+                    qrep=1,
+                    skill=0,
+                    recall=1,
+                    category=1,
+                    answer=1,
+                    leitner=1,
+                    sm2=0,
+                    recall_target=0.85,
+                )
+            session.commit()
             return user
 
         # create new user and insert to db
@@ -776,6 +789,7 @@ class MovingAvgScheduler:
 
     def get_rationale(
             self,
+            debug_id: str,
             user: User,
             facts: List[Fact],
             date: datetime,
@@ -809,13 +823,14 @@ class MovingAvgScheduler:
              </style>
              """
 
-        dump_dict = {
-            'user_id': user.user_id,
-            'fact_id': facts[order[0]].fact_id,
-            'date': date.strftime('%Y-%m-%dT%H:%M:%S%z'),
-        }
-        debug_id = hashlib.md5(json.dumps(dump_dict).encode('utf8')).hexdigest()
-        self.debug_id[user.user_id] = debug_id
+        # TODO remove
+        # dump_dict = {
+        #     'user_id': user.user_id,
+        #     'fact_id': facts[order[0]].fact_id,
+        #     'date': date.strftime('%Y-%m-%dT%H:%M:%S%z'),
+        # }
+        # debug_id = hashlib.md5(json.dumps(dump_dict).encode('utf8')).hexdigest()
+        # self.debug_id[user.user_id] = debug_id
 
         rr += '<h2>Debug ID: {}</h2>'.format(debug_id)
         row_template = '<tr><td><b>{}</b></td> <td>{}</td></tr>'
@@ -913,7 +928,14 @@ class MovingAvgScheduler:
         # plot_polar(user_qrep, '/fs/www-users/shifeng/temp/user.jpg', fill='green')
         # plot_polar(fact.qrep, '/fs/www-users/shifeng/temp/fact.jpg', fill='yellow')
 
-        rationale = self.get_rationale(user, facts, date, scores, order)
+        dump_dict = {
+            'user_id': user.user_id,
+            'fact_id': fact.fact_id,
+            'date': date.strftime('%Y-%m-%dT%H:%M:%S%z'),
+        }
+        debug_id = hashlib.md5(json.dumps(dump_dict).encode('utf8')).hexdigest()
+        rationale = self.get_rationale(debug_id, user, facts, date, scores, order)
+        self.debug_id[user.user_id] = debug_id
 
         if plot:
             figname = '{}_{}_{}.jpg'.format(user.user_id, fact.fact_id, date.strftime('%Y-%m-%d-%H-%M'))
@@ -933,7 +955,7 @@ class MovingAvgScheduler:
             scores=scores,
             details=facts_info,
             rationale=rationale,
-            debug_id=self.debug_id[user.user_id],
+            debug_id=debug_id,
         )
 
     def schedule(
@@ -1053,14 +1075,23 @@ class MovingAvgScheduler:
                 order = np.argsort([s['sum'] for s in scores]).tolist()
 
                 # NOTE redo rationale
-                rationale = self.get_rationale(user, facts, date, scores, order)
+
+                dump_dict = {
+                    'user_id': user.user_id,
+                    'fact_id': fact.fact_id,
+                    'date': date.strftime('%Y-%m-%dT%H:%M:%S%z'),
+                }
+                debug_id = hashlib.md5(json.dumps(dump_dict).encode('utf8')).hexdigest()
+                rationale = self.get_rationale(debug_id, user, facts, date, scores, order)
+                self.debug_id[user.user_id] = debug_id
+
                 facts_info = self.get_facts_info(user, facts, date, scores, order)
                 t1 = datetime.now()
                 schedule_timing_profile['get rationale and facts info'] = (len(facts), t1 - t0)
 
                 output_dict = {
                     'order': order,
-                    'debug_id': self.debug_id[user.user_id],
+                    'debug_id': debug_id,
                     'scores': scores,
                     'rationale': rationale,
                     'facts_info': facts_info,
@@ -1226,7 +1257,9 @@ class MovingAvgScheduler:
         fact = facts[indices[0]]
 
         # find the scheduler output saved to the debug_id
-        debug_id = self.debug_id.get(request.user_id, 'null')
+        debug_id = requests[0].debug_id
+        if debug_id is None:
+            debug_id = self.debug_id[request.user_id]
         scheduler_output = session.query(SchedulerOutput).get(debug_id)
 
         # save user snapshot before update

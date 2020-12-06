@@ -22,6 +22,7 @@ class ScheduleRequest(BaseModel):
     elapsed_seconds_answer: Optional[int]
     elapsed_milliseconds_text: Optional[int]
     elapsed_milliseconds_answer: Optional[int]
+    debug_id: Optional[str]
 
 
 class SchedulerOutputSchema(BaseModel):
