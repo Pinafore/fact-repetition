@@ -10,7 +10,7 @@ import altair as alt
 alt.data_transformers.disable_max_rows()
 alt.renderers.enable('mimetype')
 
-from karl.util import get_sessions
+from karl.util import get_session_makers
 from karl.models import User, Record, UserSnapshot
 
 

@@ -3,16 +3,17 @@
 
 import json
 import logging
-from fastapi import FastAPI, HTTPException
-from typing import List
+from fastapi import FastAPI, HTTPException, Depends
+from typing import List, Generator
 from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_date
 # from cachetools import cached, TTLCache
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
 from karl.util import ScheduleRequest, Params, \
     Ranking, Leaderboard, UserStatSchema, Visualization, SchedulerOutputSchema
-from karl.util import get_sessions
+from karl.util import get_session_makers
 from karl.models import User, Fact, UserStat
 from karl.scheduler import MovingAvgScheduler
 from karl.metrics import get_user_charts
@@ -24,7 +25,7 @@ default_end_date = '2038-06-01 08:00:00.000001 -0400'
 
 app = FastAPI()
 scheduler = MovingAvgScheduler(preemptive=False)
-sessions = get_sessions()
+session_maker = get_session_makers()['prod']
 
 # create logger with 'scheduler'
 logger = logging.getLogger('scheduler')
@@ -44,9 +45,18 @@ logger.addHandler(fh)
 logger.addHandler(ch)
 
 
+def get_session() -> Generator:
+    try:
+        session = session_maker()
+        yield session
+    finally:
+        session.close()
+
+
 @app.post('/api/karl/schedule')
 def schedule(
     requests: List[ScheduleRequest],
+    session: Session = Depends(get_session),
 ) -> SchedulerOutputSchema:
     if len(requests) == 0:
         return {
@@ -62,18 +72,23 @@ def schedule(
     if requests[0].date is not None:
         date = parse_date(requests[0].date)
 
-    env = 'dev' if requests[0].env == 'dev' else 'prod'
+    # env = 'dev' if requests[0].env == 'dev' else 'prod'
+    # session = get_session(env)
 
     try:
-        return scheduler.schedule(sessions[env], requests, date, plot=False)
+        return scheduler.schedule(session, requests, date, plot=False)
     except SQLAlchemyError as e:
         print(repr(e))
-        sessions[env].rollback()
+        session.rollback()
         raise HTTPException(status_code=404, detail='Scheduling failed due to SQLAlchemyError.')
 
 
 @app.post('/api/karl/update')
-def update(requests: List[ScheduleRequest], response_model=bool):
+def update(
+    requests: List[ScheduleRequest],
+    response_model=bool,
+    session: Session = Depends(get_session),
+):
     logger.info(f'/karl/update with {len(requests)} facts and env={requests[0].env} and debug_id={requests[0].debug_id}')
 
     # NOTE assuming single user single date
@@ -81,22 +96,28 @@ def update(requests: List[ScheduleRequest], response_model=bool):
     if requests[0].date is not None:
         date = parse_date(requests[0].date)
 
-    env = 'dev' if requests[0].env == 'dev' else 'prod'
+    # env = 'dev' if requests[0].env == 'dev' else 'prod'
+    # session = get_session(env)
 
     try:
-        scheduler.update(sessions[env], requests, date)
-        sessions[env].commit()
+        scheduler.update(session, requests, date)
+        session.commit()
         return True
     except SQLAlchemyError as e:
         print(repr(e))
-        sessions[env].rollback()
+        session.rollback()
         raise HTTPException(status_code=404, detail='Update failed due to SQLAlchemyError.')
 
 
 @app.put('/api/karl/set_params', response_model=Params)
-def set_params(user_id: str, env: str, params: Params):
-    env = 'dev' if env == 'dev' else 'prod'
-    session = sessions[env]
+def set_params(
+    user_id: str,
+    env: str,
+    params: Params,
+    session: Session = Depends(get_session),
+):
+    # env = 'dev' if env == 'dev' else 'prod'
+    # session = get_session(env)
     try:
         scheduler.set_user_params(session, user_id, params)
         session.commit()
@@ -108,9 +129,14 @@ def set_params(user_id: str, env: str, params: Params):
 
 
 @app.put('/api/karl/set_repetition_model', response_model=Params)
-def set_repetition_model(user_id: str, env: str, repetition_model: str):
-    env = 'dev' if env == 'dev' else 'prod'
-    session = sessions[env]
+def set_repetition_model(
+    user_id: str,
+    env: str,
+    repetition_model: str,
+    session: Session = Depends(get_session),
+):
+    # env = 'dev' if env == 'dev' else 'prod'
+    # session = get_session(env)
     if repetition_model == 'sm2':
         params = Params(
             repetition_model='sm2',
@@ -164,9 +190,14 @@ def set_repetition_model(user_id: str, env: str, repetition_model: str):
 
 
 @app.post('/api/karl/get_fact', response_model=dict)
-def get_fact(fact_id: str, env: str):
-    env = 'dev' if env == 'dev' else 'prod'
-    fact = sessions[env].query(Fact).get(fact_id)
+def get_fact(
+    fact_id: str,
+    env: str,
+    session: Session = Depends(get_session),
+):
+    # env = 'dev' if env == 'dev' else 'prod'
+    # session = get_session(env)
+    fact = session.query(Fact).get(fact_id)
     if fact is None:
         return
     return json.dumps({
@@ -175,28 +206,38 @@ def get_fact(fact_id: str, env: str):
 
 
 @app.get('/api/karl/reset_user', response_model=dict)
-def reset_user(user_id: str = None, env: str = None):
-    env = 'dev' if env == 'dev' else 'prod'
+def reset_user(
+    user_id: str = None,
+    env: str = None,
+    session: Session = Depends(get_session),
+):
+    # env = 'dev' if env == 'dev' else 'prod'
+    # session = get_session(env)
     try:
-        scheduler.reset_user(sessions[env], user_id=user_id)
-        sessions[env].commit()
+        scheduler.reset_user(session, user_id=user_id)
+        session.commit()
         return get_user(user_id, env)
     except SQLAlchemyError as e:
         print(repr(e))
-        sessions[env].rollback()
+        session.rollback()
         raise HTTPException(status_code=404, detail='Reset user failed.')
 
 
 @app.get('/api/karl/reset_fact', response_model=dict)
-def reset_fact(fact_id: str = None, env: str = None):
-    env = 'dev' if env == 'dev' else 'prod'
+def reset_fact(
+    fact_id: str = None,
+    env: str = None,
+    session: Session = Depends(get_session),
+):
+    # env = 'dev' if env == 'dev' else 'prod'
+    # session = get_session(env)
     try:
-        scheduler.reset_fact(sessions[env], fact_id=fact_id)
-        sessions[env].commit()
+        scheduler.reset_fact(session, fact_id=fact_id)
+        session.commit()
         return get_fact(fact_id, env)
     except SQLAlchemyError as e:
         print(repr(e))
-        sessions[env].rollback()
+        session.rollback()
 
 
 @app.get('/api/karl/status')
@@ -205,9 +246,14 @@ def status():
 
 
 @app.get('/api/karl/get_user')
-def get_user(user_id: str, env: str = None):
-    env = 'dev' if env == 'dev' else 'prod'
-    user = scheduler.get_user(sessions[env], user_id)
+def get_user(
+    user_id: str,
+    env: str = None,
+    session: Session = Depends(get_session),
+):
+    # env = 'dev' if env == 'dev' else 'prod'
+    # session = get_session(env)
+    user = scheduler.get_user(session, user_id)
     user_dict = {
         k: v for k, v in user.__dict__.items()
         if k != '_sa_instance_state'
@@ -223,10 +269,12 @@ def get_user_history(
     deck_id: str = None,
     date_start: str = '2008-06-01 08:00:00.000001 -0400',
     date_end: str = '2038-06-01 08:00:00.000001 -0400',
+    session: Session = Depends(get_session),
 ):
-    env = 'dev' if env == 'dev' else 'prod'
+    # env = 'dev' if env == 'dev' else 'prod'
+    # session = get_session(env)
     return scheduler.get_records(
-        sessions[env],
+        session,
         user_id,
         deck_id,
         date_start,
@@ -242,6 +290,7 @@ def get_user_stats(
     deck_id: str = None,
     date_start: str = '2008-06-01 08:00:00.000001 -0400',
     date_end: str = '2038-06-01 08:00:00.000001 -0400',
+    session: Session = Depends(get_session),
 ) -> UserStatSchema:
     '''
     Return in a dictionary the following user stats within given date range.
@@ -254,8 +303,9 @@ def get_user_stats(
     new_known_rate: float
     review_known_rate: float
     '''
-    env = 'dev' if env == 'dev' else 'prod'
-    return scheduler.get_user_stats(sessions[env], user_id, deck_id, date_start, date_end)
+    # env = 'dev' if env == 'dev' else 'prod'
+    # session = get_session(env)
+    return scheduler.get_user_stats(session, user_id, deck_id, date_start, date_end)
 
 
 def n_days_studied(
@@ -268,9 +318,10 @@ def n_days_studied(
     deck_id: str = None,
     date_start: str = '2008-06-01 08:00:00.000001 -0400',
     date_end: str = '2038-06-01 08:00:00.000001 -0400',
+    session: Session = Depends(get_session),
 ):
-    env = 'dev' if env == 'dev' else 'prod'
-    session = sessions[env]
+    # env = 'dev' if env == 'dev' else 'prod'
+    # session = get_session(env)
 
     date_start = parse_date(date_start).date()
     date_end = parse_date(date_end).date() + timedelta(days=1)  # TODO temporary fix
@@ -344,6 +395,7 @@ def leaderboard(
     deck_id: str = None,
     date_start: str = '2008-06-01 08:00:00.000001 -0400',
     date_end: str = '2038-06-01 08:00:00.000001 -0400',
+    session: Session = Depends(get_session),
 ) -> Leaderboard:
     '''
     return [(user_id: str, rank_type: 'total_seen', value: 'value')]
@@ -362,10 +414,11 @@ def leaderboard(
             date_end,
         )
 
-    env = 'dev' if env == 'dev' else 'prod'
+    # env = 'dev' if env == 'dev' else 'prod'
+    # session = get_session(env)
 
     stats = {}
-    for user in scheduler.get_all_users(sessions[env]):
+    for user in scheduler.get_all_users(session):
         if not user.user_id.isdigit():
             continue
 
@@ -374,7 +427,8 @@ def leaderboard(
             env=env,
             deck_id=deck_id,
             date_start=date_start,
-            date_end=date_end
+            date_end=date_end,
+            session=session,
         )
 
     # from high value to low
@@ -412,9 +466,10 @@ def user_charts(
     deck_id: str = None,
     date_start: str = '2008-06-01 08:00:00.000001 -0400',
     date_end: str = '2038-06-01 08:00:00.000001 -0400',
+    session: Session = Depends(get_session),
 ) -> List[Visualization]:
-    env = 'dev' if env == 'dev' else 'prod'
-    session = sessions[env]
+    # env = 'dev' if env == 'dev' else 'prod'
+    # session = get_session(env)
 
     charts = get_user_charts(
         session,

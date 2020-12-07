@@ -116,7 +116,7 @@ class Visualization(BaseModel):
     date_end: Optional[str] = None
 
 
-def get_sessions():
+def get_session_makers():
     hostname = socket.gethostname()
     if hostname.startswith('lapine'):
         db_host = '/fs/clip-quiz/shifeng/postgres/run'
@@ -130,6 +130,6 @@ def get_sessions():
         'dev': create_engine(f'postgresql+psycopg2://shifeng@localhost:5433/karl-dev?host={db_host}'),
     }
     return {
-        env: sessionmaker(bind=engine, autoflush=False)()
+        env: sessionmaker(bind=engine, autoflush=False)
         for env, engine in engines.items()
     }
