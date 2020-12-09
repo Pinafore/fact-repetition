@@ -97,14 +97,15 @@ def update(
 
     try:
         scheduler.update(session, requests, date)
-        session.commit()
-        return True
     except SQLAlchemyError as e:
         print(repr(e))
         session.rollback()
         raise HTTPException(status_code=404, detail='Update failed due to SQLAlchemyError.')
+    else:
+        session.commit()
     finally:
         session.close()
+    return True
 
 
 @app.put('/api/karl/set_params', response_model=Params)
@@ -117,14 +118,15 @@ def set_params(
     session = get_session(env)
     try:
         scheduler.set_user_params(session, user_id, params)
-        session.commit()
-        return params
     except SQLAlchemyError as e:
         print(repr(e))
         session.rollback()
         raise HTTPException(status_code=404, detail='Set_params failed due to SQLAlchemyError.')
+    else:
+        session.commit()
     finally:
         session.close()
+    return params
 
 
 @app.put('/api/karl/set_repetition_model', response_model=Params)
@@ -133,9 +135,6 @@ def set_repetition_model(
     env: str,
     repetition_model: str,
 ):
-    env = 'dev' if env == 'dev' else 'prod'
-    session = get_session(env)
-
     if repetition_model == 'sm2':
         params = Params(
             repetition_model='sm2',
@@ -149,10 +148,6 @@ def set_repetition_model(
             cool_down=0,
             recall_target=1,
         )
-        scheduler.set_user_params(session, user_id, params)
-        session.commit()
-        session.close()
-        return params
     elif repetition_model == 'leitner':
         params = Params(
             repetition_model='leitner',
@@ -166,10 +161,6 @@ def set_repetition_model(
             cool_down=0,
             recall_target=1,
         )
-        scheduler.set_user_params(session, user_id, params)
-        session.commit()
-        session.close()
-        return params
     elif repetition_model.startswith('karl'):
         recall_target = int(repetition_model[4:])
         params = Params(
@@ -183,13 +174,23 @@ def set_repetition_model(
             sm2=0,
             recall_target=float(recall_target) / 100,
         )
-        scheduler.set_user_params(session, user_id, params)
-        session.commit()
-        session.close()
-        return params
     else:
         raise HTTPException(status_code=404, detail='Unrecognized repetition model.')
 
+    env = 'dev' if env == 'dev' else 'prod'
+    session = get_session(env)
+
+    try:
+        scheduler.set_user_params(session, user_id, params)
+    except SQLAlchemyError as e:
+        print(repr(e))
+        session.rollback()
+        raise HTTPException(status_code=404, detail='Set_params failed due to SQLAlchemyError.')
+    else:
+        session.commit()
+    finally:
+        session.close()
+    return params
 
 @app.post('/api/karl/get_fact', response_model=dict)
 def get_fact(
@@ -220,14 +221,16 @@ def reset_user(
 
     try:
         scheduler.reset_user(session, user_id=user_id)
-        session.commit()
-        return get_user(user_id, env)
     except SQLAlchemyError as e:
         print(repr(e))
         session.rollback()
         raise HTTPException(status_code=404, detail='Reset user failed.')
+    else:
+        session.commit()
     finally:
         session.close()
+
+    return get_user(user_id, env)
 
 
 @app.get('/api/karl/reset_fact', response_model=dict)
@@ -240,13 +243,14 @@ def reset_fact(
 
     try:
         scheduler.reset_fact(session, fact_id=fact_id)
-        session.commit()
-        return get_fact(fact_id, env)
     except SQLAlchemyError as e:
         print(repr(e))
         session.rollback()
+    else:
+        session.commit()
     finally:
         session.close()
+    return get_fact(fact_id, env)
 
 
 @app.get('/api/karl/status')
@@ -291,6 +295,7 @@ def _get_user_history(
         date_start,
         date_end
     )
+
     session.close()
     return history
 
