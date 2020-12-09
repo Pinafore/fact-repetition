@@ -14,7 +14,6 @@ import numpy as np
 # import pandas as pd
 import en_core_web_lg
 from tqdm import tqdm
-from copy import deepcopy
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import List, Dict
@@ -22,7 +21,7 @@ from dateutil.parser import parse as parse_date
 # from whoosh.qparser import QueryParser
 
 from karl.lda import process_question
-from karl.util import ScheduleRequest, Params, UserStatSchema, SchedulerOutputSchema
+from karl.util import ScheduleRequest, Params, SchedulerOutputSchema
 from karl.models import User, Fact, Record, UserStat,\
     UserSnapshot, FactSnapshot, SchedulerOutput
 from karl.retention.baseline import RetentionModel
@@ -369,7 +368,7 @@ class MovingAvgScheduler:
         if user is not None:
             if user.params is None:
                 user.params = Params(
-                    repetition_model=f'karl{recall_target}',
+                    repetition_model='karl85',
                     qrep=1,
                     skill=0,
                     recall=1,
@@ -403,130 +402,6 @@ class MovingAvgScheduler:
         if deck_id is not None:
             records = records.filter(Record.deck_id == deck_id)
         return records.all()
-
-    def get_user_stats(
-            self,
-            session,
-            user_id: str,
-            deck_id: str = None,
-            date_start: str = '2008-06-01 08:00:00.000001 -0400',
-            date_end: str = '2038-06-01 08:00:00.000001 -0400',
-    ):
-        '''
-        To compute user statistics (e.g. number of facts shown) in the
-        interval of [`date_start`, `date_end`]. Instead of the brute-force
-        method of enumerating records in this interval, we find the two user
-        stats at the interval boundaries: the latest user stat before the
-        start date, the latest user stat no later than the end date, and
-        subtract the two.
-        '''
-        date_start = parse_date(date_start).date()
-        date_end = parse_date(date_end).date() + timedelta(days=1)  # TODO temporary fix, wait for Matthew
-
-        if deck_id is None:
-            deck_id = 'all'
-
-        # last record before start date
-        before_stat = session.query(UserStat).\
-            filter(UserStat.user_id == user_id).\
-            filter(UserStat.deck_id == deck_id).\
-            filter(UserStat.date < date_start).\
-            order_by(UserStat.date.desc()).first()
-
-        # last record no later than end date
-        after_stat = session.query(UserStat).\
-            filter(UserStat.user_id == user_id).\
-            filter(UserStat.deck_id == deck_id).\
-            filter(UserStat.date <= date_end).\
-            order_by(UserStat.date.desc()).first()
-
-        if after_stat is None or after_stat.date < date_start:
-            return UserStatSchema(
-                user_id=user_id,
-                deck_id=deck_id,
-                date_start=str(date_start),
-                date_end=str(date_end),
-                # zero for all other fields
-            )
-
-        if before_stat is None:
-            before_stat = UserStat(
-                user_stat_id=json.dumps({
-                    'user_id': user_id,
-                    'date': str(date_start),
-                    'deck_id': deck_id,
-                }),
-                user_id=user_id,
-                deck_id=deck_id,
-                date=date_start,
-                new_facts=0,
-                reviewed_facts=0,
-                new_correct=0,
-                reviewed_correct=0,
-                total_seen=0,
-                total_milliseconds=0,
-                total_seconds=0,
-                total_minutes=0,
-                elapsed_milliseconds_text=0,
-                elapsed_milliseconds_answer=0,
-                elapsed_seconds_text=0,
-                elapsed_seconds_answer=0,
-                elapsed_minutes_text=0,
-                elapsed_minutes_answer=0,
-                n_days_studied=0,
-            )
-
-        total_correct = (
-            after_stat.new_correct
-            + after_stat.reviewed_correct
-            - before_stat.new_correct
-            - before_stat.reviewed_correct
-        )
-
-        known_rate = 0
-        if after_stat.total_seen > before_stat.total_seen:
-            known_rate = (
-                total_correct / (after_stat.total_seen - before_stat.total_seen)
-            )
-
-        new_known_rate = 0
-        if after_stat.new_facts > before_stat.new_facts:
-            new_known_rate = (
-                (after_stat.new_correct - before_stat.new_correct)
-                / (after_stat.new_facts - before_stat.new_facts)
-            )
-
-        review_known_rate = 0
-        if after_stat.reviewed_facts > before_stat.reviewed_facts:
-            review_known_rate = (
-                (after_stat.reviewed_correct - before_stat.reviewed_correct)
-                / (after_stat.reviewed_facts - before_stat.reviewed_facts)
-            )
-
-        return UserStatSchema(
-            user_id=user_id,
-            deck_id=deck_id,
-            date_start=str(date_start),
-            date_end=str(date_end),
-            new_facts=after_stat.new_facts - before_stat.new_facts,
-            reviewed_facts=after_stat.reviewed_facts - before_stat.reviewed_facts,
-            new_correct=after_stat.new_correct - before_stat.new_correct,
-            reviewed_correct=after_stat.reviewed_correct - before_stat.reviewed_correct,
-            total_seen=after_stat.total_seen - before_stat.total_seen,
-            total_milliseconds=after_stat.total_milliseconds - before_stat.total_milliseconds,
-            total_seconds=after_stat.total_seconds - before_stat.total_seconds,
-            total_minutes=after_stat.total_minutes - before_stat.total_minutes,
-            elapsed_milliseconds_text=after_stat.elapsed_milliseconds_text - before_stat.elapsed_milliseconds_text,
-            elapsed_milliseconds_answer=after_stat.elapsed_milliseconds_answer - before_stat.elapsed_milliseconds_answer,
-            elapsed_seconds_text=after_stat.elapsed_seconds_text - before_stat.elapsed_seconds_text,
-            elapsed_seconds_answer=after_stat.elapsed_seconds_answer - before_stat.elapsed_seconds_answer,
-            elapsed_minutes_text=after_stat.elapsed_minutes_text - before_stat.elapsed_minutes_text,
-            elapsed_minutes_answer=after_stat.elapsed_minutes_answer - before_stat.elapsed_minutes_answer,
-            known_rate=round(known_rate * 100, 2),
-            new_known_rate=round(new_known_rate * 100, 2),
-            review_known_rate=round(review_known_rate * 100, 2),
-            n_days_studied=after_stat.n_days_studied - before_stat.n_days_studied,
-        )
 
     # def retrieve(self, fact: dict) -> Tuple[List[dict], List[float]]:
     #     record_id = self.karl_to_question_id[int(fact['question_id'])]
@@ -646,8 +521,8 @@ class MovingAvgScheduler:
 
     def dist_recall_batch(
             self,
-            user: User, 
-            facts: List[Fact], 
+            user: User,
+            facts: List[Fact],
             date: datetime,
     ) -> List[float]:
         """
@@ -1088,7 +963,7 @@ class MovingAvgScheduler:
 
                 dump_dict = {
                     'user_id': user.user_id,
-                    'fact_id': fact.fact_id,
+                    'fact_id': facts[order[0]].fact_id,
                     'date': date.strftime('%Y-%m-%dT%H:%M:%S%z'),
                 }
                 debug_id = hashlib.md5(json.dumps(dump_dict).encode('utf8')).hexdigest()
@@ -1208,10 +1083,10 @@ class MovingAvgScheduler:
             self.preemptive_future[response][user.user_id] = pre_schedule
 
     def update_user_fact(
-            self, 
-            user: User, 
-            fact: Fact, 
-            date: datetime, 
+            self,
+            user: User,
+            fact: Fact,
+            date: datetime,
             response: bool
     ) -> None:
         """
@@ -1242,8 +1117,8 @@ class MovingAvgScheduler:
 
     def update(
             self,
-            session, 
-            requests: List[ScheduleRequest], 
+            session,
+            requests: List[ScheduleRequest],
             date: datetime
     ) -> dict:
         """
@@ -1308,8 +1183,8 @@ class MovingAvgScheduler:
         old_record = session.query(Record).get(old_fact_snapshot.record_id)
         new_fact_snapshot = FactSnapshot(
             debug_id=debug_id,
-            fact_id=record.fact_id,
-            record_id=record.record_id,
+            fact_id=old_record.fact_id,
+            record_id=old_record.record_id,
             count_correct_before=old_fact_snapshot.count_correct_before + old_record.response,
             count_wrong_before=old_fact_snapshot.count_wrong_before + 1 - old_record.response,
         )
@@ -1330,16 +1205,16 @@ class MovingAvgScheduler:
             fact = results['fact']
 
         if request.elapsed_seconds_text is None:
-            request.elapsed_seconds_text = request.elapsed_milliseconds_text * 1000
+            request.elapsed_seconds_text = request.elapsed_milliseconds_text // 1000
         if request.elapsed_seconds_answer is None:
-            request.elapsed_seconds_answer = request.elapsed_milliseconds_answer * 1000
-        
+            request.elapsed_seconds_answer = request.elapsed_milliseconds_answer // 1000
+
         is_new_fact = True
         if session.query(Record).\
-            filter(Record.user_id == request.user_id).\
-            filter(Record.fact_id == fact.fact_id).\
-            filter(Record.deck_id == fact.deck_id).\
-            first() is not None:
+                filter(Record.user_id == request.user_id).\
+                filter(Record.fact_id == fact.fact_id).\
+                filter(Record.deck_id == fact.deck_id).\
+                first() is not None:
             is_new_fact = False
 
         record = Record(

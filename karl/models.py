@@ -3,7 +3,7 @@ import numpy as np
 import msgpack
 import msgpack_numpy
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date
-from sqlalchemy import ForeignKey
+from sqlalchemy import ForeignKey, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.mutable import MutableDict, MutableList
@@ -112,9 +112,9 @@ class Record(Base):
     debug_id = Column(String)
     user_id = Column(String, ForeignKey('users.user_id'))
     fact_id = Column(String, ForeignKey('facts.fact_id'))
-    user_snapshot_id = Column(String, ForeignKey('user_snapshots.debug_id'))
-    fact_snapshot_id = Column(String, ForeignKey('fact_snapshots.debug_id'))
-    scheduler_output_id = Column(String, ForeignKey('scheduler_outputs.debug_id'))
+    # user_snapshot_id = Column(String, ForeignKey('user_snapshots.debug_id'))
+    # fact_snapshot_id = Column(String, ForeignKey('fact_snapshots.debug_id'))
+    # scheduler_output_id = Column(String, ForeignKey('scheduler_outputs.debug_id'))
     deck_id = Column(String)
     response = Column(Boolean)
     judgement = Column(String)
@@ -124,7 +124,7 @@ class Record(Base):
     elapsed_milliseconds_text = Column(Integer)
     elapsed_milliseconds_answer = Column(Integer)
     is_new_fact = Column(Boolean)
-    date = Column(DateTime)
+    date = Column(DateTime, index=True)
 
 
 class SchedulerOutput(Base):
@@ -188,3 +188,10 @@ Record.fact = relationship("Fact", back_populates="records")
 # FactSnapshot.record = relationship("Record", back_populates="fact_snapshot")
 # Record.scheduler_output = relationship("SchedulerOutput", uselist=False, back_populates="record")
 # SchedulerOutput.record = relationship('Record', back_populates='scheduler_output')
+
+Index('records_date', Record.date)
+Index('records_user_date', Record.user_id, Record.date)
+Index('records_user_deck_date', Record.user_id, Record.deck_id, Record.date)
+Index('stats_date', UserStat.date)
+Index('stats_user_date', UserStat.user_id, UserStat.date)
+Index('stats_user_deck_date', UserStat.user_id, UserStat.deck_id, UserStat.date, unique=True)

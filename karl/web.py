@@ -3,13 +3,13 @@
 
 import json
 import logging
-from fastapi import FastAPI, HTTPException, Depends
-from typing import List, Generator
-from datetime import datetime, timedelta
+from fastapi import FastAPI, HTTPException
+from typing import List
+from datetime import datetime
 from dateutil.parser import parse as parse_date
+from concurrent.futures import ProcessPoolExecutor
 # from cachetools import cached, TTLCache
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session
 
 from karl.util import ScheduleRequest, Params, \
     Ranking, Leaderboard, UserStatSchema, Visualization, SchedulerOutputSchema
@@ -25,7 +25,7 @@ default_end_date = '2038-06-01 08:00:00.000001 -0400'
 
 app = FastAPI()
 scheduler = MovingAvgScheduler(preemptive=False)
-session_maker = get_session_makers()['prod']
+session_makers = get_session_makers()
 
 # create logger with 'scheduler'
 logger = logging.getLogger('scheduler')
@@ -45,18 +45,13 @@ logger.addHandler(fh)
 logger.addHandler(ch)
 
 
-def get_session() -> Generator:
-    try:
-        session = session_maker()
-        yield session
-    finally:
-        session.close()
+def get_session(env: str = 'prod'):
+    return session_makers[env]()
 
 
 @app.post('/api/karl/schedule')
 def schedule(
     requests: List[ScheduleRequest],
-    session: Session = Depends(get_session),
 ) -> SchedulerOutputSchema:
     if len(requests) == 0:
         return {
@@ -72,8 +67,8 @@ def schedule(
     if requests[0].date is not None:
         date = parse_date(requests[0].date)
 
-    # env = 'dev' if requests[0].env == 'dev' else 'prod'
-    # session = get_session(env)
+    env = 'dev' if requests[0].env == 'dev' else 'prod'
+    session = get_session(env)
 
     try:
         return scheduler.schedule(session, requests, date, plot=False)
@@ -81,13 +76,14 @@ def schedule(
         print(repr(e))
         session.rollback()
         raise HTTPException(status_code=404, detail='Scheduling failed due to SQLAlchemyError.')
+    finally:
+        session.close()
 
 
 @app.post('/api/karl/update')
 def update(
     requests: List[ScheduleRequest],
     response_model=bool,
-    session: Session = Depends(get_session),
 ):
     logger.info(f'/karl/update with {len(requests)} facts and env={requests[0].env} and debug_id={requests[0].debug_id}')
 
@@ -96,8 +92,8 @@ def update(
     if requests[0].date is not None:
         date = parse_date(requests[0].date)
 
-    # env = 'dev' if requests[0].env == 'dev' else 'prod'
-    # session = get_session(env)
+    env = 'dev' if requests[0].env == 'dev' else 'prod'
+    session = get_session(env)
 
     try:
         scheduler.update(session, requests, date)
@@ -107,6 +103,8 @@ def update(
         print(repr(e))
         session.rollback()
         raise HTTPException(status_code=404, detail='Update failed due to SQLAlchemyError.')
+    finally:
+        session.close()
 
 
 @app.put('/api/karl/set_params', response_model=Params)
@@ -114,10 +112,9 @@ def set_params(
     user_id: str,
     env: str,
     params: Params,
-    session: Session = Depends(get_session),
 ):
-    # env = 'dev' if env == 'dev' else 'prod'
-    # session = get_session(env)
+    env = 'dev' if env == 'dev' else 'prod'
+    session = get_session(env)
     try:
         scheduler.set_user_params(session, user_id, params)
         session.commit()
@@ -126,6 +123,8 @@ def set_params(
         print(repr(e))
         session.rollback()
         raise HTTPException(status_code=404, detail='Set_params failed due to SQLAlchemyError.')
+    finally:
+        session.close()
 
 
 @app.put('/api/karl/set_repetition_model', response_model=Params)
@@ -133,10 +132,10 @@ def set_repetition_model(
     user_id: str,
     env: str,
     repetition_model: str,
-    session: Session = Depends(get_session),
 ):
-    # env = 'dev' if env == 'dev' else 'prod'
-    # session = get_session(env)
+    env = 'dev' if env == 'dev' else 'prod'
+    session = get_session(env)
+
     if repetition_model == 'sm2':
         params = Params(
             repetition_model='sm2',
@@ -152,6 +151,7 @@ def set_repetition_model(
         )
         scheduler.set_user_params(session, user_id, params)
         session.commit()
+        session.close()
         return params
     elif repetition_model == 'leitner':
         params = Params(
@@ -168,6 +168,7 @@ def set_repetition_model(
         )
         scheduler.set_user_params(session, user_id, params)
         session.commit()
+        session.close()
         return params
     elif repetition_model.startswith('karl'):
         recall_target = int(repetition_model[4:])
@@ -184,6 +185,7 @@ def set_repetition_model(
         )
         scheduler.set_user_params(session, user_id, params)
         session.commit()
+        session.close()
         return params
     else:
         raise HTTPException(status_code=404, detail='Unrecognized repetition model.')
@@ -193,26 +195,29 @@ def set_repetition_model(
 def get_fact(
     fact_id: str,
     env: str,
-    session: Session = Depends(get_session),
 ):
-    # env = 'dev' if env == 'dev' else 'prod'
-    # session = get_session(env)
+    env = 'dev' if env == 'dev' else 'prod'
+    session = get_session(env)
+
     fact = session.query(Fact).get(fact_id)
     if fact is None:
         return
-    return json.dumps({
+    fact_json = json.dumps({
         k: v for k, v in fact.__dict__.items() if k != '_sa_instance_state'
     })
+
+    session.close()
+    return fact_json
 
 
 @app.get('/api/karl/reset_user', response_model=dict)
 def reset_user(
     user_id: str = None,
     env: str = None,
-    session: Session = Depends(get_session),
 ):
-    # env = 'dev' if env == 'dev' else 'prod'
-    # session = get_session(env)
+    env = 'dev' if env == 'dev' else 'prod'
+    session = get_session(env)
+
     try:
         scheduler.reset_user(session, user_id=user_id)
         session.commit()
@@ -221,16 +226,18 @@ def reset_user(
         print(repr(e))
         session.rollback()
         raise HTTPException(status_code=404, detail='Reset user failed.')
+    finally:
+        session.close()
 
 
 @app.get('/api/karl/reset_fact', response_model=dict)
 def reset_fact(
     fact_id: str = None,
     env: str = None,
-    session: Session = Depends(get_session),
 ):
-    # env = 'dev' if env == 'dev' else 'prod'
-    # session = get_session(env)
+    env = 'dev' if env == 'dev' else 'prod'
+    session = get_session(env)
+
     try:
         scheduler.reset_fact(session, fact_id=fact_id)
         session.commit()
@@ -238,6 +245,8 @@ def reset_fact(
     except SQLAlchemyError as e:
         print(repr(e))
         session.rollback()
+    finally:
+        session.close()
 
 
 @app.get('/api/karl/status')
@@ -249,48 +258,50 @@ def status():
 def get_user(
     user_id: str,
     env: str = None,
-    session: Session = Depends(get_session),
 ):
-    # env = 'dev' if env == 'dev' else 'prod'
-    # session = get_session(env)
+    env = 'dev' if env == 'dev' else 'prod'
+    session = get_session(env)
+
     user = scheduler.get_user(session, user_id)
     user_dict = {
         k: v for k, v in user.__dict__.items()
         if k != '_sa_instance_state'
     }
     user_dict['params'] = user_dict['params'].__dict__
-    return json.dumps(user_dict)
+    user_json = json.dumps(user_dict)
+
+    session.close()
+    return user_json
 
 
-# @app.get('/api/karl/get_user_history', response_model=List[dict])
-def get_user_history(
+def _get_user_history(
     user_id: str,
     env: str = None,
     deck_id: str = None,
     date_start: str = '2008-06-01 08:00:00.000001 -0400',
     date_end: str = '2038-06-01 08:00:00.000001 -0400',
-    session: Session = Depends(get_session),
 ):
-    # env = 'dev' if env == 'dev' else 'prod'
-    # session = get_session(env)
-    return scheduler.get_records(
+    env = 'dev' if env == 'dev' else 'prod'
+    session = get_session(env)
+
+    history = scheduler.get_records(
         session,
         user_id,
         deck_id,
         date_start,
         date_end
     )
+    session.close()
+    return history
 
 
-@app.get('/api/karl/get_user_stats', response_model=dict)
-# @cached(cache=TTLCache(maxsize=1024, ttl=600))
-def get_user_stats(
+def _get_user_stats(
     user_id: str,
     env: str = None,
     deck_id: str = None,
+    min_studied: int = 0,
     date_start: str = '2008-06-01 08:00:00.000001 -0400',
     date_end: str = '2038-06-01 08:00:00.000001 -0400',
-    session: Session = Depends(get_session),
 ) -> UserStatSchema:
     '''
     Return in a dictionary the following user stats within given date range.
@@ -303,89 +314,167 @@ def get_user_stats(
     new_known_rate: float
     review_known_rate: float
     '''
-    # env = 'dev' if env == 'dev' else 'prod'
-    # session = get_session(env)
-    return scheduler.get_user_stats(session, user_id, deck_id, date_start, date_end)
-
-
-def n_days_studied(
-    user_id: str = None,
-    env: str = None,
-    skip: int = 0,
-    limit: int = 10,
-    rank_type: str = 'total_seen',
-    min_studied: int = 0,
-    deck_id: str = None,
-    date_start: str = '2008-06-01 08:00:00.000001 -0400',
-    date_end: str = '2038-06-01 08:00:00.000001 -0400',
-    session: Session = Depends(get_session),
-):
-    # env = 'dev' if env == 'dev' else 'prod'
-    # session = get_session(env)
+    env = 'dev' if env == 'dev' else 'prod'
+    session = get_session(env)
 
     date_start = parse_date(date_start).date()
-    date_end = parse_date(date_end).date() + timedelta(days=1)  # TODO temporary fix
+    date_end = parse_date(date_end).date()
 
-    deck_id = 'all' if deck_id is None else deck_id
+    if deck_id is None:
+        deck_id = 'all'
 
-    n_days = {}  # user_id -> (number of days studied #cards >= min_studied)
-    for user in session.query(User):
-        if not user.user_id.isdigit():
-            continue
+    # last record before start date
+    before_stat = session.query(UserStat).\
+        filter(UserStat.user_id == user_id).\
+        filter(UserStat.deck_id == deck_id).\
+        filter(UserStat.date < date_start).\
+        order_by(UserStat.date.desc()).\
+        first()
 
-        # find all UserStats from the interval [date_start, date_end),
-        # there should be one on each day the user studied > 0 cards.
-        # enumerate through those UserStats, and subtract the `total_seen` from
-        # the previous one to check if the user studied >= min_studied cards.
+    # last record no later than end date
+    after_stat = session.query(UserStat).\
+        filter(UserStat.user_id == user_id).\
+        filter(UserStat.deck_id == deck_id).\
+        filter(UserStat.date < date_end).\
+        order_by(UserStat.date.desc()).\
+        first()
 
-        # the last user stat before the interval
-        before_stat = session.query(UserStat).\
-            filter(UserStat.user_id == user_id).\
-            filter(UserStat.deck_id == deck_id).\
-            filter(UserStat.date < date_start).\
-            order_by(UserStat.date.desc()).first()
+    if after_stat is None or after_stat.date < date_start:
+        session.close()
+        return UserStatSchema(
+            user_id=user_id,
+            deck_id=deck_id,
+            date_start=str(date_start),
+            date_end=str(date_end),
+            # zero for all other fields
+        )
 
-        prev_total_seen = 0 if before_stat is None else before_stat.total_seen
-        n_days[user.user_id] = 0
+    if before_stat is None:
+        before_stat = UserStat(
+            user_stat_id=json.dumps({
+                'user_id': user_id,
+                'date': str(date_start),
+                'deck_id': deck_id,
+            }),
+            user_id=user_id,
+            deck_id=deck_id,
+            date=date_start,
+            new_facts=0,
+            reviewed_facts=0,
+            new_correct=0,
+            reviewed_correct=0,
+            total_seen=0,
+            total_milliseconds=0,
+            total_seconds=0,
+            total_minutes=0,
+            elapsed_milliseconds_text=0,
+            elapsed_milliseconds_answer=0,
+            elapsed_seconds_text=0,
+            elapsed_seconds_answer=0,
+            elapsed_minutes_text=0,
+            elapsed_minutes_answer=0,
+            n_days_studied=0,
+        )
 
+    total_correct = (
+        after_stat.new_correct
+        + after_stat.reviewed_correct
+        - before_stat.new_correct
+        - before_stat.reviewed_correct
+    )
+
+    known_rate = 0
+    if after_stat.total_seen > before_stat.total_seen:
+        known_rate = (
+            total_correct / (after_stat.total_seen - before_stat.total_seen)
+        )
+
+    new_known_rate = 0
+    if after_stat.new_facts > before_stat.new_facts:
+        new_known_rate = (
+            (after_stat.new_correct - before_stat.new_correct)
+            / (after_stat.new_facts - before_stat.new_facts)
+        )
+
+    review_known_rate = 0
+    if after_stat.reviewed_facts > before_stat.reviewed_facts:
+        review_known_rate = (
+            (after_stat.reviewed_correct - before_stat.reviewed_correct)
+            / (after_stat.reviewed_facts - before_stat.reviewed_facts)
+        )
+
+    total_milliseconds = after_stat.total_milliseconds - before_stat.total_milliseconds
+    elapsed_milliseconds_text = after_stat.elapsed_milliseconds_text - before_stat.elapsed_milliseconds_text
+    elapsed_milliseconds_answer = after_stat.elapsed_milliseconds_answer - before_stat.elapsed_milliseconds_answer
+
+    if min_studied > 0:
+        n_days_studied = 0
+        prev_total_seen = before_stat.total_seen
         # go through user stats within the interval
         for user_stat in session.query(UserStat).\
-                filter(UserStat.user_id == user.user_id).\
+                filter(UserStat.user_id == user_id).\
                 filter(UserStat.deck_id == deck_id).\
                 filter(UserStat.date >= date_start, UserStat.date < date_end).\
                 order_by(UserStat.date):
             if user_stat.total_seen - prev_total_seen >= min_studied:
-                n_days[user.user_id] += 1
+                n_days_studied += 1
             prev_total_seen = user_stat.total_seen
+    else:
+        n_days_studied = after_stat.n_days_studied - before_stat.n_days_studied
 
-    # from high value to low
-    n_days = sorted(n_days.items(), key=lambda x: x[1])[::-1]
-    # remove users with 0 days studied
-    n_days = [(k, v) for k, v in n_days if v > 0]
-
-    rankings = []
-    user_place = None
-    for i, (k, v) in enumerate(n_days):
-        if user_id == k:
-            user_place = i
-        rankings.append(Ranking(user_id=k, rank=i + 1, value=v))
-
-    leaderboard = Leaderboard(
-        leaderboard=rankings[skip: skip + limit],
-        total=len(rankings),
-        rank_type=rank_type,
-        user_place=user_place,
+    user_stat_schema = UserStatSchema(
         user_id=user_id,
-        skip=skip,
-        limit=limit,
+        deck_id=deck_id,
+        date_start=str(date_start),
+        date_end=str(date_end),
+        new_facts=after_stat.new_facts - before_stat.new_facts,
+        reviewed_facts=after_stat.reviewed_facts - before_stat.reviewed_facts,
+        new_correct=after_stat.new_correct - before_stat.new_correct,
+        reviewed_correct=after_stat.reviewed_correct - before_stat.reviewed_correct,
+        total_seen=after_stat.total_seen - before_stat.total_seen,
+        total_milliseconds=total_milliseconds,
+        # NOTE we always convert from milliseconds to avoid as much rounding error as possible
+        total_seconds=total_milliseconds // 1000,
+        total_minutes=total_milliseconds // 60000,
+        elapsed_milliseconds_text=elapsed_milliseconds_text,
+        elapsed_milliseconds_answer=elapsed_milliseconds_answer,
+        elapsed_seconds_text=elapsed_milliseconds_text // 1000,
+        elapsed_seconds_answer=elapsed_milliseconds_answer // 1000,
+        elapsed_minutes_text=elapsed_milliseconds_text // 60000,
+        elapsed_minutes_answer=elapsed_milliseconds_answer // 60000,
+        known_rate=round(known_rate * 100, 2),
+        new_known_rate=round(new_known_rate * 100, 2),
+        review_known_rate=round(review_known_rate * 100, 2),
+        n_days_studied=n_days_studied,
     )
 
-    return leaderboard
+    session.close()
+    return user_stat_schema
+
+
+@app.get('/api/karl/get_user_stats', response_model=UserStatSchema)
+# @cached(cache=TTLCache(maxsize=1024, ttl=600))
+def get_user_stats(
+    user_id: str,
+    env: str = None,
+    deck_id: str = None,
+    min_studied: int = 0,
+    date_start: str = '2008-06-01 08:00:00.000001 -0400',
+    date_end: str = '2038-06-01 08:00:00.000001 -0400',
+) -> UserStatSchema:
+    return _get_user_stats(
+        user_id=user_id,
+        env=env,
+        min_studied=min_studied,
+        deck_id=deck_id,
+        date_start=date_start,
+        date_end=date_end
+    )
 
 
 @app.get('/api/karl/leaderboard', response_model=Leaderboard)
 # @cached(cache=TTLCache(maxsize=1024, ttl=1800))
-def leaderboard(
+def get_leaderboard(
     user_id: str = None,
     env: str = None,
     skip: int = 0,
@@ -395,41 +484,27 @@ def leaderboard(
     deck_id: str = None,
     date_start: str = '2008-06-01 08:00:00.000001 -0400',
     date_end: str = '2038-06-01 08:00:00.000001 -0400',
-    session: Session = Depends(get_session),
 ) -> Leaderboard:
-    '''
-    return [(user_id: str, rank_type: 'total_seen', value: 'value')]
-    that ranks [skip: skip + limit)
-    '''
-    if rank_type == 'n_days_studied':
-        return n_days_studied(
-            user_id,
-            env,
-            skip,
-            limit,
-            rank_type,
-            min_studied,
-            deck_id,
-            date_start,
-            date_end,
-        )
+    env = 'dev' if env == 'dev' else 'prod'
+    session = get_session(env)
 
-    # env = 'dev' if env == 'dev' else 'prod'
-    # session = get_session(env)
-
+    executor = ProcessPoolExecutor()
     stats = {}
-    for user in scheduler.get_all_users(session):
+    for user in session.query(User):
         if not user.user_id.isdigit():
             continue
 
-        stats[user.user_id] = get_user_stats(
+        stats[user.user_id] = executor.submit(
+            _get_user_stats,
             user_id=user.user_id,
-            env=env,
             deck_id=deck_id,
+            min_studied=min_studied,
             date_start=date_start,
             date_end=date_end,
-            session=session,
         )
+
+    for user_id, future in stats.items():
+        stats[user_id] = future.result()
 
     # from high value to low
     stats = sorted(stats.items(), key=lambda x: x[1].__dict__[rank_type])[::-1]
@@ -446,7 +521,9 @@ def leaderboard(
             value=v.__dict__[rank_type]
         ))
 
-    leaderboard = Leaderboard(
+    session.close()
+
+    return Leaderboard(
         leaderboard=rankings[skip: skip + limit],
         total=len(rankings),
         rank_type=rank_type,
@@ -456,8 +533,6 @@ def leaderboard(
         limit=limit,
     )
 
-    return leaderboard
-
 
 @app.get('/api/karl/user_charts')
 def user_charts(
@@ -466,10 +541,9 @@ def user_charts(
     deck_id: str = None,
     date_start: str = '2008-06-01 08:00:00.000001 -0400',
     date_end: str = '2038-06-01 08:00:00.000001 -0400',
-    session: Session = Depends(get_session),
 ) -> List[Visualization]:
-    # env = 'dev' if env == 'dev' else 'prod'
-    # session = get_session(env)
+    env = 'dev' if env == 'dev' else 'prod'
+    session = get_session(env)
 
     charts = get_user_charts(
         session,
@@ -492,4 +566,6 @@ def user_charts(
                 date_end=date_end,
             )
         )
+
+    session.close()
     return visualizations

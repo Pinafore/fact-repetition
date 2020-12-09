@@ -1,5 +1,5 @@
 import socket
-from typing import Optional, List, Dict
+from typing import Optional, List
 from pydantic import BaseModel
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -121,12 +121,15 @@ def get_session_makers():
     if hostname.startswith('lapine'):
         db_host = '/fs/clip-quiz/shifeng/postgres/run'
     elif hostname.startswith('newspeak'):
-        db_host = '/fs/clip-scratch/shifeng/postgres/run'
+        db_host = '/fs/clip-quiz/shifeng/postgres-dev/run'
     else:
         print('unrecognized hostname')
         exit()
+
     engines = {
-        'prod': create_engine(f'postgresql+psycopg2://shifeng@localhost:5433/karl-prod?host={db_host}'),
+        'prod': create_engine(
+            f'postgresql+psycopg2://shifeng@localhost:5433/karl-prod?host={db_host}',
+        ),
         'dev': create_engine(f'postgresql+psycopg2://shifeng@localhost:5433/karl-dev?host={db_host}'),
     }
     return {
