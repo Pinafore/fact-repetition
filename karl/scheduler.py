@@ -1304,15 +1304,15 @@ class MovingAvgScheduler:
         )
 
         # save fact snapshot before update
-        old_fact_snapshot = session.query(FactSnapshot).order_by(FactSnapshot.id.desc()).first()
-        old_record = session.query(Record).get(old_fact_snapshot.record_id)
-        new_fact_snapshot = FactSnapshot(
-            debug_id=debug_id,
-            fact_id=record.fact_id,
-            record_id=record.record_id,
-            count_correct_before=old_fact_snapshot.count_correct_before + old_record.response,
-            count_wrong_before=old_fact_snapshot.count_wrong_before + 1 - old_record.response,
-        )
+        # old_fact_snapshot = session.query(FactSnapshot).order_by(FactSnapshot.id.desc()).first()
+        # old_record = session.query(Record).get(old_fact_snapshot.record_id)
+        # new_fact_snapshot = FactSnapshot(
+        #     debug_id=debug_id,
+        #     fact_id=record.fact_id,
+        #     record_id=record.record_id,
+        #     count_correct_before=old_fact_snapshot.count_correct_before + old_record.response,
+        #     count_wrong_before=old_fact_snapshot.count_wrong_before + 1 - old_record.response,
+        # )
 
         # update user and fact
         # (optionally) commit preemptive compute
@@ -1357,9 +1357,9 @@ class MovingAvgScheduler:
             elapsed_milliseconds_answer=request.elapsed_milliseconds_answer,
             is_new_fact=is_new_fact,
             date=date,
-            user_snapshot_id=user_snapshot.debug_id,
-            fact_snapshot_id=new_fact_snapshot.debug_id,
-            scheduler_output_id=scheduler_output.debug_id,
+            # user_snapshot_id=user_snapshot.debug_id,
+            # fact_snapshot_id=new_fact_snapshot.debug_id,
+            # scheduler_output_id=scheduler_output.debug_id,
         )
 
         # update user stats
