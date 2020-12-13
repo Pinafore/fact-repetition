@@ -369,7 +369,7 @@ class MovingAvgScheduler:
         if user is not None:
             if user.params is None:
                 user.params = Params(
-                    repetition_model=f'karl{recall_target}',
+                    repetition_model=f'karl85',
                     qrep=1,
                     skill=0,
                     recall=1,
@@ -384,6 +384,17 @@ class MovingAvgScheduler:
 
         # create new user and insert to db
         new_user = User(user_id=user_id)
+        new_user.params = Params(
+            repetition_model=f'karl85',
+            qrep=1,
+            skill=0,
+            recall=1,
+            category=1,
+            answer=1,
+            leitner=1,
+            sm2=0,
+            recall_target=0.85,
+        )
         session.add(new_user)
         return new_user
 
