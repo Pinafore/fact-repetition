@@ -19,7 +19,6 @@ uvicorn
 alembic
 torch==1.6.0
 transformers==3.0.2
-Whoosh==2.7.4
 allennlp==1.1.0
-SQLAlchemy==1.3.19
+sqlalchemy
 tables
