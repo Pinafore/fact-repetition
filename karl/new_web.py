@@ -3,17 +3,19 @@
 
 import json
 import logging
+import requests
 from typing import Generator
-from fastapi import FastAPI, HTTPException, Depends
+from datetime import datetime
+from fastapi import FastAPI, Depends
 from dateutil.parser import parse as parse_date
 from cachetools import cached, TTLCache
 from concurrent.futures import ProcessPoolExecutor
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from karl.schemas import UserStatsSchema, Ranking, Leaderboard, \
-    OldParametersSchema, ParametersSchema
-from karl.models import User, UserStats, Parameters
+    OldParametersSchema, ParametersSchema, RetentionFeatures
+from karl.models import User, UserStats, Parameters, \
+    CurrUserCardFeatureVector, CurrUserFeatureVector, CurrCardFeatureVector
 from karl.db.session import SessionLocal
 
 
@@ -314,8 +316,68 @@ def predict_recall(
     user_id: str = None,
     card_id: str = None,
     env: str = None,
+    date: datetime = datetime.now(),
     session: Session = Depends(get_session),
 ):
-    # get curr feature vectors
-    # predict
-    pass
+    curr_usercard_vector = session.query(CurrUserCardFeatureVector).get((user_id, card_id))
+    if curr_usercard_vector is None:
+        curr_usercard_vector = CurrUserCardFeatureVector(
+            user_id=user_id,
+            card_id=card_id,
+            n_study_positive=0,
+            n_study_negative=0,
+            n_study_total=0,
+            previous_delta=None,
+            previous_study_date=None,
+            previous_study_response=None,
+        )
+        session.add(curr_usercard_vector)
+
+    curr_user_vector = session.query(CurrUserFeatureVector).get(user_id)
+    if curr_user_vector is None:
+        curr_user_vector = CurrUserFeatureVector(
+            user_id=user_id,
+            n_study_positive=0,
+            n_study_negative=0,
+            n_study_total=0,
+            previous_delta=None,
+            previous_study_date=None,
+            previous_study_response=None,
+        )
+        session.add(curr_user_vector)
+
+    curr_card_vector = session.query(CurrCardFeatureVector).get(card_id)
+    if curr_card_vector is None:
+        curr_card_vector = CurrCardFeatureVector(
+            card_id=card_id,
+            n_study_positive=0,
+            n_study_negative=0,
+            n_study_total=0,
+            previous_delta=None,
+            previous_study_date=None,
+            previous_study_response=None,
+        )
+        session.add(curr_card_vector)
+
+    user_previous_result = curr_user_vector.previous_study_response
+    if user_previous_result is None:
+        user_previous_result = False
+    features = RetentionFeatures(
+        user_count_correct=curr_usercard_vector.n_study_positive,
+        user_count_wrong=curr_usercard_vector.n_study_negative,
+        user_count_total=curr_usercard_vector.n_study_total,
+        user_average_overall_accuracy=0 if curr_user_vector.n_study_total == 0 else curr_user_vector.n_study_positive / curr_user_vector.n_study_total,
+        user_average_question_accuracy=0 if curr_card_vector.n_study_total == 0 else curr_card_vector.n_study_positive / curr_card_vector.n_study_negative,
+        user_previous_result=user_previous_result,
+        user_gap_from_previous=0,
+        question_average_overall_accuracy=0,
+        question_count_total=0,
+        question_count_correct=0,
+        question_count_wrong=0,
+    )
+
+    r = requests.get(
+        'http://127.0.0.1:8001/api/karl/predict',
+        data=json.dumps(features.__dict__)
+    )
+    return float(r.text)
