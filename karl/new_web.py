@@ -3,11 +3,13 @@
 
 import json
 import logging
-from fastapi import FastAPI, HTTPException
+from typing import Generator
+from fastapi import FastAPI, HTTPException, Depends
 from dateutil.parser import parse as parse_date
 from cachetools import cached, TTLCache
 from concurrent.futures import ProcessPoolExecutor
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
 from karl.schemas import UserStatsSchema, Ranking, Leaderboard, \
     OldParametersSchema, ParametersSchema
@@ -35,8 +37,12 @@ logger.addHandler(fh)
 logger.addHandler(ch)
 
 
-def get_session(env: str = 'prod'):
-    return SessionLocal()
+def get_session() -> Generator:
+    try:
+        session = SessionLocal()
+        yield session
+    finally:
+        session.close()
 
 
 @app.put('/api/karl/set_params', response_model=ParametersSchema)
@@ -44,82 +50,59 @@ def set_params(
     user_id: str,
     env: str,
     params: OldParametersSchema,
+    session: Session = Depends(get_session),
 ) -> ParametersSchema:
-    env = 'dev' if env == 'dev' else 'prod'
-    session = get_session(env)
+    curr_params = session.query(Parameters).get(user_id)
+    is_new_params = False
+    if curr_params is None:
+        is_new_params = True
+        curr_params = Parameters(id=user_id)
 
-    try:
-        curr_params = session.query(Parameters).get(user_id)
-        is_new_params = False
-        if curr_params is None:
-            is_new_params = True
-            curr_params = Parameters(id=user_id)
+    curr_params.repetition_model = params.repetition_model
+    curr_params.card_embedding = params.qrep
+    curr_params.recall = params.recall
+    curr_params.recall_target = params.recall_target
+    curr_params.category = params.category
+    curr_params.answer = params.answer
+    curr_params.leitner = params.leitner
+    curr_params.sm2 = params.sm2
+    curr_params.decay_qrep = params.decay_qrep
+    curr_params.cool_down = params.cool_down
+    curr_params.cool_down_time_correct = params.cool_down_time_correct
+    curr_params.cool_down_time_wrong = params.cool_down_time_wrong
+    curr_params.max_recent_facts = params.max_recent_facts
 
-        curr_params.repetition_model = params.repetition_model
-        curr_params.card_embedding = params.qrep
-        curr_params.recall = params.recall
-        curr_params.recall_target = params.recall_target
-        curr_params.category = params.category
-        curr_params.answer = params.answer
-        curr_params.leitner = params.leitner
-        curr_params.sm2 = params.sm2
-        curr_params.decay_qrep = params.decay_qrep
-        curr_params.cool_down = params.cool_down
-        curr_params.cool_down_time_correct = params.cool_down_time_correct
-        curr_params.cool_down_time_wrong = params.cool_down_time_wrong
-        curr_params.max_recent_facts = params.max_recent_facts
+    if is_new_params:
+        session.add(User(id=user_id))
+        session.add(curr_params)
 
-        if is_new_params:
-            session.add(User(id=user_id))
-            session.add(curr_params)
-
-        return_value = ParametersSchema(**curr_params.__dict__)
-
-        session.commit()
-    except SQLAlchemyError as e:
-        print(repr(e))
-        session.rollback()
-        raise HTTPException(status_code=404, detail='Set_params failed due to SQLAlchemyError.')
-    finally:
-        session.close()
-
-    return return_value
+    session.commit()
+    return ParametersSchema(**curr_params.__dict__)
 
 
 @app.get('/api/karl/get_params', response_model=ParametersSchema)
 def get_params(
     user_id: str,
     env: str,
+    session: Session = Depends(get_session),
 ) -> ParametersSchema:
-    env = 'dev' if env == 'dev' else 'prod'
-    session = get_session(env)
-
-    try:
-        curr_params = session.query(Parameters).get(user_id)
-        if curr_params is None:
-            curr_params = Parameters(id=user_id)
-        return_value = ParametersSchema(**curr_params.__dict__)
-    except SQLAlchemyError as e:
-        print(repr(e))
-        session.rollback()
-        raise HTTPException(status_code=404, detail='Set_params failed due to SQLAlchemyError.')
-    finally:
-        session.close()
-
-    return return_value
+    curr_params = session.query(Parameters).get(user_id)
+    if curr_params is None:
+        curr_params = Parameters(id=user_id)
+    return ParametersSchema(**curr_params.__dict__)
 
 
-def _get_user_stats(
+@app.get('/api/karl/get_user_stats', response_model=UserStatsSchema)
+# @cached(cache=TTLCache(maxsize=1024, ttl=600))
+def get_user_stats(
     user_id: str,
     deck_id: str = None,
     min_studied: int = 0,
     date_start: str = '2008-06-01 08:00:00+00:00',
     date_end: str = '2038-06-01 08:00:00+00:00',
     env: str = None,
+    session: Session = Depends(get_session),
 ) -> UserStatsSchema:
-    env = 'dev' if env == 'dev' else 'prod'
-    session = get_session(env)
-
     date_start = parse_date(date_start).date()
     date_end = parse_date(date_end).date()
 
@@ -143,7 +126,6 @@ def _get_user_stats(
         first()
 
     if after is None or after.date < date_start:
-        session.close()
         return UserStatsSchema(
             user_id=user_id,
             deck_id=deck_id,
@@ -251,28 +233,7 @@ def _get_user_stats(
         n_days_studied=n_days_studied,
     )
 
-    session.close()
     return user_stat_schema
-
-
-@app.get('/api/karl/get_user_stats', response_model=UserStatsSchema)
-@cached(cache=TTLCache(maxsize=1024, ttl=600))
-def get_user_stats(
-    user_id: str,
-    deck_id: str = None,
-    min_studied: int = 0,
-    date_start: str = '2008-06-01 08:00:00+00:00',
-    date_end: str = '2038-06-01 08:00:00+00:00',
-    env: str = None,
-) -> UserStatsSchema:
-    return _get_user_stats(
-        user_id=user_id,
-        min_studied=min_studied,
-        deck_id=deck_id,
-        date_start=date_start,
-        date_end=date_end,
-        env=env,
-    )
 
 
 @app.get('/api/karl/leaderboard', response_model=Leaderboard)
@@ -287,19 +248,17 @@ def get_leaderboard(
     deck_id: str = None,
     date_start: str = '2008-06-01 08:00:00+00:00',
     date_end: str = '2038-06-01 08:00:00+00:00',
+    session: Session = Depends(get_session),
 ) -> Leaderboard:
-    env = 'dev' if env == 'dev' else 'prod'
-    session = get_session(env)
-
+    stats = {}
     if False:
         executor = ProcessPoolExecutor()
-        stats = {}
         for user in session.query(User):
             if not user.id.isdigit():
                 continue
 
             stats[user.id] = executor.submit(
-                _get_user_stats,
+                get_user_stats,
                 user_id=user.id,
                 deck_id=deck_id,
                 min_studied=min_studied,
@@ -315,12 +274,13 @@ def get_leaderboard(
             if not user.id.isdigit():
                 continue
 
-            stats[user.id] = _get_user_stats(
+            stats[user.id] = get_user_stats(
                 user_id=user.id,
                 deck_id=deck_id,
                 min_studied=min_studied,
                 date_start=date_start,
                 date_end=date_end,
+                session=session,
             )
 
     # from high value to low
@@ -338,8 +298,6 @@ def get_leaderboard(
             value=v.__dict__[rank_type]
         ))
 
-    session.close()
-
     return Leaderboard(
         leaderboard=rankings[skip: skip + limit],
         total=len(rankings),
@@ -349,3 +307,15 @@ def get_leaderboard(
         skip=skip,
         limit=limit,
     )
+
+
+@app.get('/api/karl/predict_recall')
+def predict_recall(
+    user_id: str = None,
+    card_id: str = None,
+    env: str = None,
+    session: Session = Depends(get_session),
+):
+    # get curr feature vectors
+    # predict
+    pass
