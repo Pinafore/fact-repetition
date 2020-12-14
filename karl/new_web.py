@@ -3,13 +3,15 @@
 
 import json
 import logging
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from dateutil.parser import parse as parse_date
 from cachetools import cached, TTLCache
 from concurrent.futures import ProcessPoolExecutor
+from sqlalchemy.exc import SQLAlchemyError
 
-from karl.schemas import UserStatsSchema, Ranking, Leaderboard
-from karl.models import User, UserStats
+from karl.schemas import UserStatsSchema, Ranking, Leaderboard, \
+    OldParametersSchema, ParametersSchema
+from karl.models import User, UserStats, Parameters
 from karl.db.session import SessionLocal
 
 
@@ -35,6 +37,76 @@ logger.addHandler(ch)
 
 def get_session(env: str = 'prod'):
     return SessionLocal()
+
+
+@app.put('/api/karl/set_params', response_model=ParametersSchema)
+def set_params(
+    user_id: str,
+    env: str,
+    params: OldParametersSchema,
+) -> ParametersSchema:
+    env = 'dev' if env == 'dev' else 'prod'
+    session = get_session(env)
+
+    try:
+        curr_params = session.query(Parameters).get(user_id)
+        is_new_params = False
+        if curr_params is None:
+            is_new_params = True
+            curr_params = Parameters(id=user_id)
+
+        curr_params.repetition_model = params.repetition_model
+        curr_params.card_embedding = params.qrep
+        curr_params.recall = params.recall
+        curr_params.recall_target = params.recall_target
+        curr_params.category = params.category
+        curr_params.answer = params.answer
+        curr_params.leitner = params.leitner
+        curr_params.sm2 = params.sm2
+        curr_params.decay_qrep = params.decay_qrep
+        curr_params.cool_down = params.cool_down
+        curr_params.cool_down_time_correct = params.cool_down_time_correct
+        curr_params.cool_down_time_wrong = params.cool_down_time_wrong
+        curr_params.max_recent_facts = params.max_recent_facts
+
+        if is_new_params:
+            session.add(User(id=user_id))
+            session.add(curr_params)
+
+        return_value = ParametersSchema(**curr_params.__dict__)
+
+        session.commit()
+    except SQLAlchemyError as e:
+        print(repr(e))
+        session.rollback()
+        raise HTTPException(status_code=404, detail='Set_params failed due to SQLAlchemyError.')
+    finally:
+        session.close()
+
+    return return_value
+
+
+@app.get('/api/karl/get_params', response_model=ParametersSchema)
+def get_params(
+    user_id: str,
+    env: str,
+) -> ParametersSchema:
+    env = 'dev' if env == 'dev' else 'prod'
+    session = get_session(env)
+
+    try:
+        curr_params = session.query(Parameters).get(user_id)
+        if curr_params is None:
+            curr_params = Parameters(id=user_id)
+        return_value = ParametersSchema(**curr_params.__dict__)
+    except SQLAlchemyError as e:
+        print(repr(e))
+        session.rollback()
+        raise HTTPException(status_code=404, detail='Set_params failed due to SQLAlchemyError.')
+    finally:
+        session.close()
+
+    return return_value
 
 
 def _get_user_stats(
