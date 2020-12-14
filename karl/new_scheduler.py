@@ -1,28 +1,8 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-import os
-import json
-import time
-import copy
-import pickle
-import gensim
-import hashlib
-import logging
-import threading
-import requests
-import numpy as np
-import en_core_web_lg
-from tqdm import tqdm
-from copy import deepcopy
-from collections import defaultdict
-from datetime import datetime, timedelta
-from typing import List, Dict
-from dateutil.parser import parse as parse_date
-
-from karl.schemas import ScheduleRequest, Params, UserStatSchema, SchedulerOutputSchema
-from karl.models import User, Fact, Record, UserStat,\
-    UserSnapshot, FactSnapshot, SchedulerOutput
+from karl.schemas import ScheduleRequest, UpdateRequest, Params, UserStatSchema, SchedulerOutputSchema
+from karl.models import User, Fact, Record, UserStats
 
 
 class RetentionModel:
