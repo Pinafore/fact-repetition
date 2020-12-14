@@ -31,7 +31,6 @@ from transformers import (
     Trainer,
     TrainingArguments,
     set_seed,
-    BertTokenizer,
     DistilBertTokenizer,
     EvalPrediction,
 )
@@ -39,10 +38,8 @@ from transformers import (
 from karl.retention_utils import (
     RetentionDataArguments,
     RetentionDataset,
-    RetentionBertConfig,
     RetentionDistilBertConfig,
     RetentionInputFeatures,
-    BertRetentionModel,
     DistilBertRetentionModel,
     retention_data_collator,
 )
@@ -199,13 +196,14 @@ def train():
         result = trainer.evaluate(eval_dataset=eval_dataset)
 
         output_eval_file = os.path.join(
-            training_args.output_dir, f"eval_results_retention.txt"
+            training_args.output_dir, "eval_results_retention.txt"
         )
         with open(output_eval_file, "w") as writer:
             logger.info("***** Eval results retention *****")
             for key, value in result.items():
                 logger.info("  %s = %s", key, value)
                 writer.write("%s = %s\n" % (key, value))
+
 
 class HFRetentionModel:
 

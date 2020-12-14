@@ -127,6 +127,7 @@ class RetentionDataset(torch.utils.data.Dataset):
             idx = idx.tolist()
         return self.features[idx]
 
+
 def retention_data_collator(features: List[RetentionInputFeatures]) -> Dict[str, torch.Tensor]:
     # In this method we'll make the assumption that all `features` in the batch
     # have the same attributes.

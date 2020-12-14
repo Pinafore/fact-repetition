@@ -1,5 +1,5 @@
 import socket
-from typing import Optional, List, Dict
+from typing import Optional, List
 from pydantic import BaseModel
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker

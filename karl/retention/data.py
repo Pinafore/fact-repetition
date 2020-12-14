@@ -25,13 +25,10 @@ from allennlp.data.tokenizers import Tokenizer, Token
 from allennlp.data.dataset_readers import DatasetReader
 from allennlp.data.token_indexers import TokenIndexer, SingleIdTokenIndexer
 
-
-log = logging.getLogger(__name__)
-
 import warnings
 warnings.filterwarnings('ignore', module='torch.data.dataloader')
-
 DATA_DIR = '/fs/clip-quiz/shifeng/karl/data/protobowl/'
+log = logging.getLogger(__name__)
 
 
 def apply_parallel(f, groupby):
