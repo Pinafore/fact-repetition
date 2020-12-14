@@ -167,13 +167,23 @@ def test_leaderboard():
         URL = 'http://127.0.0.1:8000/api/karl'
         r = requests.get(f'{URL}/leaderboard?user_id={user_id}&env=prod&date_star={date_start}&date_end={date_end}&min_studied={min_studied}&rank_type={rank_type}')
         # r = requests.get(f'{URL}/leaderboard?rank_type=total_seen&limit=10&min_studied=10&env=43&user_id=44')
-        leaderboard = json.loads(r.text)
+        # leaderboard = json.loads(r.text)
 
         t1 = datetime.now()
 
-        if 'total' not in profile:
-            profile['total'] = []
-        profile['total'].append(t1 - t0)
+        URL = 'http://127.0.0.1:8001/api/karl'
+        r = requests.get(f'{URL}/leaderboard?user_id={user_id}&env=prod&date_star={date_start}&date_end={date_end}&min_studied={min_studied}&rank_type={rank_type}')
+        # r = requests.get(f'{URL}/leaderboard?rank_type=total_seen&limit=10&min_studied=10&env=43&user_id=44')
+        # leaderboard = json.loads(r.text)
+
+        t2 = datetime.now()
+
+        if 'total_0' not in profile:
+            profile['total_0'] = []
+        if 'total_1' not in profile:
+            profile['total_1'] = []
+        profile['total_0'].append(t1 - t0)
+        profile['total_1'].append(t2 - t1)
 
     print()
     for key, values in profile.items():
