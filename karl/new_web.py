@@ -402,7 +402,6 @@ def predict_recall(
         session=session,
     )
 
-
 @app.post('/api/karl/schedule')
 def schedule(
     env: str,
