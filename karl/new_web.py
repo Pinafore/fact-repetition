@@ -17,6 +17,7 @@ from karl.schemas import UserStatsSchema, RankingSchema, LeaderboardSchema, \
 from karl.models import User, UserStats, Parameters
 from karl.new_scheduler import KARLScheduler
 from karl.db.session import SessionLocal
+from karl.config import settings
 
 
 app = FastAPI()
@@ -26,7 +27,7 @@ scheduler = KARLScheduler()
 logger = logging.getLogger('scheduler')
 logger.setLevel(logging.DEBUG)
 # create file handler which logs even debug messages
-fh = logging.FileHandler('/Users/shifeng/workspace/fact-repetition/scheduler.log')
+fh = logging.FileHandler(f'{settings.CODE_DIR}/scheduler.log')
 fh.setLevel(logging.DEBUG)
 # create console handler with a higher log level
 ch = logging.StreamHandler()
@@ -50,8 +51,8 @@ def get_session() -> Generator:
 
 @app.put('/api/karl/set_params', response_model=ParametersSchema)
 def set_params(
-    user_id: str,
     env: str,
+    user_id: str,
     params: OldParametersSchema,
     session: Session = Depends(get_session),
 ) -> ParametersSchema:
@@ -59,7 +60,7 @@ def set_params(
     is_new_params = False
     if curr_params is None:
         is_new_params = True
-        curr_params = Parameters(id=user_id)
+        curr_params = Parameters(id=user_id, **ParametersSchema().__dict__)
 
     curr_params.repetition_model = params.repetition_model
     curr_params.card_embedding = params.qrep
@@ -85,14 +86,88 @@ def set_params(
 
 @app.get('/api/karl/get_params', response_model=ParametersSchema)
 def get_params(
-    user_id: str,
     env: str,
+    user_id: str,
     session: Session = Depends(get_session),
 ) -> ParametersSchema:
     curr_params = session.query(Parameters).get(user_id)
     if curr_params is None:
         curr_params = Parameters(id=user_id)
     return ParametersSchema(**curr_params.__dict__)
+
+
+@app.put('/api/karl/set_repetition_model', response_model=ParametersSchema)
+def set_repetition_model(
+    env: str,
+    user_id: str,
+    repetition_model: str,
+    session: Session = Depends(get_session),
+):
+    if repetition_model == 'sm2':
+        params = ParametersSchema(
+            repetition_model='sm2',
+            card_embedding=0,
+            recall=0,
+            recall_target=0,
+            category=0,
+            answer=0,
+            leitner=0,
+            sm2=1,
+            decay_qrep=0,
+            cool_down=0,
+            cool_down_time_correct=0,
+            cool_down_time_wrong=0,
+            max_recent_facts=0,
+        )
+    elif repetition_model == 'leitner':
+        params = ParametersSchema(
+            repetition_model='leitner',
+            card_embedding=0,
+            recall=0,
+            recall_target=0,
+            category=0,
+            answer=0,
+            leitner=1,
+            sm2=0,
+            decay_qrep=0,
+            cool_down=0,
+            cool_down_time_correct=0,
+            cool_down_time_wrong=0,
+            max_recent_facts=0,
+        )
+    elif repetition_model.startswith('karl'):
+        recall_target = int(repetition_model[4:])
+        params = ParametersSchema(
+            repetition_model=f'karl{recall_target}',
+            recall_target=float(recall_target) / 100,
+        )
+
+    curr_params = session.query(Parameters).get(user_id)
+    is_new_params = False
+    if curr_params is None:
+        is_new_params = True
+        curr_params = Parameters(id=user_id, **params)
+
+    curr_params.repetition_model = params.repetition_model
+    curr_params.card_embedding = params.card_embedding
+    curr_params.recall = params.recall
+    curr_params.recall_target = params.recall_target
+    curr_params.category = params.category
+    curr_params.answer = params.answer
+    curr_params.leitner = params.leitner
+    curr_params.sm2 = params.sm2
+    curr_params.decay_qrep = params.decay_qrep
+    curr_params.cool_down = params.cool_down
+    curr_params.cool_down_time_correct = params.cool_down_time_correct
+    curr_params.cool_down_time_wrong = params.cool_down_time_wrong
+    curr_params.max_recent_facts = params.max_recent_facts
+
+    if is_new_params:
+        session.add(User(id=user_id))
+        session.add(curr_params)
+
+    session.commit()
+    return params
 
 
 @app.get('/api/karl/get_user_stats', response_model=UserStatsSchema)
@@ -353,3 +428,8 @@ def update(
     else:
         date = datetime.now()
     scheduler.update(session, update_request, date)
+
+
+@app.get('/api/karl/status')
+def status():
+    return True
