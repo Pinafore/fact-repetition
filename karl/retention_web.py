@@ -2,6 +2,7 @@
 # coding: utf-8
 
 import json
+import pytz
 import logging
 from typing import Generator
 from pydantic import BaseModel
@@ -116,7 +117,7 @@ class RetentionModel:
         date: datetime = None,
     ) -> np.ndarray:
         if date is None:
-            date = parse_date(datetime.now().strftime('%Y-%m-%dT%H:%M:%S%z'))
+            date = parse_date(datetime.now(pytz.utc).strftime('%Y-%m-%dT%H:%M:%S%z'))
         xs = [self.compute_features(user, fact, date)[0] for fact in facts]
         xs = np.array(xs).astype(np.float32)
         xs = (xs - self.dataset.mean) / self.dataset.std

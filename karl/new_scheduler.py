@@ -96,9 +96,6 @@ class KARLScheduler:
         session: Session,
     ) -> List[Dict[str, float]]:
         recall_scores = self.score_recall_batch(vs_usercard, vs_user, vs_card)
-        print('********')
-        print(recall_scores)
-        print('********')
         scores = [
             {
                 'recall': recall_scores[i],

@@ -2,6 +2,7 @@
 # coding: utf-8
 
 import json
+import pytz
 import logging
 from typing import Generator, List
 from datetime import datetime
@@ -392,7 +393,7 @@ def predict_recall(
     user_id: str,
     card_id: str,
     env: str = None,
-    date: datetime = datetime.now(),
+    date: datetime = datetime.now(pytz.utc),
     session: Session = Depends(get_session),
 ):
     return scheduler.predict_recall(
@@ -411,8 +412,10 @@ def schedule(
     if schedule_requests[0].date is not None:
         date = parse_date(schedule_requests[0].date)
     else:
-        date = datetime.now()
-    return scheduler.schedule(session, schedule_requests, date)
+        date = datetime.now(pytz.utc)
+    schedule_response = scheduler.schedule(session, schedule_requests, date)
+    session.commit()
+    return schedule_response
 
 
 @app.post('/api/karl/update')
@@ -425,8 +428,9 @@ def update(
     if update_request.date is not None:
         date = parse_date(update_request.date)
     else:
-        date = datetime.now()
+        date = datetime.now(pytz.utc)
     scheduler.update(session, update_request, date)
+    session.commit()
 
 
 @app.get('/api/karl/status')
