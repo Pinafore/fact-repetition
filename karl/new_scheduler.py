@@ -6,13 +6,13 @@ import pytz
 import requests
 import numpy as np
 from tqdm import tqdm
-from datetime import datetime
 from typing import List, Dict
+from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 from karl.schemas import ScheduleRequestSchema, UpdateRequestSchema, ScheduleResponseSchema,\
     RetentionFeaturesSchema, ParametersSchema
-from karl.models import User, Card, Record, Parameters,\
+from karl.models import User, Card, Record, Parameters, UserStats,\
     UserCardFeatureVector, UserFeatureVector, CardFeatureVector,\
     CurrUserCardFeatureVector, CurrUserFeatureVector, CurrCardFeatureVector,\
     Leitner, SM2
@@ -123,7 +123,7 @@ class KARLScheduler:
         # gather card features
         vs_usercard, vs_user, vs_card = [], [], []
         for card in cards:
-            v_usercard, v_user, v_card = self.get_curr_features(user.id, card.id, session)
+            v_usercard, v_user, v_card = self.get_feature_vectors(user.id, card.id, session)
             vs_usercard.append(v_usercard)
             vs_user.append(v_user)
             vs_card.append(v_card)
@@ -189,21 +189,7 @@ class KARLScheduler:
             scores=scores,
         )
 
-    def update(
-        self,
-        session,
-        request: UpdateRequestSchema,
-        date: datetime
-    ) -> dict:
-        # read debug_id from request
-        # add front_end_id to record, response, elapsed_times to record
-        # update current features
-        # update user stats
-        # update leitner
-        # update sm2
-        pass
-
-    def get_curr_features(
+    def get_feature_vectors(
         self,
         user_id: str,
         card_id: str,
@@ -257,7 +243,7 @@ class KARLScheduler:
         date: datetime,
         session: Session,
     ) -> float:
-        v_usercard, v_user, v_card = self.get_curr_features(user_id, card_id, session)
+        v_usercard, v_user, v_card = self.get_feature_vectors(user_id, card_id, session)
         return self.score_recall(v_usercard, v_user, v_card)
 
     def score_recall(
@@ -344,7 +330,7 @@ class KARLScheduler:
     def score_cool_down(self, user: User, card: Card, date: datetime, session: Session) -> float:
         """
         Avoid repetition of the same card within a cool down time.
-        We set a longer cool down time for correctly recalled facts.
+        We set a longer cool down time for correctly recalled cards.
 
         :param user:
         :param card:
@@ -369,7 +355,7 @@ class KARLScheduler:
     def score_leitner(self, user: User, card: Card, date: datetime, session: Session) -> float:
         """
         Time till the scheduled date by Leitner measured by number of hours.
-        The value can be negative when the fact is over-due in Leitner.
+        The value can be negative when the card is over-due in Leitner.
 
         :param user:
         :param card:
@@ -385,7 +371,7 @@ class KARLScheduler:
     def score_sm2(self, user: User, card: Card, date: datetime, session: Session) -> float:
         """
         Time till the scheduled date by SM-2 measured by number of hours.
-        The value can be negative when the fact is over-due in SM-2.
+        The value can be negative when the card is over-due in SM-2.
 
         :param user:
         :param card:
@@ -406,7 +392,7 @@ class KARLScheduler:
         date: datetime,
         session: Session,
     ) -> None:
-        v_usercard, v_user, v_card = self.get_curr_features(user_id, card_id, session)
+        v_usercard, v_user, v_card = self.get_feature_vectors(user_id, card_id, session)
         delta_usercard = None
         if v_usercard.previous_study_date is not None:
             delta_usercard = (date - v_usercard.previous_study_date).total_seconds()
@@ -456,3 +442,188 @@ class KARLScheduler:
                 previous_study_date=v_card.previous_study_date,
                 previous_study_response=v_card.previous_study_response,
             ))
+
+    def update(
+        self,
+        session,
+        request: UpdateRequestSchema,
+        date: datetime
+    ) -> dict:
+        # read debug_id from request, find corresponding record
+        record = session.query(Record).get(request.debug_id)
+
+        # add front_end_id to record, response, elapsed_times to record
+        record.date = date
+        record.front_end_id = request.history_id
+        record.response = request.label
+        record.elapsed_milliseconds_text = request.elapsed_milliseconds_text
+        record.elapsed_milliseconds_answer = request.elapsed_milliseconds_answer
+
+        # update leitner
+        self.update_leitner(record, date, session)
+        # update sm2
+        self.update_sm2(record, date, session)
+
+        # update user stats
+        utc_date = date.astimezone(pytz.utc).date()
+        self.update_user_stats(record, deck_id='all', utc_date=utc_date, session=session)
+        if record.deck_id is not None:
+            self.update_user_stats(record, deck_id=record.deck_id, utc_date=utc_date, session=session)
+
+        # update current features
+        # NOTE do this last, especially after leitner and sm2
+        self.update_feature_vectors(record, date, session)
+
+    def update_feature_vectors(self, record: Record, date: datetime, session: Session):
+        v_usercard, v_user, v_card = self.get_feature_vectors(record.user_id, record.card_id, session)
+
+        delta_usercard = None
+        if v_usercard.previous_study_date is not None:
+            delta_usercard = (date - v_usercard.previous_study_date).total_seconds()
+        v_usercard.n_study_positive += record.response
+        v_usercard.n_study_negative += (not record.response)
+        v_usercard.n_study_total += 1
+        v_usercard.previous_delta = delta_usercard
+        v_usercard.previous_study_date = date
+        v_usercard.previous_study_response = record.response
+
+        delta_user = None
+        if v_user.previous_study_date is not None:
+            delta_user = (date - v_user.previous_study_date).total_seconds()
+        v_user.n_study_positive += record.response
+        v_user.n_study_negative += (not record.response)
+        v_user.n_study_total += 1
+        v_user.previous_delta = delta_user
+        v_user.previous_study_date = date
+        v_user.previous_study_response = record.response
+
+        delta_card = None
+        if v_card.previous_study_date is not None:
+            delta_card = (date - v_card.previous_study_date).total_seconds()
+        v_card.n_study_positive += record.response
+        v_card.n_study_negative += (not record.response)
+        v_card.n_study_total += 1
+        v_card.previous_delta = delta_card
+        v_card.previous_study_date = date
+        v_card.previous_study_response = record.response
+
+    def update_user_stats(self, record: Record, utc_date, deck_id: str, session: Session):
+        # get the latest user_stat ordered by date
+        curr_stats = session.query(UserStats).\
+            filter(UserStats.user_id == record.user_id).\
+            filter(UserStats.deck_id == deck_id).\
+            order_by(UserStats.date.desc()).first()
+
+        is_new_stat = False
+        if curr_stats is None:
+            stats_id = json.dumps({
+                'user_id': record.user_id,
+                'deck_id': deck_id,
+                'date': str(utc_date),
+            })
+            curr_stats = UserStats(
+                id=stats_id,
+                user_id=record.user_id,
+                deck_id=deck_id,
+                date=utc_date,
+                n_cards_total=0,
+                n_cards_positive=0,
+                n_new_cards_total=0,
+                n_old_cards_total=0,
+                n_new_cards_positive=0,
+                n_old_cards_positive=0,
+                elapsed_milliseconds_text=0,
+                elapsed_milliseconds_answer=0,
+                n_days_studied=0,
+            )
+            is_new_stat = True
+
+        if utc_date != curr_stats.date:
+            # there is a previous user_stat, but not from today
+            # copy user stat to today
+            stats_id = json.dumps({
+                'user_id': record.user_id,
+                'deck_id': deck_id,
+                'date': str(utc_date),
+            })
+            new_stat = UserStats(
+                id=stats_id,
+                user_id=record.user_id,
+                deck_id=deck_id,
+                date=utc_date,
+                n_cards_total=curr_stats.n_cards_total,
+                n_cards_positive=curr_stats.n_cards_positive,
+                n_new_cards_total=curr_stats.n_new_cards_total,
+                n_old_cards_total=curr_stats.n_old_cards_total,
+                n_new_cards_positive=curr_stats.n_new_cards_positive,
+                n_old_cards_positive=curr_stats.n_old_cards_positive,
+                elapsed_milliseconds_text=curr_stats.elapsed_milliseconds_text,
+                elapsed_milliseconds_answer=curr_stats.elapsed_milliseconds_answer,
+                n_days_studied=curr_stats.n_days_studied + 1,
+            )
+            curr_stats = new_stat
+            is_new_stat = True
+
+        if record.is_new_fact:
+            curr_stats.n_new_cards_total += 1
+            curr_stats.n_new_cards_positive += record.response
+        else:
+            curr_stats.n_old_cards_total += 1
+            curr_stats.n_old_cards_positive += record.response
+
+        curr_stats.n_cards_total += 1
+        curr_stats.n_cards_positive += record.response
+        curr_stats.elapsed_milliseconds_text += record.elapsed_milliseconds_text
+        curr_stats.elapsed_milliseconds_answer += record.elapsed_milliseconds_answer
+
+        if is_new_stat:
+            session.add(curr_stats)
+
+    def update_leitner(self, record: Record, date: datetime, session: Session) -> None:
+        # leitner boxes 1~10
+        # days[0] = None as placeholder since we don't have box 0
+        # days[9] and days[10] = 999 to make it never repeat
+        days = [0, 0, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 999, 999]
+        increment_days = {i: x for i, x in enumerate(days)}
+
+        leitner = session.query(Leitner).get((record.user_id, record.card_id))
+        if leitner is None:
+            # boxes: 1 ~ 10
+            leitner = Leitner(user_id=record.user_id, card_id=record.card_id, box=1)
+            session.add(leitner)
+
+        leitner.box += (1 if record.response else -1)
+        leitner.box = max(min(leitner.box, 10), 1)
+        interval = timedelta(days=increment_days[leitner.box])
+        leitner.scheduled_date = date + interval
+
+    def update_sm2(self, record: Record, date: datetime, session: Session) -> None:
+        def get_quality_from_response(response: bool) -> int:
+            return 4 if response else 1
+
+        sm2 = session.query(SM2).get((record.user_id, record.card_id))
+        if sm2 is None:
+            sm2 = SM2(
+                user_id=record.user_id,
+                card_id=record.card_id,
+                efactor=2.5,
+                interval=1,
+                repetition=0,
+            )
+
+        q = get_quality_from_response(record.response)
+        sm2.repetition += 1
+        sm2.efactor = max(1.3, sm2.efactor + 0.1 - (5.0 - q) * (0.08 + (5.0 - q) * 0.02))
+
+        if not record.response:
+            sm2.interval = 0
+            sm2.repetition = 0
+        else:
+            if sm2.repeptition == 1:
+                sm2.interval = 1
+            elif sm2.repetition == 2:
+                sm2.interval = 6
+            else:
+                sm2.interval *= sm2.efactor
+
+        sm2.scheduled_date = date + timedelta(days=sm2.interval)

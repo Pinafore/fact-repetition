@@ -54,27 +54,27 @@ for nth_day in range(n_days):
         debug_id = schedule_response['debug_id']
         print(fact_id, debug_id)
 
-        # response = bool(np.random.binomial(1, 0.5))
+        response = bool(np.random.binomial(1, 0.5))
 
-        # update_request = UpdateRequestSchema(
-        #     text=schedule_requests[index].text,
-        #     date=current_date.strftime('%Y-%m-%dT%H:%M:%S%z'),
-        #     answer=schedule_requests[index].answer,
-        #     category=schedule_requests[index].category,
-        #     user_id=user_id,
-        #     fact_id=schedule_requests[index].fact_id,
-        #     label=response,
-        #     history_id=f'sim_history_{nth_day}_{nth_fact}',
-        #     elapsed_milliseconds_text=10000,
-        #     elapsed_milliseconds_answer=10000,
-        #     debug_id=debug_id,
-        # )
-        # update_response = json.loads(
-        #     requests.post(
-        #         f'{URL}/update?env=prod',
-        #         data=json.dumps([update_request.__dict__]),
-        #     ).text
-        # )
+        update_request = UpdateRequestSchema(
+            text=schedule_requests[index].text,
+            date=current_date.strftime('%Y-%m-%dT%H:%M:%S%z'),
+            answer=schedule_requests[index].answer,
+            category=schedule_requests[index].category,
+            user_id=user_id,
+            fact_id=schedule_requests[index].fact_id,
+            label=response,
+            history_id=f'sim_history_{nth_day}_{nth_fact}',
+            elapsed_milliseconds_text=10000,
+            elapsed_milliseconds_answer=10000,
+            debug_id=debug_id,
+        )
+        update_response = json.loads(
+            requests.post(
+                f'{URL}/update?env=prod',
+                data=json.dumps([update_request.__dict__]),
+            ).text
+        )
 
         seconds_offset += 20
 

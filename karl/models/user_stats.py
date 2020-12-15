@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, Date
 
 from karl.db.base_class import Base
-from karl.models import User, Record
+from karl.models import User
 
 
 class UserStats(Base):

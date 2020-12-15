@@ -337,7 +337,7 @@ def schedule(
     if schedule_requests[0].date is not None:
         date = parse_date(schedule_requests[0].date)
     else:
-        date = parse_date(datetime.now().strftime('%Y-%m-%dT%H:%M:%S%z'))
+        date = datetime.now()
     return scheduler.schedule(session, schedule_requests, date)
 
 
@@ -347,4 +347,9 @@ def update(
     update_requests: List[UpdateRequestSchema],
     session: Session = Depends(get_session),
 ) -> None:
-    pass
+    update_request = update_requests[0]  # only accept one request. for backward compatability
+    if update_request.date is not None:
+        date = parse_date(update_request.date)
+    else:
+        date = datetime.now()
+    scheduler.update(session, update_request, date)
