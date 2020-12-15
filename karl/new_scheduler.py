@@ -10,11 +10,12 @@ from datetime import datetime
 from typing import List, Dict
 from sqlalchemy.orm import Session
 
-from karl.schemas import ScheduleRequestSchema, UpdateRequestSchema, ScheduleResponseSchema, \
+from karl.schemas import ScheduleRequestSchema, UpdateRequestSchema, ScheduleResponseSchema,\
     RetentionFeaturesSchema, ParametersSchema
-from karl.models import User, Card, Record, Parameters, \
+from karl.models import User, Card, Record, Parameters,\
     UserCardFeatureVector, UserFeatureVector, CardFeatureVector,\
-    CurrUserCardFeatureVector, CurrUserFeatureVector, CurrCardFeatureVector
+    CurrUserCardFeatureVector, CurrUserFeatureVector, CurrCardFeatureVector,\
+    Leitner, SM2
 
 
 class KARLScheduler:
@@ -73,14 +74,14 @@ class KARLScheduler:
         v_usercard: CurrUserCardFeatureVector,
         v_user: CurrUserFeatureVector,
         v_card: CurrCardFeatureVector,
+        session: Session,
     ) -> Dict[str, float]:
         scores = {
             'recall': self.score_recall(v_usercard, v_user, v_card),
-            # 'category': self.dist_category(user, fact),
-            # 'answer': self.dist_answer(user, fact),
-            # 'cool_down': self.dist_cool_down(user, fact, date),
-            # 'leitner': self.dist_leitner(user, fact, date),
-            # 'sm2': self.dist_sm2(user, fact, date),
+            'category': self.score_category(user, card),
+            'cool_down': self.score_cool_down(user, card, date, session),
+            'leitner': self.score_leitner(user, card, date, session),
+            'sm2': self.score_sm2(user, card, date, session),
         }
         return scores
 
@@ -92,16 +93,16 @@ class KARLScheduler:
         vs_usercard: List[CurrUserCardFeatureVector],
         vs_user: List[CurrUserFeatureVector],
         vs_card: List[CurrCardFeatureVector],
+        session: Session,
     ) -> List[Dict[str, float]]:
         recall_scores = self.score_recall_batch(vs_usercard, vs_user, vs_card)
         scores = [
             {
                 'recall': recall_scores[i],
-                # 'category': self.dist_category(user, card),
-                # 'answer': self.dist_answer(user, card),
-                # 'cool_down': self.dist_cool_down(user, card, date),
-                # 'leitner': self.dist_leitner(user, card, date),
-                # 'sm2': self.dist_sm2(user, card, date),
+                'category': self.score_category(user, card),
+                'cool_down': self.score_cool_down(user, card, date, session),
+                'leitner': self.score_leitner(user, card, date, session),
+                'sm2': self.score_sm2(user, card, date, session),
             }
             for i, card in enumerate(cards)
         ]
@@ -119,27 +120,32 @@ class KARLScheduler:
         user = self.get_user(schedule_requests[0].user_id, session)
         cards = [self.get_card(request, session) for request in schedule_requests]
 
-        # score cards
+        # gather card features
         vs_usercard, vs_user, vs_card = [], [], []
         for card in cards:
             v_usercard, v_user, v_card = self.get_curr_features(user.id, card.id, session)
             vs_usercard.append(v_usercard)
             vs_user.append(v_user)
             vs_card.append(v_card)
+
+        # score cards
         if False:
-            scores = []
-            for i, card in enumerate(tqdm(cards)):
-                scores.append(
-                    self.score_user_card(user, card, date, vs_usercard[i], vs_user[i], vs_card[i])
-                )
+            scores = [
+                self.score_user_card(
+                    user, card, date,
+                    vs_usercard[i], vs_user[i], vs_card[i],
+                    session
+                ) for i, card in enumerate(tqdm(cards))
+            ]
         else:
-            scores = self.score_user_cards(user, cards, date, vs_usercard, vs_user, vs_card)
+            scores = self.score_user_cards(
+                user, cards, date, vs_usercard, vs_user, vs_card, session,
+            )
 
         # computer total score
-        user_parameters = session.query(Parameters).get(user.id)
         for i, _ in enumerate(scores):
             scores[i]['sum'] = sum([
-                user_parameters.__dict__.get(key, 0) * value
+                user.parameters.__dict__.get(key, 0) * value
                 for key, value in scores[i].items()
             ])
 
@@ -315,6 +321,82 @@ class KARLScheduler:
                 data=json.dumps([x.__dict__ for x in feature_vectors])
             ).text
         )
+
+    def score_category(self, user: User, card: Card) -> float:
+        """
+        Penalize shift in predefined categories.
+        1 if card category is different than the
+        previous card the user studied, 0 otherwise.
+
+        :param user:
+        :param card:
+        :return: 0 if same category, 1 if otherwise.
+        """
+        if len(user.records) == 0:
+            return 0
+
+        prev_card = user.records[-1].card
+        if prev_card is None or prev_card.category is None:
+            return 0
+
+        return float(card.category != prev_card.category)
+
+    def score_cool_down(self, user: User, card: Card, date: datetime, session: Session) -> float:
+        """
+        Avoid repetition of the same card within a cool down time.
+        We set a longer cool down time for correctly recalled facts.
+
+        :param user:
+        :param card:
+        :param date: current study date.
+        :return: portion of cool down period remained. 0 if passed.
+        """
+        v_usercard = session.query(CurrUserCardFeatureVector).get((user.id, card.id))
+        if v_usercard is None or v_usercard.previous_study_date is None:
+            return 0
+        else:
+            if v_usercard.previous_study_response:
+                cool_down_period = user.parameters.cool_down_time_correct
+            else:
+                cool_down_period = user.parameters.cool_down_time_wrong
+
+            delta_minutes = (date - v_usercard.previous_study_date).total_seconds() // 60
+            if delta_minutes > cool_down_period:
+                return 0
+            else:
+                return float(delta_minutes / cool_down_period)
+
+    def score_leitner(self, user: User, card: Card, date: datetime, session: Session) -> float:
+        """
+        Time till the scheduled date by Leitner measured by number of hours.
+        The value can be negative when the fact is over-due in Leitner.
+
+        :param user:
+        :param card:
+        :return: distance in number of hours.
+        """
+        leitner = session.query(Leitner).get((user.id, card.id))
+        if leitner is None or leitner.scheduled_date is None:
+            return 0
+        else:
+            # NOTE distance in hours, can be negative
+            return (leitner.scheduled_date - date).total_seconds() / (60 * 60)
+
+    def score_sm2(self, user: User, card: Card, date: datetime, session: Session) -> float:
+        """
+        Time till the scheduled date by SM-2 measured by number of hours.
+        The value can be negative when the fact is over-due in SM-2.
+
+        :param user:
+        :param card:
+        :return: distance in number of hours.
+        """
+        sm2 = session.query(SM2).get((user.id, card.id))
+        if sm2 is None or sm2.scheduled_date is None:
+            return 0
+        else:
+            # NOTE distance in hours, can be negative
+            return (sm2.scheduled_date - date).total_seconds() / (60 * 60)
 
     def save_feature_vectors(
         self,

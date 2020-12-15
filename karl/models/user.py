@@ -8,4 +8,4 @@ class User(Base):
     id = Column(String, primary_key=True, index=True)
 
     records = relationship('Record', order_by='Record.date', back_populates='user')
-    parameters = relationship('Parameters', back_populates='user')
+    parameters = relationship('Parameters', back_populates='user', uselist=False)
