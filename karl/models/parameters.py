@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, Float, String, ForeignKey
+from sqlalchemy.orm import relationship
 
 from karl.db.base_class import Base
 from karl.models import User
@@ -19,3 +20,5 @@ class Parameters(Base):
     cool_down_time_correct = Column(Integer, default=20, nullable=False)
     cool_down_time_wrong = Column(Integer, default=1, nullable=False)
     max_recent_facts = Column(Integer, default=10, nullable=False)
+
+    user = relationship('User', back_populates='parameters')

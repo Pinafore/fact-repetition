@@ -12,4 +12,4 @@ class Card(Base):
     deck_name = Column(String)
     deck_id = Column(String)
 
-    records = relationship("Record", order_by="Record.date", back_populates="card")
+    records = relationship('Record', order_by='Record.date', back_populates='card')

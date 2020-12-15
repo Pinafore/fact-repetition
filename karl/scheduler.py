@@ -14,7 +14,6 @@ import numpy as np
 # import pandas as pd
 import en_core_web_lg
 from tqdm import tqdm
-from copy import deepcopy
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import List, Dict
@@ -22,11 +21,12 @@ from dateutil.parser import parse as parse_date
 # from whoosh.qparser import QueryParser
 
 from karl.lda import process_question
-from karl.util import ScheduleRequest, Params, UserStatSchema, SchedulerOutputSchema
+from karl.util import Params, UserStatSchema, SchedulerOutputSchema
 from karl.models import User, Fact, Record, UserStat,\
-    UserSnapshot, FactSnapshot, SchedulerOutput
+    UserSnapshot, SchedulerOutput
 from karl.retention.baseline import RetentionModel
 # from karl.new_retention import HFRetentionModel as RetentionModel
+from karl.schemas import ScheduleRequest, UpdateRequest
 
 
 CORRECT = True
@@ -369,7 +369,7 @@ class MovingAvgScheduler:
         if user is not None:
             if user.params is None:
                 user.params = Params(
-                    repetition_model=f'karl{recall_target}',
+                    repetition_model='karl85',
                     qrep=1,
                     skill=0,
                     recall=1,
@@ -383,7 +383,31 @@ class MovingAvgScheduler:
             return user
 
         # create new user and insert to db
-        new_user = User(user_id=user_id)
+        new_user = User(
+            user_id=user_id,
+            recent_facts=[],
+            previous_study={},
+            leitner_box={},
+            leitner_scheduled_date={},
+            sm2_efactor={},
+            sm2_interval={},
+            sm2_repetition={},
+            sm2_scheduled_date={},
+            results=[],
+            count_correct_before={},
+            count_wrong_before={},
+            params=Params(
+                repetition_model='karl85',
+                qrep=1,
+                skill=0,
+                recall=1,
+                category=1,
+                answer=1,
+                leitner=1,
+                sm2=0,
+                recall_target=0.85,
+            )
+        )
         session.add(new_user)
         return new_user
 
@@ -646,8 +670,8 @@ class MovingAvgScheduler:
 
     def dist_recall_batch(
             self,
-            user: User, 
-            facts: List[Fact], 
+            user: User,
+            facts: List[Fact],
             date: datetime,
     ) -> List[float]:
         """
@@ -1208,10 +1232,10 @@ class MovingAvgScheduler:
             self.preemptive_future[response][user.user_id] = pre_schedule
 
     def update_user_fact(
-            self, 
-            user: User, 
-            fact: Fact, 
-            date: datetime, 
+            self,
+            user: User,
+            fact: Fact,
+            date: datetime,
             response: bool
     ) -> None:
         """
@@ -1242,8 +1266,8 @@ class MovingAvgScheduler:
 
     def update(
             self,
-            session, 
-            requests: List[ScheduleRequest], 
+            session,
+            requests: List[UpdateRequest],
             date: datetime
     ) -> dict:
         """
@@ -1328,18 +1352,16 @@ class MovingAvgScheduler:
             self.preemptive_commit[user.user_id] = results
             user = results['user']
             fact = results['fact']
-
-        if request.elapsed_seconds_text is None:
-            request.elapsed_seconds_text = request.elapsed_milliseconds_text * 1000
-        if request.elapsed_seconds_answer is None:
-            request.elapsed_seconds_answer = request.elapsed_milliseconds_answer * 1000
         
+        elapsed_seconds_text = request.elapsed_milliseconds_text * 1000
+        elapsed_seconds_answer = request.elapsed_milliseconds_answer * 1000
+
         is_new_fact = True
         if session.query(Record).\
-            filter(Record.user_id == request.user_id).\
-            filter(Record.fact_id == fact.fact_id).\
-            filter(Record.deck_id == fact.deck_id).\
-            first() is not None:
+                filter(Record.user_id == request.user_id).\
+                filter(Record.fact_id == fact.fact_id).\
+                filter(Record.deck_id == fact.deck_id).\
+                first() is not None:
             is_new_fact = False
 
         record = Record(
@@ -1351,8 +1373,8 @@ class MovingAvgScheduler:
             response=request.label,
             judgement=request.label,
             fact_ids=json.dumps([x.fact_id for x in facts]),
-            elapsed_seconds_text=request.elapsed_seconds_text,
-            elapsed_seconds_answer=request.elapsed_seconds_answer,
+            elapsed_seconds_text=elapsed_seconds_text,
+            elapsed_seconds_answer=elapsed_seconds_answer,
             elapsed_milliseconds_text=request.elapsed_milliseconds_text,
             elapsed_milliseconds_answer=request.elapsed_milliseconds_answer,
             is_new_fact=is_new_fact,

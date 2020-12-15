@@ -15,15 +15,15 @@ class IntOrFloat:
         raise TypeError('int or float required')
 
 
-class Ranking(BaseModel):
+class RankingSchema(BaseModel):
     user_id: int
     rank: int
     # value: Union[int, float]  # don't use this
     value: IntOrFloat
 
 
-class Leaderboard(BaseModel):
-    leaderboard: List[Ranking]
+class LeaderboardSchema(BaseModel):
+    leaderboard: List[RankingSchema]
     total: int
     rank_type: str
     user_place: Optional[int] = None

@@ -11,12 +11,12 @@ from dateutil.parser import parse as parse_date
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from karl.util import ScheduleRequest, Params, \
-    Ranking, Leaderboard, UserStatSchema, Visualization, SchedulerOutputSchema
+from karl.util import Params, Ranking, Leaderboard, UserStatSchema, Visualization, SchedulerOutputSchema
 from karl.util import get_session_makers
 from karl.models import User, Fact, UserStat
 from karl.scheduler import MovingAvgScheduler
 from karl.metrics import get_user_charts
+from karl.schemas import ScheduleRequest, UpdateRequest
 
 
 default_start_date = '2008-06-01 08:00:00.000001 -0400'
@@ -55,6 +55,7 @@ def get_session() -> Generator:
 
 @app.post('/api/karl/schedule')
 def schedule(
+    env: str,
     requests: List[ScheduleRequest],
     session: Session = Depends(get_session),
 ) -> SchedulerOutputSchema:
@@ -65,7 +66,7 @@ def schedule(
             'facts_info': '',
         }
 
-    logger.info(f'/karl/schedule with {len(requests)} facts and env={requests[0].env}')
+    logger.info(f'/karl/schedule with {len(requests)} facts and env={env}')
 
     # NOTE assuming single user single date
     date = parse_date(datetime.now().strftime('%Y-%m-%dT%H:%M:%S%z'))
@@ -85,11 +86,11 @@ def schedule(
 
 @app.post('/api/karl/update')
 def update(
-    requests: List[ScheduleRequest],
-    response_model=bool,
+    env: str,
+    requests: List[UpdateRequest],
     session: Session = Depends(get_session),
 ):
-    logger.info(f'/karl/update with {len(requests)} facts and env={requests[0].env} and debug_id={requests[0].debug_id}')
+    logger.info(f'/karl/update with {len(requests)} facts and env={env} and debug_id={requests[0].debug_id}')
 
     # NOTE assuming single user single date
     date = parse_date(datetime.now().strftime('%Y-%m-%dT%H:%M:%S%z'))
@@ -309,6 +310,7 @@ def get_user_stats(
 
 
 def n_days_studied(
+    session: Session = None,
     user_id: str = None,
     env: str = None,
     skip: int = 0,
@@ -318,10 +320,9 @@ def n_days_studied(
     deck_id: str = None,
     date_start: str = '2008-06-01 08:00:00.000001 -0400',
     date_end: str = '2038-06-01 08:00:00.000001 -0400',
-    session: Session = Depends(get_session),
 ):
     # env = 'dev' if env == 'dev' else 'prod'
-    # session = get_session(env)
+    # session = get_session()
 
     date_start = parse_date(date_start).date()
     date_end = parse_date(date_end).date() + timedelta(days=1)  # TODO temporary fix
@@ -380,6 +381,8 @@ def n_days_studied(
         limit=limit,
     )
 
+    session.close()
+
     return leaderboard
 
 
@@ -403,6 +406,7 @@ def leaderboard(
     '''
     if rank_type == 'n_days_studied':
         return n_days_studied(
+            session,
             user_id,
             env,
             skip,
@@ -415,7 +419,7 @@ def leaderboard(
         )
 
     # env = 'dev' if env == 'dev' else 'prod'
-    # session = get_session(env)
+    # session = get_session()
 
     stats = {}
     for user in scheduler.get_all_users(session):
@@ -455,6 +459,8 @@ def leaderboard(
         skip=skip,
         limit=limit,
     )
+
+    session.close()
 
     return leaderboard
 

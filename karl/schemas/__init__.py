@@ -1,5 +1,6 @@
 from .user_stats_schema import UserStatsSchema
-from .leaderboard import Leaderboard, Ranking
+from .leaderboard import LeaderboardSchema, RankingSchema
 from .parameters import ParametersSchema, OldParametersSchema
-from .retention_features import RetentionFeatures
-from .schedule_update_requests import ScheduleRequest, UpdateRequest
+from .retention_features import RetentionFeaturesSchema
+from .schedule_update_requests import ScheduleRequestSchema, UpdateRequestSchema
+from .schedule_response import ScheduleResponseSchema

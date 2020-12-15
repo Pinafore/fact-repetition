@@ -3,8 +3,7 @@
 
 import json
 import logging
-import requests
-from typing import Generator
+from typing import Generator, List
 from datetime import datetime
 from fastapi import FastAPI, Depends
 from dateutil.parser import parse as parse_date
@@ -12,14 +11,16 @@ from cachetools import cached, TTLCache
 from concurrent.futures import ProcessPoolExecutor
 from sqlalchemy.orm import Session
 
-from karl.schemas import UserStatsSchema, Ranking, Leaderboard, \
-    OldParametersSchema, ParametersSchema, RetentionFeatures
-from karl.models import User, UserStats, Parameters, \
-    CurrUserCardFeatureVector, CurrUserFeatureVector, CurrCardFeatureVector
+from karl.schemas import UserStatsSchema, RankingSchema, LeaderboardSchema, \
+    OldParametersSchema, ParametersSchema, \
+    ScheduleResponseSchema, ScheduleRequestSchema, UpdateRequestSchema
+from karl.models import User, UserStats, Parameters
+from karl.new_scheduler import KARLScheduler
 from karl.db.session import SessionLocal
 
 
 app = FastAPI()
+scheduler = KARLScheduler()
 
 # create logger with 'scheduler'
 logger = logging.getLogger('scheduler')
@@ -238,7 +239,7 @@ def get_user_stats(
     return user_stat_schema
 
 
-@app.get('/api/karl/leaderboard', response_model=Leaderboard)
+@app.get('/api/karl/leaderboard', response_model=LeaderboardSchema)
 # @cached(cache=TTLCache(maxsize=1024, ttl=1800))
 def get_leaderboard(
     user_id: str = None,
@@ -251,7 +252,7 @@ def get_leaderboard(
     date_start: str = '2008-06-01 08:00:00+00:00',
     date_end: str = '2038-06-01 08:00:00+00:00',
     session: Session = Depends(get_session),
-) -> Leaderboard:
+) -> LeaderboardSchema:
     stats = {}
     if False:
         executor = ProcessPoolExecutor()
@@ -294,13 +295,13 @@ def get_leaderboard(
     for i, (k, v) in enumerate(stats):
         if user_id == k:
             user_place = i
-        rankings.append(Ranking(
+        rankings.append(RankingSchema(
             user_id=k,
             rank=i + 1,
             value=v.__dict__[rank_type]
         ))
 
-    return Leaderboard(
+    return LeaderboardSchema(
         leaderboard=rankings[skip: skip + limit],
         total=len(rankings),
         rank_type=rank_type,
@@ -313,71 +314,37 @@ def get_leaderboard(
 
 @app.get('/api/karl/predict_recall')
 def predict_recall(
-    user_id: str = None,
-    card_id: str = None,
+    user_id: str,
+    card_id: str,
     env: str = None,
     date: datetime = datetime.now(),
     session: Session = Depends(get_session),
 ):
-    curr_usercard_vector = session.query(CurrUserCardFeatureVector).get((user_id, card_id))
-    if curr_usercard_vector is None:
-        curr_usercard_vector = CurrUserCardFeatureVector(
-            user_id=user_id,
-            card_id=card_id,
-            n_study_positive=0,
-            n_study_negative=0,
-            n_study_total=0,
-            previous_delta=None,
-            previous_study_date=None,
-            previous_study_response=None,
-        )
-        session.add(curr_usercard_vector)
-
-    curr_user_vector = session.query(CurrUserFeatureVector).get(user_id)
-    if curr_user_vector is None:
-        curr_user_vector = CurrUserFeatureVector(
-            user_id=user_id,
-            n_study_positive=0,
-            n_study_negative=0,
-            n_study_total=0,
-            previous_delta=None,
-            previous_study_date=None,
-            previous_study_response=None,
-        )
-        session.add(curr_user_vector)
-
-    curr_card_vector = session.query(CurrCardFeatureVector).get(card_id)
-    if curr_card_vector is None:
-        curr_card_vector = CurrCardFeatureVector(
-            card_id=card_id,
-            n_study_positive=0,
-            n_study_negative=0,
-            n_study_total=0,
-            previous_delta=None,
-            previous_study_date=None,
-            previous_study_response=None,
-        )
-        session.add(curr_card_vector)
-
-    user_previous_result = curr_user_vector.previous_study_response
-    if user_previous_result is None:
-        user_previous_result = False
-    features = RetentionFeatures(
-        user_count_correct=curr_usercard_vector.n_study_positive,
-        user_count_wrong=curr_usercard_vector.n_study_negative,
-        user_count_total=curr_usercard_vector.n_study_total,
-        user_average_overall_accuracy=0 if curr_user_vector.n_study_total == 0 else curr_user_vector.n_study_positive / curr_user_vector.n_study_total,
-        user_average_question_accuracy=0 if curr_card_vector.n_study_total == 0 else curr_card_vector.n_study_positive / curr_card_vector.n_study_negative,
-        user_previous_result=user_previous_result,
-        user_gap_from_previous=0,
-        question_average_overall_accuracy=0,
-        question_count_total=0,
-        question_count_correct=0,
-        question_count_wrong=0,
+    return scheduler.predict_recall(
+        user_id=user_id,
+        card_id=card_id,
+        date=date,
+        session=session,
     )
 
-    r = requests.get(
-        'http://127.0.0.1:8001/api/karl/predict',
-        data=json.dumps(features.__dict__)
-    )
-    return float(r.text)
+
+@app.post('/api/karl/schedule')
+def schedule(
+    env: str,
+    schedule_requests: List[ScheduleRequestSchema],
+    session: Session = Depends(get_session),
+) -> ScheduleResponseSchema:
+    if schedule_requests[0].date is not None:
+        date = parse_date(schedule_requests[0].date)
+    else:
+        date = parse_date(datetime.now().strftime('%Y-%m-%dT%H:%M:%S%z'))
+    return scheduler.schedule(session, schedule_requests, date)
+
+
+@app.post('/api/karl/update')
+def update(
+    env: str,
+    update_requests: List[UpdateRequestSchema],
+    session: Session = Depends(get_session),
+) -> None:
+    pass

@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 
 
-class RetentionFeatures(BaseModel):
+class RetentionFeaturesSchema(BaseModel):
     user_count_correct: float
     user_count_wrong: float
     user_count_total: float
