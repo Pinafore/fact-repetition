@@ -1,19 +1,20 @@
 """create user table
 
 Revision ID: 40324e3b835a
-Revises: 
+Revises:
 Create Date: 2020-12-13 00:28:32.634993
 
 """
 from tqdm import tqdm
 from alembic import op
 from sqlalchemy import orm
-from sqlalchemy import Column, ForeignKey, String, Float, Integer
+from sqlalchemy import Column, String
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from karl.old_models import User as OldUser
-from karl.models import User, Parameters
+from karl.models import User
+from karl.config import settings
 
 
 # revision identifiers, used by Alembic.
@@ -35,7 +36,7 @@ def schema_downgrade():
 
 
 def data_upgrade():
-    engine = create_engine('postgresql+psycopg2://shifeng@4.tcp.ngrok.io:18805/karl-prod')
+    engine = create_engine(settings.STABLE_DATABASE_URL)
     session_remote = sessionmaker(bind=engine, autoflush=False)()
 
     bind = op.get_bind()

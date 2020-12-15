@@ -14,6 +14,7 @@ from sqlalchemy.orm import sessionmaker
 
 from karl.old_models import Fact as OldCard
 from karl.models import Card
+from karl.config import settings
 
 
 # revision identifiers, used by Alembic.
@@ -40,7 +41,7 @@ def schema_downgrade():
 
 
 def data_upgrade():
-    engine = create_engine('postgresql+psycopg2://shifeng@4.tcp.ngrok.io:18805/karl-prod')
+    engine = create_engine(settings.STABLE_DATABASE_URL)
     session_remote = sessionmaker(bind=engine, autoflush=False)()
 
     bind = op.get_bind()
