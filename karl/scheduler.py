@@ -122,6 +122,7 @@ class KARLScheduler:
         user = self.get_user(schedule_requests[0].user_id, session)
         cards = [self.get_card(request, session) for request in schedule_requests]
 
+        t0 = datetime.now(pytz.utc)
         # gather card features
         vs_usercard, vs_user, vs_card = [], [], []
         for card in cards:
@@ -129,7 +130,10 @@ class KARLScheduler:
             vs_usercard.append(v_usercard)
             vs_user.append(v_user)
             vs_card.append(v_card)
+        session.commit()
 
+        t1 = datetime.now(pytz.utc)
+        print('======== gather features', (t1 - t0).total_seconds())
         # score cards
         if False:
             scores = [
@@ -155,7 +159,9 @@ class KARLScheduler:
         order = np.argsort([s['sum'] for s in scores]).tolist()
         card_selected = cards[order[0]]
 
-        # determin if is new card
+        t2 = datetime.now(pytz.utc)
+        print('======== scores', (t2 - t1).total_seconds())
+        # determine if is new card
         if session.query(Record).\
                 filter(Record.user_id == user.id).\
                 filter(Record.card_id == card_selected.id).count() > 0:
@@ -170,6 +176,8 @@ class KARLScheduler:
             'date': str(date.replace(tzinfo=pytz.UTC)),
         })
 
+        t3 = datetime.now(pytz.utc)
+        print('======== new record', (t3 - t2).total_seconds())
         # store record with front_end_id empty @ debug_id
         record = Record(
             id=record_id,
@@ -182,9 +190,13 @@ class KARLScheduler:
         session.add(record)
         session.commit()
 
+        t4 = datetime.now(pytz.utc)
+        print('======== save record', (t4 - t3).total_seconds())
         # store feature vectors @ debug_id
         self.save_feature_vectors(record.id, user.id, card_selected.id, date, session)
 
+        t5 = datetime.now(pytz.utc)
+        print('======== save features', (t5 - t4).total_seconds())
         # return
         return ScheduleResponseSchema(
             order=order,
@@ -211,7 +223,7 @@ class KARLScheduler:
                 previous_study_response=None,
             )
             session.add(v_usercard)
-            session.commit()
+            # session.commit()
 
         v_user = session.query(CurrUserFeatureVector).get(user_id)
         if v_user is None:
@@ -225,7 +237,7 @@ class KARLScheduler:
                 previous_study_response=None,
             )
             session.add(v_user)
-            session.commit()
+            # session.commit()
 
         v_card = session.query(CurrCardFeatureVector).get(card_id)
         if v_card is None:
@@ -239,7 +251,7 @@ class KARLScheduler:
                 previous_study_response=None,
             )
             session.add(v_card)
-            session.commit()
+            # session.commit()
 
         return v_usercard, v_user, v_card
 

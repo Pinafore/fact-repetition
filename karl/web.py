@@ -172,7 +172,7 @@ def set_repetition_model(
 
 
 @app.get('/api/karl/get_user_stats', response_model=UserStatsSchema)
-# @cached(cache=TTLCache(maxsize=1024, ttl=600))
+@cached(cache=TTLCache(maxsize=1024, ttl=600))
 def get_user_stats(
     user_id: str,
     deck_id: str = None,
@@ -316,7 +316,7 @@ def get_user_stats(
 
 
 @app.get('/api/karl/leaderboard', response_model=LeaderboardSchema)
-# @cached(cache=TTLCache(maxsize=1024, ttl=1800))
+@cached(cache=TTLCache(maxsize=1024, ttl=1800))
 def get_leaderboard(
     user_id: str = None,
     env: str = None,

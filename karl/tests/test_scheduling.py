@@ -17,7 +17,7 @@ with open(f'{settings.DATA_DIR}/diagnostic_questions.pkl', 'rb') as f:
 URL = 'http://127.0.0.1:8000/api/karl'
 n_days = 1
 n_facts_per_day = 10
-n_facts_per_query = 50
+n_facts_per_query = 300
 user_id = 'dummy'
 start_date = parse_date('2028-06-01 08:00:00.000001 -0400')
 
