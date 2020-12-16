@@ -58,6 +58,8 @@ def schedule(
     requests: List[ScheduleRequest],
     session: Session = Depends(get_session),
 ) -> SchedulerOutputSchema:
+    with open('example_requests.json', 'w') as f:
+        json.dump([request.__dict__ for request in requests], f)
     if len(requests) == 0:
         return {
             'order': [],
