@@ -6,25 +6,11 @@ import logging
 import numpy as np
 from typing import List
 from fastapi import FastAPI
-from pydantic import BaseModel
 import torch.nn.functional as F
 
 from karl.retention.data import RetentionDataset
 from karl.retention.baseline import TemperatureScaledNet
-
-
-class RetentionFeatures(BaseModel):
-    user_count_correct: float
-    user_count_wrong: float
-    user_count_total: float
-    user_average_overall_accuracy: float
-    user_average_question_accuracy: float
-    user_previous_result: float
-    user_gap_from_previous: float
-    question_average_overall_accuracy: float
-    question_count_total: float
-    question_count_correct: float
-    question_count_wrong: float
+from karl.schemas import RetentionFeaturesSchema
 
 
 class RetentionModel:
@@ -44,7 +30,7 @@ class RetentionModel:
 
     def predict_one(
         self,
-        feature_vector: RetentionFeatures,
+        feature_vector: RetentionFeaturesSchema,
     ) -> float:
         '''recall probability of a single fact'''
         xs = [[
@@ -71,7 +57,7 @@ class RetentionModel:
 
     def predict(
         self,
-        feature_vectors: List[RetentionFeatures],
+        feature_vectors: List[RetentionFeaturesSchema],
     ) -> List[float]:
         xs = [[
             feature_vector.user_count_correct,
@@ -123,9 +109,9 @@ retention_model = RetentionModel()
 
 
 @app.get('/api/karl/predict_one')
-def predict_one(feature_vector: RetentionFeatures):
+def predict_one(feature_vector: RetentionFeaturesSchema):
     return retention_model.predict_one(feature_vector)
 
 @app.get('/api/karl/predict')
-def predict(feature_vectors: List[RetentionFeatures]):
+def predict(feature_vectors: List[RetentionFeaturesSchema]):
     return retention_model.predict(feature_vectors)

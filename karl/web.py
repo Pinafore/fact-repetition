@@ -403,9 +403,16 @@ def predict_recall(
         session=session,
     )
 
+# @app.post('/api/karl/schedule')
+# def fake_schedule(
+#     body: List[dict],
+# ):
+#     with open('example_request.json', 'w') as f:
+#         json.dump(body, f)
+
 @app.post('/api/karl/schedule')
 def schedule(
-    env: str,
+    # env: str,
     schedule_requests: List[ScheduleRequestSchema],
     session: Session = Depends(get_session),
 ) -> ScheduleResponseSchema:
@@ -420,7 +427,7 @@ def schedule(
 
 @app.post('/api/karl/update')
 def update(
-    env: str,
+    # env: str,
     update_requests: List[UpdateRequestSchema],
     session: Session = Depends(get_session),
 ) -> None:

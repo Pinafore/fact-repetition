@@ -79,7 +79,7 @@ class KARLScheduler:
         session: Session,
     ) -> Dict[str, float]:
         scores = {
-            'recall': self.score_recall(v_usercard, v_user, v_card),
+            'recall': self.score_recall(v_usercard, v_user, v_card, date),
             'category': self.score_category(user, card),
             'cool_down': self.score_cool_down(user, card, date, session),
             'leitner': self.score_leitner(user, card, date, session),
@@ -97,7 +97,7 @@ class KARLScheduler:
         vs_card: List[CurrCardFeatureVector],
         session: Session,
     ) -> List[Dict[str, float]]:
-        recall_scores = self.score_recall_batch(vs_usercard, vs_user, vs_card)
+        recall_scores = self.score_recall_batch(vs_usercard, vs_user, vs_card, date)
         scores = [
             {
                 'recall': recall_scores[i],
@@ -251,29 +251,33 @@ class KARLScheduler:
         session: Session,
     ) -> float:
         v_usercard, v_user, v_card = self.get_feature_vectors(user_id, card_id, session)
-        return self.score_recall(v_usercard, v_user, v_card)
+        return self.score_recall(v_usercard, v_user, v_card, date)
 
     def score_recall(
         self,
         v_usercard: CurrUserCardFeatureVector,
         v_user: CurrUserFeatureVector,
         v_card: CurrCardFeatureVector,
+        date: datetime,
     ) -> float:
         user_previous_result = v_user.previous_study_response
         if user_previous_result is None:
             user_previous_result = False
+        delta_usercard = 0
+        if v_usercard.previous_study_date is not None:
+            delta_usercard = (date - v_usercard.previous_study_date).total_seconds()
         features = RetentionFeaturesSchema(
             user_count_correct=v_usercard.n_study_positive,
             user_count_wrong=v_usercard.n_study_negative,
             user_count_total=v_usercard.n_study_total,
             user_average_overall_accuracy=0 if v_user.n_study_total == 0 else v_user.n_study_positive / v_user.n_study_total,
-            user_average_question_accuracy=0 if v_card.n_study_total == 0 else v_card.n_study_positive / v_card.n_study_negative,
+            user_average_question_accuracy=0 if v_usercard.n_study_total == 0 else v_usercard.n_study_positive / v_usercard.n_study_total,
             user_previous_result=user_previous_result,
-            user_gap_from_previous=0,
-            question_average_overall_accuracy=0,
-            question_count_total=0,
-            question_count_correct=0,
-            question_count_wrong=0,
+            user_gap_from_previous=delta_usercard,
+            question_average_overall_accuracy=0 if v_card.n_study_total == 0 else v_card.n_study_positive / v_card.n_study_total,
+            question_count_total=v_card.n_study_total,
+            question_count_correct=v_card.n_study_positive,
+            question_count_wrong=v_card.n_study_negative,
         )
 
         return float(
@@ -288,24 +292,28 @@ class KARLScheduler:
         vs_usercard: List[CurrUserCardFeatureVector],
         vs_user: List[CurrUserFeatureVector],
         vs_card: List[CurrCardFeatureVector],
+        date: datetime,
     ) -> List[float]:
         feature_vectors = []
         for v_usercard, v_user, v_card in zip(vs_usercard, vs_user, vs_card):
             user_previous_result = v_user.previous_study_response
             if user_previous_result is None:
                 user_previous_result = False
+            delta_usercard = 0
+            if v_usercard.previous_study_date is not None:
+                delta_usercard = (date - v_usercard.previous_study_date).total_seconds()
             feature_vectors.append(RetentionFeaturesSchema(
                 user_count_correct=v_usercard.n_study_positive,
                 user_count_wrong=v_usercard.n_study_negative,
                 user_count_total=v_usercard.n_study_total,
                 user_average_overall_accuracy=0 if v_user.n_study_total == 0 else v_user.n_study_positive / v_user.n_study_total,
-                user_average_question_accuracy=0 if v_card.n_study_total == 0 else v_card.n_study_positive / v_card.n_study_negative,
+                user_average_question_accuracy=0 if v_usercard.n_study_total == 0 else v_usercard.n_study_positive / v_usercard.n_study_total,
                 user_previous_result=user_previous_result,
-                user_gap_from_previous=0,
-                question_average_overall_accuracy=0,
-                question_count_total=0,
-                question_count_correct=0,
-                question_count_wrong=0,
+                user_gap_from_previous=delta_usercard,
+                question_average_overall_accuracy=0 if v_card.n_study_total == 0 else v_card.n_study_positive / v_card.n_study_total,
+                question_count_total=v_card.n_study_total,
+                question_count_correct=v_card.n_study_positive,
+                question_count_wrong=v_card.n_study_negative,
             ))
 
         return json.loads(
