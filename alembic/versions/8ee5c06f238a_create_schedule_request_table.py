@@ -65,6 +65,9 @@ def data_upgrade():
         else:
             keys.add(new_id)
 
+        if session.query(Record).get(new_id) is None:
+            continue
+
         request = ScheduleRequest(
             id=new_id,
             card_ids=record_old.fact_ids,
