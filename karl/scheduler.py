@@ -8,6 +8,7 @@ import numpy as np
 from tqdm import tqdm
 from typing import List, Dict
 from datetime import datetime, timedelta
+from concurrent.futures import ProcessPoolExecutor
 from sqlalchemy.orm import Session
 
 from karl.schemas import ScheduleRequestSchema, UpdateRequestSchema, ScheduleResponseSchema,\
@@ -126,14 +127,14 @@ class KARLScheduler:
         # gather card features
         vs_usercard, vs_user, vs_card = [], [], []
         for card in cards:
-            v_usercard, v_user, v_card = self.get_feature_vectors(user.id, card.id, session)
+            v_usercard, v_user, v_card = self.get_feature_vectors(user.id, card.id, session, expunge=True)
             vs_usercard.append(v_usercard)
             vs_user.append(v_user)
             vs_card.append(v_card)
-        session.commit()
+        # session.commit()
 
         t1 = datetime.now(pytz.utc)
-        print('======== gather features', (t1 - t0).total_seconds())
+        print('======== gather features 1', (t1 - t0).total_seconds())
         # score cards
         if False:
             scores = [
@@ -160,7 +161,7 @@ class KARLScheduler:
         card_selected = cards[order[0]]
 
         t2 = datetime.now(pytz.utc)
-        print('======== scores', (t2 - t1).total_seconds())
+        # print('======== scores', (t2 - t1).total_seconds())
         # determine if is new card
         if session.query(Record).\
                 filter(Record.user_id == user.id).\
@@ -194,6 +195,7 @@ class KARLScheduler:
         print('======== save record', (t4 - t3).total_seconds())
         # store feature vectors @ debug_id
         self.save_feature_vectors(record.id, user.id, card_selected.id, date, session)
+        session.commit()
 
         t5 = datetime.now(pytz.utc)
         print('======== save features', (t5 - t4).total_seconds())
@@ -209,6 +211,7 @@ class KARLScheduler:
         user_id: str,
         card_id: str,
         session: Session,
+        expunge: bool = False,
     ):
         v_usercard = session.query(CurrUserCardFeatureVector).get((user_id, card_id))
         if v_usercard is None:
@@ -222,8 +225,11 @@ class KARLScheduler:
                 previous_study_date=None,
                 previous_study_response=None,
             )
-            session.add(v_usercard)
+            if not expunge:
+                session.add(v_usercard)
             # session.commit()
+        elif expunge:
+            session.expunge(v_usercard)
 
         v_user = session.query(CurrUserFeatureVector).get(user_id)
         if v_user is None:
@@ -236,8 +242,11 @@ class KARLScheduler:
                 previous_study_date=None,
                 previous_study_response=None,
             )
-            session.add(v_user)
+            if not expunge:
+                session.add(v_user)
             # session.commit()
+        elif expunge:
+            session.expunge(v_user)
 
         v_card = session.query(CurrCardFeatureVector).get(card_id)
         if v_card is None:
@@ -250,8 +259,11 @@ class KARLScheduler:
                 previous_study_date=None,
                 previous_study_response=None,
             )
-            session.add(v_card)
+            if expunge:
+                session.add(v_card)
             # session.commit()
+        elif expunge:
+            session.expunge(v_card)
 
         return v_usercard, v_user, v_card
 
@@ -299,6 +311,33 @@ class KARLScheduler:
             ).text
         )
 
+    def vectors_to_features(
+        self,
+        v_usercard: CurrUserCardFeatureVector,
+        v_user: CurrUserFeatureVector,
+        v_card: CurrCardFeatureVector,
+        date: datetime,
+    ) -> RetentionFeaturesSchema:
+        user_previous_result = v_user.previous_study_response
+        if user_previous_result is None:
+            user_previous_result = False
+        delta_usercard = 0
+        if v_usercard.previous_study_date is not None:
+            delta_usercard = (date - v_usercard.previous_study_date).total_seconds()
+        return RetentionFeaturesSchema(
+            user_count_correct=v_usercard.n_study_positive,
+            user_count_wrong=v_usercard.n_study_negative,
+            user_count_total=v_usercard.n_study_total,
+            user_average_overall_accuracy=0 if v_user.n_study_total == 0 else v_user.n_study_positive / v_user.n_study_total,
+            user_average_question_accuracy=0 if v_usercard.n_study_total == 0 else v_usercard.n_study_positive / v_usercard.n_study_total,
+            user_previous_result=user_previous_result,
+            user_gap_from_previous=delta_usercard,
+            question_average_overall_accuracy=0 if v_card.n_study_total == 0 else v_card.n_study_positive / v_card.n_study_total,
+            question_count_total=v_card.n_study_total,
+            question_count_correct=v_card.n_study_positive,
+            question_count_wrong=v_card.n_study_negative,
+        )
+
     def score_recall_batch(
         self,
         vs_usercard: List[CurrUserCardFeatureVector],
@@ -306,34 +345,34 @@ class KARLScheduler:
         vs_card: List[CurrCardFeatureVector],
         date: datetime,
     ) -> List[float]:
-        feature_vectors = []
-        for v_usercard, v_user, v_card in zip(vs_usercard, vs_user, vs_card):
-            user_previous_result = v_user.previous_study_response
-            if user_previous_result is None:
-                user_previous_result = False
-            delta_usercard = 0
-            if v_usercard.previous_study_date is not None:
-                delta_usercard = (date - v_usercard.previous_study_date).total_seconds()
-            feature_vectors.append(RetentionFeaturesSchema(
-                user_count_correct=v_usercard.n_study_positive,
-                user_count_wrong=v_usercard.n_study_negative,
-                user_count_total=v_usercard.n_study_total,
-                user_average_overall_accuracy=0 if v_user.n_study_total == 0 else v_user.n_study_positive / v_user.n_study_total,
-                user_average_question_accuracy=0 if v_usercard.n_study_total == 0 else v_usercard.n_study_positive / v_usercard.n_study_total,
-                user_previous_result=user_previous_result,
-                user_gap_from_previous=delta_usercard,
-                question_average_overall_accuracy=0 if v_card.n_study_total == 0 else v_card.n_study_positive / v_card.n_study_total,
-                question_count_total=v_card.n_study_total,
-                question_count_correct=v_card.n_study_positive,
-                question_count_wrong=v_card.n_study_negative,
-            ))
+        t0 = datetime.now(pytz.utc)
 
-        return json.loads(
+        feature_vectors = []
+        if False:
+            for v_usercard, v_user, v_card in zip(vs_usercard, vs_user, vs_card):
+                feature_vectors.append(self.vectors_to_features(v_usercard, v_user, v_card, date))
+        else:
+            executor = ProcessPoolExecutor()
+            for v_usercard, v_user, v_card in zip(vs_usercard, vs_user, vs_card):
+                feature_vectors.append(executor.submit(
+                    self.vectors_to_features, v_usercard, v_user, v_card, date
+                ))
+            for i, future in enumerate(feature_vectors):
+                feature_vectors[i] = future.result()
+
+        t1 = datetime.now(pytz.utc)
+        print('======== gather features 2', (t1 - t0).total_seconds())
+
+        scores = json.loads(
             requests.get(
                 'http://127.0.0.1:8001/api/karl/predict',
                 data=json.dumps([x.__dict__ for x in feature_vectors])
             ).text
         )
+
+        t2 = datetime.now(pytz.utc)
+        print('======== scores', (t2 - t1).total_seconds())
+        return scores
 
     def score_category(self, user: User, card: Card) -> float:
         """
@@ -438,7 +477,7 @@ class KARLScheduler:
                 previous_study_date=v_usercard.previous_study_date,
                 previous_study_response=v_usercard.previous_study_response,
             ))
-        session.commit()
+        # session.commit()
 
         delta_user = None
         if v_user.previous_study_date is not None:
@@ -456,7 +495,7 @@ class KARLScheduler:
                 previous_study_date=v_user.previous_study_date,
                 previous_study_response=v_user.previous_study_response,
             ))
-        session.commit()
+        # session.commit()
 
         delta_card = None
         if v_card.previous_study_date is not None:
@@ -474,7 +513,7 @@ class KARLScheduler:
                 previous_study_date=v_card.previous_study_date,
                 previous_study_response=v_card.previous_study_response,
             ))
-        session.commit()
+        # session.commit()
 
     def update(
         self,
