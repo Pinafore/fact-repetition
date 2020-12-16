@@ -40,6 +40,7 @@ class KARLScheduler:
         new_params = Parameters(id=user_id, **ParametersSchema().__dict__)
         session.add(new_user)
         session.add(new_params)
+        session.commit()
         return new_user
 
     def get_card(
@@ -61,6 +62,7 @@ class KARLScheduler:
             deck_id=request.deck_id,
         )
         session.add(card)
+        session.commit()
 
         # TODO create embedding
 
@@ -178,6 +180,7 @@ class KARLScheduler:
             date=date,
         )
         session.add(record)
+        session.commit()
 
         # store feature vectors @ debug_id
         self.save_feature_vectors(record.id, user.id, card_selected.id, date, session)
@@ -208,6 +211,7 @@ class KARLScheduler:
                 previous_study_response=None,
             )
             session.add(v_usercard)
+            session.commit()
 
         v_user = session.query(CurrUserFeatureVector).get(user_id)
         if v_user is None:
@@ -221,6 +225,7 @@ class KARLScheduler:
                 previous_study_response=None,
             )
             session.add(v_user)
+            session.commit()
 
         v_card = session.query(CurrCardFeatureVector).get(card_id)
         if v_card is None:
@@ -234,6 +239,8 @@ class KARLScheduler:
                 previous_study_response=None,
             )
             session.add(v_card)
+            session.commit()
+
         return v_usercard, v_user, v_card
 
     def predict_recall(
@@ -393,6 +400,7 @@ class KARLScheduler:
         session: Session,
     ) -> None:
         v_usercard, v_user, v_card = self.get_feature_vectors(user_id, card_id, session)
+
         delta_usercard = None
         if v_usercard.previous_study_date is not None:
             delta_usercard = (date - v_usercard.previous_study_date).total_seconds()
@@ -410,6 +418,8 @@ class KARLScheduler:
                 previous_study_date=v_usercard.previous_study_date,
                 previous_study_response=v_usercard.previous_study_response,
             ))
+        session.commit()
+
         delta_user = None
         if v_user.previous_study_date is not None:
             delta_user = (date - v_user.previous_study_date).total_seconds()
@@ -426,6 +436,8 @@ class KARLScheduler:
                 previous_study_date=v_user.previous_study_date,
                 previous_study_response=v_user.previous_study_response,
             ))
+        session.commit()
+
         delta_card = None
         if v_card.previous_study_date is not None:
             delta_card = (date - v_card.previous_study_date).total_seconds()
@@ -442,6 +454,7 @@ class KARLScheduler:
                 previous_study_date=v_card.previous_study_date,
                 previous_study_response=v_card.previous_study_response,
             ))
+        session.commit()
 
     def update(
         self,
@@ -578,6 +591,7 @@ class KARLScheduler:
 
         if is_new_stat:
             session.add(curr_stats)
+            session.commit()
 
     def update_leitner(self, record: Record, date: datetime, session: Session) -> None:
         # leitner boxes 1~10
@@ -591,6 +605,7 @@ class KARLScheduler:
             # boxes: 1 ~ 10
             leitner = Leitner(user_id=record.user_id, card_id=record.card_id, box=1)
             session.add(leitner)
+            session.commit()
 
         leitner.box += (1 if record.response else -1)
         leitner.box = max(min(leitner.box, 10), 1)
@@ -619,7 +634,7 @@ class KARLScheduler:
             sm2.interval = 0
             sm2.repetition = 0
         else:
-            if sm2.repeptition == 1:
+            if sm2.repetition == 1:
                 sm2.interval = 1
             elif sm2.repetition == 2:
                 sm2.interval = 6

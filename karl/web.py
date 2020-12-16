@@ -16,7 +16,7 @@ from karl.schemas import UserStatsSchema, RankingSchema, LeaderboardSchema, \
     OldParametersSchema, ParametersSchema, \
     ScheduleResponseSchema, ScheduleRequestSchema, UpdateRequestSchema
 from karl.models import User, UserStats, Parameters
-from karl.new_scheduler import KARLScheduler
+from karl.scheduler import KARLScheduler
 from karl.db.session import SessionLocal
 from karl.config import settings
 
