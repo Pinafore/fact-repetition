@@ -4,7 +4,7 @@ import random
 import requests
 import numpy as np
 from tqdm import tqdm
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_date
 from sqlalchemy.orm import Session
 
@@ -136,10 +136,18 @@ def test_user_stats():
         r = requests.get(f'{URL}/get_user_stats?user_id={user_id}&env=prod&date_start={date_start}&date_end={date_end}&min_studied={min_studied}')
         user_stats_fast = json.loads(r.text)
 
+        date_end = parse_date(date_end).date() - timedelta(days=1)
+        date_end = date_end.strftime('%Y-%m-%dT%H:%M:%S%z')
+
+        URL = 'http://0.tcp.ngrok.io:10081/api/karl'
+        r = requests.get(f'{URL}/get_user_stats?user_id={user_id}&env=prod&date_start={date_start}&date_end={date_end}&min_studied={min_studied}')
+        user_stats_stable = json.loads(r.text)
+
         for key in user_stats_slow.keys():
             a = user_stats_slow[key]
             b = user_stats_fast[key]
-            print(a == b, key, a, b)
+            c = user_stats_stable[key]
+            print(a == b, b == c, key, a, b, c)
 
     print()
 
@@ -173,7 +181,7 @@ def test_leaderboard():
 
         t1 = datetime.now()
 
-        URL = 'http://127.0.0.1:8001/api/karl'
+        URL = 'http://0.tcp.ngrok.io:10081/api/karl'
         # r = requests.get(f'{URL}/leaderboard?user_id={user_id}&env=prod&date_star={date_start}&date_end={date_end}&min_studied={min_studied}&rank_type={rank_type}')
         # r = requests.get(f'{URL}/leaderboard?rank_type=total_seen&limit=10&min_studied=10&env=43&user_id=44')
         r = requests.get(f'{URL}/leaderboard/?rank_type=total_seen&limit=10&min_studied=10&env=43&user_id=44&date_start=2020-12-15+00%3A00%3A00-05%3A00')
@@ -194,5 +202,5 @@ def test_leaderboard():
         print(key, np.mean(values))
 
 
-# test_user_stats()
-test_leaderboard()
+test_user_stats()
+# test_leaderboard()
