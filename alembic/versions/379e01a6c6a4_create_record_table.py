@@ -53,13 +53,24 @@ def data_upgrade():
     bind = op.get_bind()
     session = orm.Session(bind=bind)
 
+    keys = set()
     records = session_remote.query(OldRecord)
     for record_old in tqdm(records, total=records.count()):
+        if record_old.response is None:
+            continue
+
+        if not record_old.user_id.isdigit():
+            continue
+
         new_id = json.dumps({
             'user_id': record_old.user_id,
             'card_id': record_old.fact_id,
             'date': str(record_old.date.replace(tzinfo=pytz.UTC)),
         })
+        if new_id in keys:
+            continue
+        else:
+            keys.add(new_id)
 
         record_new = Record(
             id=new_id,

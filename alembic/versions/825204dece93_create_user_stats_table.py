@@ -129,7 +129,13 @@ def data_upgrade():
     for user in tqdm(users, total=users.count()):
         # go through all records of each user
         # save the user's statistics at the end of each UTC day
+        if not user.id.isdigit():
+            continue
+
         for record in user.records:
+            if record.response is None:
+                continue
+
             if record.deck_id is not None:
                 update_user_stats(session, user, record, record.deck_id)
             update_user_stats(session, user, record, 'all')

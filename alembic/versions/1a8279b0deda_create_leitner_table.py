@@ -47,6 +47,9 @@ def data_upgrade():
 
     users = session_remote.query(OldUser)
     for user in tqdm(users, total=users.count()):
+        if not user.user_id.isdigit():
+            continue
+
         for card_id, box in user.leitner_box.items():
             if card_id in user.leitner_scheduled_date:
                 leitner = Leitner(

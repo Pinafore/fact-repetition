@@ -1,1592 +1,629 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-import os
 import json
-import time
-import copy
-import pickle
-import gensim
-import hashlib
-import logging
-import threading
+import pytz
+import requests
 import numpy as np
-# import pandas as pd
-import en_core_web_lg
 from tqdm import tqdm
-from collections import defaultdict
-from datetime import datetime, timedelta
 from typing import List, Dict
-from dateutil.parser import parse as parse_date
-# from whoosh.qparser import QueryParser
+from datetime import datetime, timedelta
+from sqlalchemy.orm import Session
 
-from karl.lda import process_question
-from karl.util import Params, UserStatSchema, SchedulerOutputSchema
-from karl.models import User, Fact, Record, UserStat,\
-    UserSnapshot, SchedulerOutput
-from karl.retention.baseline import RetentionModel
-# from karl.new_retention import HFRetentionModel as RetentionModel
-from karl.schemas import ScheduleRequest, UpdateRequest
-
-
-CORRECT = True
-WRONG = False
+from karl.schemas import ScheduleRequestSchema, UpdateRequestSchema, ScheduleResponseSchema,\
+    RetentionFeaturesSchema, ParametersSchema
+from karl.models import User, Card, Record, Parameters, UserStats,\
+    UserCardFeatureVector, UserFeatureVector, CardFeatureVector,\
+    CurrUserCardFeatureVector, CurrUserFeatureVector, CurrCardFeatureVector,\
+    Leitner, SM2
 
 
-nlp = en_core_web_lg.load()
-nlp.add_pipe(process_question, name='process', last=True)
+class KARLScheduler:
 
-logger = logging.getLogger('scheduler')
-
-# def plot_polar(qrep, filename=None, alpha=0.2, fill='blue'):
-#     qrep = qrep.tolist()
-#     n_topics = len(qrep)
-#
-#     plt.figure(figsize=(3, 3))
-#     ax = plt.subplot(111, projection='polar')
-#
-#     theta = np.linspace(0, 2 * np.pi, n_topics)
-#     # topics = ['topic_%d' % i for i in range(n_topics)]
-#     # lines, labels = plt.thetagrids(range(0, 360, int(360 / n_topics)), (topics))
-#
-#     ax.plot(theta, qrep)
-#     ax.fill(theta, qrep, fill=fill, alpha=alpha / 2)
-#
-#     # remove ticks
-#     ax.set_rticks([])
-#
-#     # Add legend and title for the plot
-#     # ax.legend(labels=('Fact', 'User', 'Next'), loc=1)
-#     # ax.set_title("Question representation")
-#
-#     # Dsiplay the plot on the screen
-#     # plt.show()
-#     plt.savefig(filename, bbox_inches='tight', pad_inches=0)
-#     plt.close()
-
-
-class MovingAvgScheduler:
-
-    def __init__(
-            self,
-            preemptive=True,
-            lda_dir='checkpoints/gensim_quizbowl_10_1585102364.5221019',
-            whoosh_index='whoosh_index',
-    ) -> None:
+    def get_user(
+        self,
+        user_id: str,
+        session: Session,
+    ) -> User:
         """
-        :param db_filename: location of database store.
-        :param preemptive: on-off switch of preemptive scheduling.
-        :param lda_dir: gensim LDA model directory.
-        :param whoosh_index: whoosh index for text matching.
+        Get user from DB. Create new if user does not exist.
+
+        :param user_id: the `user_id` of the user to load.
+        :return: the user.
         """
-        self.preemptive = preemptive
-        self.lda_dir = lda_dir
-        self.whoosh_index = whoosh_index
+        user = session.query(User).get(user_id)
+        if user is not None:
+            return user
 
-        self.retention_model = RetentionModel()
+        # create new user and insert to db
+        new_user = User(id=user_id)
+        new_params = Parameters(id=user_id, **ParametersSchema().__dict__)
+        session.add(new_user)
+        session.add(new_params)
+        return new_user
 
-        # logger.info('loading question and records...')
-        # with open('data/jeopardy_310326_question_player_pairs_20190612.pkl', 'rb') as f:
-        #     records_df = pickle.load(f)
-        # with open('data/jeopardy_358974_questions_20190612.pkl', 'rb') as f:
-        #     questions_df = pickle.load(f)
-        # self.karl_to_question_id = questions_df.to_dict()['question_id']
+    def get_card(
+        self,
+        request: ScheduleRequestSchema,
+        session: Session,
+    ) -> Card:
+        card = session.query(Card).get(request.fact_id)  # TODO will change to card_id at some point
 
-        # # augment question_df with record stats
-        # logger.info('merging dfs...')
-        # df = questions_df.set_index('question_id').join(records_df.set_index('question_id'))
-        # df = df[df[CORRECT].notna()]
-        # df[CORRECT] = df[CORRECT].apply(lambda x: 1 if x == 1 else 0)
-        # df_grouped = df.reset_index()[['question_id', CORRECT]].groupby('question_id')
-        # dict_correct_mean = df_grouped.mean().to_dict()[CORRECT]
-        # dict_records_cnt = df_grouped.count().to_dict()[CORRECT]
-        # questions_df['prob'] = questions_df['question_id'].apply(lambda x: dict_correct_mean.get(x, None))
-        # questions_df['count'] = questions_df['question_id'].apply(lambda x: dict_records_cnt.get(x, None))
-        # self.questions_df = questions_df
-        # self.question_id_set = set(self.questions_df['question_id'])
+        if card is not None:
+            return card
 
-        # # setup whoosh for text search
-        # if not os.path.exists(self.whoosh_index):
-        #     logger.info('building whoosh...')
-        #     self.build_whoosh()
-        # from whoosh.index import open_dir
-        # self.ix = open_dir(self.whoosh_index)
-
-        # LDA gensim
-        # self.lda_model = gensim.models.LdaModel.load(os.path.join(params.lda_dir, 'lda'))
-        self.lda_model = gensim.models.ldamulticore.LdaMulticore.load(os.path.join(lda_dir, 'lda'))
-        self.vocab = gensim.corpora.Dictionary.load_from_text(os.path.join(lda_dir, 'vocab.txt'))
-        with open(os.path.join(lda_dir, 'topic_words.txt'), 'r') as f:
-            self.topic_words = [line.strip() for line in f.readlines()]
-        with open(os.path.join(lda_dir, 'args.json'), 'r') as f:
-            self.n_topics = json.load(f)['n_topics']
-        logger.info(self.topic_words)
-        # build default estimate for users
-        self.avg_user_skill_estimate = self.estimate_avg()
-
-        # True
-        # |user.user_id
-        # | | user  # after branching update
-        # | | fact  # previously selected fact, after branching update
-        # | | facts # previously scored facts, after branching update
-        # | | order
-        # | | scores
-        # | | rationale
-        # | | facts_info
-        # | | (plot)
-        # False
-        # |user.user_id
-        # | | user  # after branching update
-        # | | fact  # previously selected fact, after branching update
-        # | | facts # previously scored facts, after branching update
-        # | | order
-        # | | scores
-        # | | rationale
-        # | | facts_info
-        # | | (plot)
-        self.preemptive_future = {CORRECT: {}, WRONG: {}}
-        self.preemptive_commit = dict()
-
-        # during a scheduler API call, we generate a SchedulerOutput object,
-        # and then during the update API call, we get the record_id from the front-end
-        # we want to link the record_id to the SchedulerOutput object that we generate during
-        # the previous schedule API call, so we use a debug_id.
-        # the SchedulerOutput will use the debug_id as the key, and the update API call
-        # will return the same debug_id so we can retrieve the corresponding SchedulerOutput
-        # user_id -> random hash string that corresponds to the card being shown to the user
-        self.debug_id = dict()
-
-    def estimate_avg(self) -> np.ndarray:
-        """
-        Estimate the average user acccuracy in each topic.
-        This estimate is used as the initial user skill estimate.
-
-        :return: a numpy array of size `n_topics` of average skill estimate of each topic.
-        """
-        estimate_file_dir = os.path.join(
-            self.lda_dir, 'diagnostic_avg_estimate.txt')
-        if os.path.exists(estimate_file_dir):
-            logger.info('load user skill estimate')
-            with open(estimate_file_dir) as f:
-                return np.array([float(x) for x in f.readlines()])
-
-        with open('data/diagnostic_questions.pkl', 'rb') as f:
-            facts = pickle.load(f)
-
-        logger.info('estimate average user skill')
-        facts = [
-            Fact(
-                fact_id=c['fact_id'],
-                text=c['text'],
-                answer=c['answer'],
-                category=c['category'],
-                qrep=None,
-                skill=None,
-                results=[],
-            )
-            for c in facts
-        ]
-
-        self.embed(facts)
-        qreps = [c.qrep for c in facts]
-        estimates = [[] for _ in range(self.n_topics)]
-        for fact, qrep in zip(facts, qreps):
-            topic_idx = np.argmax(qrep)
-            estimates[topic_idx].append(self.get_skill_for_fact(fact))
-        estimates = [np.mean(x) for x in estimates]
-        with open(estimate_file_dir, 'w') as f:
-            for e in estimates:
-                f.write(str(e) + '\n')
-        return np.array(estimates)
-
-    def reset_user(self, session, user_id=None) -> None:
-        """
-        Delete a specific user (when `user_id` is provided) or all users (when `user_id` is `None`)
-        and the corresponding history entries from database. This resets the study progress.
-
-        :param user_id: the `user_id` of the user to be reset. Resets all users if `None`.
-        """
-
-        if user_id is not None:
-            # remove user from db
-            user = session.query(User).get(user_id)
-            if user is not None:
-                session.delete(user)
-
-            if user_id in self.preemptive_future[CORRECT]:
-                self.preemptive_future[CORRECT].pop(user_id)
-            if user_id in self.preemptive_future[WRONG]:
-                self.preemptive_future[WRONG].pop(user_id)
-            if user_id in self.preemptive_commit:
-                self.preemptive_commit.pop(user_id)
-        else:
-            # remove all users
-            session.query(User).delete()
-
-    def reset_fact(self, session, fact_id=None) -> None:
-        """
-        Delete a specific fact (if `fact_id` is provided) or all facts (if `fact_id` is None) from
-        database. This removed the cached embedding and skill estimate of the fact(s).
-
-        :param fact_id: the `fact_id` of the fact to be reset. Resets all facts if `None`.
-        """
-        fact = session.query(Fact).get(fact_id)
-        if fact is not None:
-            session.query(Fact).delete(fact)
-
-    def build_whoosh(self) -> None:
-        """
-        Construct a whoosh index for text matching.
-        The whoosh index is useful for finding similar facts with user records.
-        """
-        # NOTE This is not in use at the moment
-        from whoosh.fields import Schema, ID, TEXT
-        from whoosh.index import create_in
-
-        if not os.path.exists(self.whoosh_index):
-            os.mkdir(self.whoosh_index)
-        schema = Schema(
-            question_id=ID(stored=True),
-            text=TEXT(stored=True),
-            answer=TEXT(stored=True)
-        )
-        ix = create_in(self.whoosh_index, schema)
-        writer = ix.writer()
-
-        for _, q in tqdm(self.questions_df.iterrows()):
-            writer.add_document(
-                question_id=q['question_id'],
-                text=q['text'],
-                answer=q['answer']
-            )
-        writer.commit()
-
-    def embed(self, facts: List[Fact]) -> None:
-        """
-        Create embedding for facts and store in the `qrep` field of each fact.
-
-        :param facts: the list of facts to be embedded.
-        """
-        texts = [c.text for c in facts]
-        texts = (self.vocab.doc2bow(x) for x in nlp.pipe(texts))
-        # need to set minimum_probability to a negative value
-        # to prevent gensim output skipping topics
-        doc_topic_dists = self.lda_model.get_document_topics(texts, minimum_probability=-1)
-        for fact, dist in zip(facts, doc_topic_dists):
-            # dist is something like [(d_i, i)]
-            fact.qrep = np.asarray([d_i for i, d_i in dist])
-
-    def get_fact(self, session, request: ScheduleRequest) -> Fact:
-        """
-        Get fact from database, insert if new.
-
-        :param request: a `ScheduleRequest` where `fact_id` is used for database query.
-        :return: a fact.
-        """
-        # retrieve from db if exists
-        fact = session.query(Fact).get(request.fact_id)
-        if fact is not None:
-            return fact
-
-        fact = Fact(
-            fact_id=request.fact_id,
+        card = Card(
+            id=request.fact_id,  # TODO will change to card_id at some point
             text=request.text,
             answer=request.answer,
             category=request.category,
             deck_name=request.deck_name,
             deck_id=request.deck_id,
-            qrep=None,
-            skill=None,
-            results=[],
         )
+        session.add(card)
 
-        self.embed([fact])
-        # the skill of a fact is an one-hot vector
-        # the non-zero entry is a value between 0 and 1
-        # indicating the average question accuracy
-        fact.skill = np.zeros_like(fact.qrep)
-        fact.skill[np.argmax(fact.qrep)] = 1
-        fact.skill *= self.get_skill_for_fact(fact)
+        # TODO create embedding
 
-        session.add(fact)
-        return fact
+        return card
 
-    def get_facts(self, session, requests: List[ScheduleRequest]) -> List[Fact]:
-        """
-        Get a list of facts from database based on a list of schedule requests.
-        Insert new facst to database if any.
-        Compared to calling `get_fact` for each request, this function embeds all new facts in one
-        batch for faster speed.
+    def score_user_card(
+        self,
+        user: User,
+        card: Card,
+        date: datetime,
+        v_usercard: CurrUserCardFeatureVector,
+        v_user: CurrUserFeatureVector,
+        v_card: CurrCardFeatureVector,
+        session: Session,
+    ) -> Dict[str, float]:
+        scores = {
+            'recall': self.score_recall(v_usercard, v_user, v_card),
+            'category': self.score_category(user, card),
+            'cool_down': self.score_cool_down(user, card, date, session),
+            'leitner': self.score_leitner(user, card, date, session),
+            'sm2': self.score_sm2(user, card, date, session),
+        }
+        return scores
 
-        :param requests: the list of schedule requests whose `fact_id`s are used for query.
-        :return: a list of facts.
-        """
-        new_facts, facts = [], []
-        for i, r in enumerate(requests):
-            fact = session.query(Fact).get(r.fact_id)
-            if fact is None:
-                fact = Fact(
-                    fact_id=r.fact_id,
-                    text=r.text,
-                    answer=r.answer,
-                    category=r.category,
-                    deck_name=r.deck_name,
-                    deck_id=r.deck_id,
-                    qrep=None,  # placeholder
-                    skill=None,  # placeholder
-                    results=[],  # placeholder
-                )
-                new_facts.append(fact)
-            facts.append(fact)
+    def score_user_cards(
+        self,
+        user: User,
+        cards: List[Card],
+        date: datetime,
+        vs_usercard: List[CurrUserCardFeatureVector],
+        vs_user: List[CurrUserFeatureVector],
+        vs_card: List[CurrCardFeatureVector],
+        session: Session,
+    ) -> List[Dict[str, float]]:
+        recall_scores = self.score_recall_batch(vs_usercard, vs_user, vs_card)
+        scores = [
+            {
+                'recall': recall_scores[i],
+                'category': self.score_category(user, card),
+                'cool_down': self.score_cool_down(user, card, date, session),
+                'leitner': self.score_leitner(user, card, date, session),
+                'sm2': self.score_sm2(user, card, date, session),
+            }
+            for i, card in enumerate(cards)
+        ]
+        return scores
 
-        if len(new_facts) == 0:
-            return facts
-
-        logger.info('embed facts ' + str(len(new_facts)))
-        self.embed(new_facts)
-
-        fact_skills = self.get_skill_for_facts(new_facts)
-        for i, fact in enumerate(new_facts):
-            fact.skill = np.zeros_like(fact.qrep)
-            fact.skill[np.argmax(fact.qrep)] = 1
-            fact.skill *= fact_skills[i]
-        session.bulk_save_objects(new_facts)
-        return facts
-
-    def get_all_users(self, session) -> List[User]:
-        return session.query(User).all()
-
-    def get_user(self, session, user_id: str) -> User:
-        """
-        Get user from DB. If the user is new, we create a new user with default skill estimate and
-        an empty study record.
-
-        :param user_id: the `user_id` of the user to load.
-        :return: the user.
-        """
-        # retrieve from db if exists
-        user = session.query(User).get(user_id)
-        if user is not None:
-            if user.params is None:
-                user.params = Params(
-                    repetition_model='karl85',
-                    qrep=1,
-                    skill=0,
-                    recall=1,
-                    category=1,
-                    answer=1,
-                    leitner=1,
-                    sm2=0,
-                    recall_target=0.85,
-                )
-            session.commit()
-            return user
-
-        # create new user and insert to db
-        new_user = User(
-            user_id=user_id,
-            recent_facts=[],
-            previous_study={},
-            leitner_box={},
-            leitner_scheduled_date={},
-            sm2_efactor={},
-            sm2_interval={},
-            sm2_repetition={},
-            sm2_scheduled_date={},
-            results=[],
-            count_correct_before={},
-            count_wrong_before={},
-            params=Params(
-                repetition_model='karl85',
-                qrep=1,
-                skill=0,
-                recall=1,
-                category=1,
-                answer=1,
-                leitner=1,
-                sm2=0,
-                recall_target=0.85,
-            )
-        )
-        session.add(new_user)
-        return new_user
-
-    def get_records(
+    def schedule(
         self,
         session,
+        schedule_requests: List[ScheduleRequestSchema],
+        date: datetime,
+        rationale=False,
+        details=False,
+    ) -> ScheduleResponseSchema:
+        # get user and cards
+        user = self.get_user(schedule_requests[0].user_id, session)
+        cards = [self.get_card(request, session) for request in schedule_requests]
+
+        # gather card features
+        vs_usercard, vs_user, vs_card = [], [], []
+        for card in cards:
+            v_usercard, v_user, v_card = self.get_feature_vectors(user.id, card.id, session)
+            vs_usercard.append(v_usercard)
+            vs_user.append(v_user)
+            vs_card.append(v_card)
+
+        # score cards
+        if False:
+            scores = [
+                self.score_user_card(
+                    user, card, date,
+                    vs_usercard[i], vs_user[i], vs_card[i],
+                    session
+                ) for i, card in enumerate(tqdm(cards))
+            ]
+        else:
+            scores = self.score_user_cards(
+                user, cards, date, vs_usercard, vs_user, vs_card, session,
+            )
+
+        # computer total score
+        for i, _ in enumerate(scores):
+            scores[i]['sum'] = sum([
+                user.parameters.__dict__.get(key, 0) * value
+                for key, value in scores[i].items()
+            ])
+
+        # sort cards
+        order = np.argsort([s['sum'] for s in scores]).tolist()
+        card_selected = cards[order[0]]
+
+        # determin if is new card
+        if session.query(Record).\
+                filter(Record.user_id == user.id).\
+                filter(Record.card_id == card_selected.id).count() > 0:
+            is_new_fact = False
+        else:
+            is_new_fact = True
+
+        # generate record.id (debug_id)
+        record_id = json.dumps({
+            'user_id': user.id,
+            'card_id': card_selected.id,
+            'date': str(date.replace(tzinfo=pytz.UTC)),
+        })
+
+        # store record with front_end_id empty @ debug_id
+        record = Record(
+            id=record_id,
+            user_id=user.id,
+            card_id=card_selected.id,
+            deck_id=card_selected.deck_id,
+            is_new_fact=is_new_fact,
+            date=date,
+        )
+        session.add(record)
+
+        # store feature vectors @ debug_id
+        self.save_feature_vectors(record.id, user.id, card_selected.id, date, session)
+
+        # return
+        return ScheduleResponseSchema(
+            order=order,
+            debug_id=record_id,
+            scores=scores,
+        )
+
+    def get_feature_vectors(
+        self,
         user_id: str,
-        deck_id: str = None,
-        date_start: str = '2008-06-01 08:00:00.000001 -0400',
-        date_end: str = '2038-06-01 08:00:00.000001 -0400',
+        card_id: str,
+        session: Session,
     ):
-        '''Get records in interval [`date_start`, `date_end`]'''
-        date_start = parse_date(date_start)
-        date_end = parse_date(date_end)
-        records = session.query(Record).filter(Record.user_id == user_id).\
-            filter(Record.date >= date_start, Record.date <= date_end)
-        if deck_id is not None:
-            records = records.filter(Record.deck_id == deck_id)
-        return records.all()
-
-    def get_user_stats(
-            self,
-            session,
-            user_id: str,
-            deck_id: str = None,
-            date_start: str = '2008-06-01 08:00:00.000001 -0400',
-            date_end: str = '2038-06-01 08:00:00.000001 -0400',
-    ):
-        '''
-        To compute user statistics (e.g. number of facts shown) in the
-        interval of [`date_start`, `date_end`]. Instead of the brute-force
-        method of enumerating records in this interval, we find the two user
-        stats at the interval boundaries: the latest user stat before the
-        start date, the latest user stat no later than the end date, and
-        subtract the two.
-        '''
-        date_start = parse_date(date_start).date()
-        date_end = parse_date(date_end).date() + timedelta(days=1)  # TODO temporary fix, wait for Matthew
-
-        if deck_id is None:
-            deck_id = 'all'
-
-        # last record before start date
-        before_stat = session.query(UserStat).\
-            filter(UserStat.user_id == user_id).\
-            filter(UserStat.deck_id == deck_id).\
-            filter(UserStat.date < date_start).\
-            order_by(UserStat.date.desc()).first()
-
-        # last record no later than end date
-        after_stat = session.query(UserStat).\
-            filter(UserStat.user_id == user_id).\
-            filter(UserStat.deck_id == deck_id).\
-            filter(UserStat.date <= date_end).\
-            order_by(UserStat.date.desc()).first()
-
-        if after_stat is None or after_stat.date < date_start:
-            return UserStatSchema(
+        v_usercard = session.query(CurrUserCardFeatureVector).get((user_id, card_id))
+        if v_usercard is None:
+            v_usercard = CurrUserCardFeatureVector(
                 user_id=user_id,
-                deck_id=deck_id,
-                date_start=str(date_start),
-                date_end=str(date_end),
-                # zero for all other fields
+                card_id=card_id,
+                n_study_positive=0,
+                n_study_negative=0,
+                n_study_total=0,
+                previous_delta=None,
+                previous_study_date=None,
+                previous_study_response=None,
             )
+            session.add(v_usercard)
 
-        if before_stat is None:
-            before_stat = UserStat(
-                user_stat_id=json.dumps({
-                    'user_id': user_id,
-                    'date': str(date_start),
-                    'deck_id': deck_id,
-                }),
+        v_user = session.query(CurrUserFeatureVector).get(user_id)
+        if v_user is None:
+            v_user = CurrUserFeatureVector(
                 user_id=user_id,
-                deck_id=deck_id,
-                date=date_start,
-                new_facts=0,
-                reviewed_facts=0,
-                new_correct=0,
-                reviewed_correct=0,
-                total_seen=0,
-                total_milliseconds=0,
-                total_seconds=0,
-                total_minutes=0,
-                elapsed_milliseconds_text=0,
-                elapsed_milliseconds_answer=0,
-                elapsed_seconds_text=0,
-                elapsed_seconds_answer=0,
-                elapsed_minutes_text=0,
-                elapsed_minutes_answer=0,
-                n_days_studied=0,
+                n_study_positive=0,
+                n_study_negative=0,
+                n_study_total=0,
+                previous_delta=None,
+                previous_study_date=None,
+                previous_study_response=None,
             )
+            session.add(v_user)
 
-        total_correct = (
-            after_stat.new_correct
-            + after_stat.reviewed_correct
-            - before_stat.new_correct
-            - before_stat.reviewed_correct
+        v_card = session.query(CurrCardFeatureVector).get(card_id)
+        if v_card is None:
+            v_card = CurrCardFeatureVector(
+                card_id=card_id,
+                n_study_positive=0,
+                n_study_negative=0,
+                n_study_total=0,
+                previous_delta=None,
+                previous_study_date=None,
+                previous_study_response=None,
+            )
+            session.add(v_card)
+        return v_usercard, v_user, v_card
+
+    def predict_recall(
+        self,
+        user_id: str,
+        card_id: str,
+        date: datetime,
+        session: Session,
+    ) -> float:
+        v_usercard, v_user, v_card = self.get_feature_vectors(user_id, card_id, session)
+        return self.score_recall(v_usercard, v_user, v_card)
+
+    def score_recall(
+        self,
+        v_usercard: CurrUserCardFeatureVector,
+        v_user: CurrUserFeatureVector,
+        v_card: CurrCardFeatureVector,
+    ) -> float:
+        user_previous_result = v_user.previous_study_response
+        if user_previous_result is None:
+            user_previous_result = False
+        features = RetentionFeaturesSchema(
+            user_count_correct=v_usercard.n_study_positive,
+            user_count_wrong=v_usercard.n_study_negative,
+            user_count_total=v_usercard.n_study_total,
+            user_average_overall_accuracy=0 if v_user.n_study_total == 0 else v_user.n_study_positive / v_user.n_study_total,
+            user_average_question_accuracy=0 if v_card.n_study_total == 0 else v_card.n_study_positive / v_card.n_study_negative,
+            user_previous_result=user_previous_result,
+            user_gap_from_previous=0,
+            question_average_overall_accuracy=0,
+            question_count_total=0,
+            question_count_correct=0,
+            question_count_wrong=0,
         )
 
-        known_rate = 0
-        if after_stat.total_seen > before_stat.total_seen:
-            known_rate = (
-                total_correct / (after_stat.total_seen - before_stat.total_seen)
-            )
-
-        new_known_rate = 0
-        if after_stat.new_facts > before_stat.new_facts:
-            new_known_rate = (
-                (after_stat.new_correct - before_stat.new_correct)
-                / (after_stat.new_facts - before_stat.new_facts)
-            )
-
-        review_known_rate = 0
-        if after_stat.reviewed_facts > before_stat.reviewed_facts:
-            review_known_rate = (
-                (after_stat.reviewed_correct - before_stat.reviewed_correct)
-                / (after_stat.reviewed_facts - before_stat.reviewed_facts)
-            )
-
-        return UserStatSchema(
-            user_id=user_id,
-            deck_id=deck_id,
-            date_start=str(date_start),
-            date_end=str(date_end),
-            new_facts=after_stat.new_facts - before_stat.new_facts,
-            reviewed_facts=after_stat.reviewed_facts - before_stat.reviewed_facts,
-            new_correct=after_stat.new_correct - before_stat.new_correct,
-            reviewed_correct=after_stat.reviewed_correct - before_stat.reviewed_correct,
-            total_seen=after_stat.total_seen - before_stat.total_seen,
-            total_milliseconds=after_stat.total_milliseconds - before_stat.total_milliseconds,
-            total_seconds=after_stat.total_seconds - before_stat.total_seconds,
-            total_minutes=after_stat.total_minutes - before_stat.total_minutes,
-            elapsed_milliseconds_text=after_stat.elapsed_milliseconds_text - before_stat.elapsed_milliseconds_text,
-            elapsed_milliseconds_answer=after_stat.elapsed_milliseconds_answer - before_stat.elapsed_milliseconds_answer,
-            elapsed_seconds_text=after_stat.elapsed_seconds_text - before_stat.elapsed_seconds_text,
-            elapsed_seconds_answer=after_stat.elapsed_seconds_answer - before_stat.elapsed_seconds_answer,
-            elapsed_minutes_text=after_stat.elapsed_minutes_text - before_stat.elapsed_minutes_text,
-            elapsed_minutes_answer=after_stat.elapsed_minutes_answer - before_stat.elapsed_minutes_answer,
-            known_rate=round(known_rate * 100, 2),
-            new_known_rate=round(new_known_rate * 100, 2),
-            review_known_rate=round(review_known_rate * 100, 2),
-            n_days_studied=after_stat.n_days_studied - before_stat.n_days_studied,
+        return float(
+            requests.get(
+                'http://127.0.0.1:8001/api/karl/predict_one',
+                data=json.dumps(features.__dict__)
+            ).text
         )
 
-    # def retrieve(self, fact: dict) -> Tuple[List[dict], List[float]]:
-    #     record_id = self.karl_to_question_id[int(fact['question_id'])]
+    def score_recall_batch(
+        self,
+        vs_usercard: List[CurrUserCardFeatureVector],
+        vs_user: List[CurrUserFeatureVector],
+        vs_card: List[CurrCardFeatureVector],
+    ) -> List[float]:
+        feature_vectors = []
+        for v_usercard, v_user, v_card in zip(vs_usercard, vs_user, vs_card):
+            user_previous_result = v_user.previous_study_response
+            if user_previous_result is None:
+                user_previous_result = False
+            feature_vectors.append(RetentionFeaturesSchema(
+                user_count_correct=v_usercard.n_study_positive,
+                user_count_wrong=v_usercard.n_study_negative,
+                user_count_total=v_usercard.n_study_total,
+                user_average_overall_accuracy=0 if v_user.n_study_total == 0 else v_user.n_study_positive / v_user.n_study_total,
+                user_average_question_accuracy=0 if v_card.n_study_total == 0 else v_card.n_study_positive / v_card.n_study_negative,
+                user_previous_result=user_previous_result,
+                user_gap_from_previous=0,
+                question_average_overall_accuracy=0,
+                question_count_total=0,
+                question_count_correct=0,
+                question_count_wrong=0,
+            ))
 
-    #     # 1. try to find in records with gameid-catnum-level
-    #     if record_id in self.question_id_set:
-    #         hits = self.questions_df[self.questions_df.question_id == record_id]
-    #         if len(hits) > 0:
-    #             facts = [fact.to_dict() for idx, fact in hits.iterrows()]
-    #             return facts, [1 / len(hits) for _ in range(len(hits))]
-    #     else:
-    #         # return better default value without text search
-    #         return 0.5
+        return json.loads(
+            requests.get(
+                'http://127.0.0.1:8001/api/karl/predict',
+                data=json.dumps([x.__dict__ for x in feature_vectors])
+            ).text
+        )
 
-    #     # 2. do text search
-    #     with self.ix.searcher() as searcher:
-    #         query = QueryParser("text", self.ix.schema).parse(fact['text'])
-    #         hits = searcher.search(query)
-    #         hits = [x for x in hits if x['answer'] == fact['answer']]
-    #         if len(hits) > 0:
-    #             scores = [x.score for x in hits]
-    #             ssum = np.sum(scores)
-    #             scores = [x / ssum for x in scores]
-    #             facts = [self.questions_df[self.questions_df['question_id'] == x['question_id']].iloc[0] for x in hits]
-    #             return facts, scores
-
-    #     # 3. not found
-    #     return [], []
-
-    def get_skill_for_fact(self, fact: Fact) -> float:
-        # NOTE this is not in use
-        # # 1. find same or similar fact in records
-        # facts, scores = self.retrieve(fact)
-        # if len(facts) > 0:
-        #     return np.dot([x['prob'] for x in facts], scores)
-        # # 2. use model to predict
-        # return self.retention_model.predict_one(user, fact)
-        return 0.5
-
-    def get_skill_for_facts(self, facts: List[Fact]) -> List[float]:
-        # NOTE this is not in use
-        return [self.get_skill_for_fact(fact) for fact in facts]
-
-    def set_user_params(self, session, user_id: str, params: Params):
+    def score_category(self, user: User, card: Card) -> float:
         """
-        Set parameters for user.
-
-        :param params:
-        """
-        user = self.get_user(session, user_id)
-        user.params = params
-
-    def dist_category(self, user: User, fact: Fact) -> float:
-        """
-        Penalize shift in predefined categories. 1 if fact category is different than the
-        previous fact the user studied, 0 otherwise.
+        Penalize shift in predefined categories.
+        1 if card category is different than the
+        previous card the user studied, 0 otherwise.
 
         :param user:
-        :param fact:
+        :param card:
         :return: 0 if same category, 1 if otherwise.
         """
         if len(user.records) == 0:
             return 0
-        last_fact = user.records[-1].fact
-        if last_fact is None or last_fact.category is None or fact.category is None:
+
+        prev_card = user.records[-1].card
+        if prev_card is None or prev_card.category is None:
             return 0
-        return float(fact.category != last_fact.category)
 
-    def dist_answer(self, user: User, fact: Fact) -> float:
+        return float(card.category != prev_card.category)
+
+    def score_cool_down(self, user: User, card: Card, date: datetime, session: Session) -> float:
         """
-        Penalize repetition of the same answer.
-        If the same answer appeared T cards ago, penalize by 1 / T
+        Avoid repetition of the same card within a cool down time.
+        We set a longer cool down time for correctly recalled cards.
 
         :param user:
-        :param fact:
-        :return: 1 if same answer, 0 if otherwise.
-        """
-        if (
-                len(user.records) == 0
-                or fact.answer is None
-        ):
-            return 0
-        T = 0
-        for i, record in enumerate(user.records[::-1]):
-            # from most recent to least recent
-            if record.fact.answer == fact.answer:
-                T = i + 1
-                break
-        if T == 0:
-            return 0
-        else:
-            return 1 / T
-
-    def dist_skill(self, user: User, fact: Fact) -> float:
-        """
-        Difference in the skill level between the user and the fact.
-        Fact skill is a n_topics dimensional one-hot vector where the non-zero entry is the average
-        question accuracy.
-        User skill is the accumulated skill vectors of the max_recent_facts previous facts.
-        We also additionally penalize easier questions by a factor of 10.
-
-        :param user:
-        :param fact:
-        :return: different in skill estimate, multiplied by 10 if fact is easier.
-        """
-        if len(user.records) == 0:
-            user_skill = copy.deepcopy(self.avg_user_skill_estimate)
-        else:
-            recent_facts = [record.fact for record in user.records[::-1][:user.params.max_recent_facts]]
-            user_skill = self.get_discounted_average([fact.skill for fact in recent_facts], user.params.decay_skill)
-            user_skill = np.clip(user_skill, a_min=0.0, a_max=1.0)
-        topic_idx = np.argmax(fact.qrep)
-        d = fact.skill[topic_idx] - user_skill[topic_idx]
-        # penalize easier questions by ten
-        d *= 1 if d <= 0 else 10
-        return abs(d)
-
-    def dist_recall_batch(
-            self,
-            user: User,
-            facts: List[Fact],
-            date: datetime,
-    ) -> List[float]:
-        """
-        With recall_target = 1, we basically penalize facts that the user
-        likely cannot cannot recall.
-        With recall_target < 1, we look for facts whose recall probability is
-        close to the designated target.
-
-        Returns one minus the recall probability of each fact.
-        This functions calls the retention model for all facts in one batch.
-
-        :param user:
-        :param facts:
-        :return: the (recall_target - recall probablity) of each fact.
-        """
-        target = user.params.recall_target
-        p_of_recall = self.retention_model.predict(user, facts, date)
-        return np.abs(target - p_of_recall).tolist()
-
-    def dist_cool_down(self, user: User, fact: Fact, date: datetime) -> float:
-        """
-        Avoid repetition of the same fact within a cool down time.
-        We set a longer cool down time for correctly recalled facts.
-
-        :param user:
-        :param fact:
+        :param card:
         :param date: current study date.
-        :return: time in minutes till cool down time. 0 if passed.
+        :return: portion of cool down period remained. 0 if passed.
         """
-        prev_date, prev_response = user.previous_study.get(fact.fact_id, (None, None))
-        if prev_date is None:
-            # TODO handle correct on first try
+        v_usercard = session.query(CurrUserCardFeatureVector).get((user.id, card.id))
+        if v_usercard is None or v_usercard.previous_study_date is None:
             return 0
         else:
-            if isinstance(prev_date, str):
-                prev_date = parse_date(prev_date)
-            current_date = time.mktime(date.timetuple())
-            prev_date = time.mktime(prev_date.timetuple())
-            delta_minutes = max(float(current_date - prev_date) / 60, 0)
-            # cool down is never negative
-            if prev_response == CORRECT:
-                return max(user.params.cool_down_time_correct - delta_minutes, 0)
+            if v_usercard.previous_study_response:
+                cool_down_period = user.parameters.cool_down_time_correct
             else:
-                return max(user.params.cool_down_time_wrong - delta_minutes, 0)
+                cool_down_period = user.parameters.cool_down_time_wrong
 
-    def get_discounted_average(self, vectors: List[np.ndarray], decay: float) -> np.ndarray:
-        """
-        Compute the weighted average of a list of vectors with a geometric sequence of weights
-        determined by `decay` (a value between 0 and 1).
-        The last item has the initial (highest) weight.
+            delta_minutes = (date - v_usercard.previous_study_date).total_seconds() // 60
+            if delta_minutes > cool_down_period:
+                return 0
+            else:
+                return float(delta_minutes / cool_down_period)
 
-        :param vectors: a list of numpy vectors to be averaged.
-        :param decay: a real value between zero and one.
-        :return: the weighted average vector.
-        """
-        if decay < 0 or decay > 1:
-            raise ValueError('Decay rate for discounted average should be within (0, 1). \
-                             Got {}'.format(decay))
-
-        w = 1
-        vs, ws = [], []
-        for v in vectors[::-1]:
-            vs.append(w * v)
-            ws.append(w)
-            w *= decay
-        return np.sum(vs, axis=0) / np.sum(ws)
-
-    def dist_qrep(self, user: User, fact: Fact) -> float:
-        """
-        Semantic similarity between user and fact.
-        Cosine distance between the user's accumulated question representation and the fact's
-        question representation.
-
-        :param user:
-        :param fact:
-        :return: one minus cosine similarity.
-        """
-        def cosine_distance(a, b):
-            return 1 - (a @ b.T) / (np.linalg.norm(a) * np.linalg.norm(b))
-        if len(user.records) == 0:
-            user_qrep = np.array([1 / self.n_topics for _ in range(self.n_topics)])
-        else:
-            recent_facts = [record.fact for record in user.records[::-1][:user.params.max_recent_facts]]
-            user_qrep = self.get_discounted_average([x.qrep for x in recent_facts],
-                                                    user.params.decay_qrep)
-        return cosine_distance(user_qrep, fact.qrep)
-
-    def dist_leitner(self, user: User, fact: Fact, date: datetime) -> float:
+    def score_leitner(self, user: User, card: Card, date: datetime, session: Session) -> float:
         """
         Time till the scheduled date by Leitner measured by number of hours.
-        The value can be negative when the fact is over-due in Leitner.
+        The value can be negative when the card is over-due in Leitner.
 
         :param user:
-        :param fact:
+        :param card:
         :return: distance in number of hours.
         """
-        scheduled_date = user.leitner_scheduled_date.get(fact.fact_id, None)
-        if scheduled_date is None:
+        leitner = session.query(Leitner).get((user.id, card.id))
+        if leitner is None or leitner.scheduled_date is None:
             return 0
         else:
-            if isinstance(scheduled_date, str):
-                scheduled_date = parse_date(scheduled_date)
             # NOTE distance in hours, can be negative
-            return (scheduled_date - date).total_seconds() / (60 * 60)
+            return (leitner.scheduled_date - date).total_seconds() / (60 * 60)
 
-    def dist_sm2(self, user: User, fact: Fact, date: datetime) -> float:
+    def score_sm2(self, user: User, card: Card, date: datetime, session: Session) -> float:
         """
         Time till the scheduled date by SM-2 measured by number of hours.
-        The value can be negative when the fact is over-due in SM-2.
+        The value can be negative when the card is over-due in SM-2.
 
         :param user:
-        :param fact:
+        :param card:
         :return: distance in number of hours.
         """
-        scheduled_date = user.sm2_scheduled_date.get(fact.fact_id, None)
-        if scheduled_date is None:
+        sm2 = session.query(SM2).get((user.id, card.id))
+        if sm2 is None or sm2.scheduled_date is None:
             return 0
         else:
-            if isinstance(scheduled_date, str):
-                scheduled_date = parse_date(scheduled_date)
             # NOTE distance in hours, can be negative
-            return (scheduled_date - date).total_seconds() / (60 * 60)
+            return (sm2.scheduled_date - date).total_seconds() / (60 * 60)
 
-    def score(self, user: User, facts: List[Fact], date: datetime) -> List[Dict[str, float]]:
-        """
-        Compute the score between user and each fact, and compute the weighted sum distance.
-
-        :param user:
-        :param fact:
-        :return: distance in number of hours.
-        """
-        recall_scores = self.dist_recall_batch(user, facts, date)
-        scores = [{
-            'qrep': self.dist_qrep(user, fact),
-            # 'skill': self.dist_skill(user, fact),
-            'recall': recall_scores[i],
-            'category': self.dist_category(user, fact),
-            'answer': self.dist_answer(user, fact),
-            'cool_down': self.dist_cool_down(user, fact, date),
-            'leitner': self.dist_leitner(user, fact, date),
-            'sm2': self.dist_sm2(user, fact, date),
-        } for i, fact in enumerate(facts)]
-
-        for i, _ in enumerate(scores):
-            scores[i]['sum'] = sum([
-                user.params.__dict__.get(key, 0) * value
-                for key, value in scores[i].items()
-            ])
-        return scores
-
-    def get_rationale(
-            self,
-            debug_id: str,
-            user: User,
-            facts: List[Fact],
-            date: datetime,
-            scores: List[Dict[str, float]],
-            order: List[int],
-            top_n_facts: int = 3
-    ) -> str:
-        """
-        Create rationale HTML table for the top facts.
-
-        :param user:
-        :param facts:
-        :param date: current study date passed to `schedule`.
-        :param scores: the computed scores.
-        :param order: the ordering of cards.
-        :param top_n_facts: number of cards to explain.
-        :return: an HTML table.
-        """
-        rr = """
-             <style>
-             table {
-               border-collapse: collapse;
-             }
-
-             td, th {
-               padding: 0.5rem;
-               text-align: left;
-             }
-
-             tr:nth-child(even) {background-color: #f2f2f2;}
-             </style>
-             """
-
-        # TODO remove
-        # dump_dict = {
-        #     'user_id': user.user_id,
-        #     'fact_id': facts[order[0]].fact_id,
-        #     'date': date.strftime('%Y-%m-%dT%H:%M:%S%z'),
-        # }
-        # debug_id = hashlib.md5(json.dumps(dump_dict).encode('utf8')).hexdigest()
-        # self.debug_id[user.user_id] = debug_id
-
-        rr += '<h2>Debug ID: {}</h2>'.format(debug_id)
-        row_template = '<tr><td><b>{}</b></td> <td>{}</td></tr>'
-        row_template_3 = '<tr><td><b>{}</b></td> <td>{:.4f} x {:.2f}</td></tr>'
-        for i in order[:top_n_facts]:
-            c = facts[i]
-            prev_date, prev_response = user.previous_study.get(c.fact_id, ('-', '-'))
-            rr += '<table style="float: left;">'
-            rr += row_template.format('fact_id', c.fact_id)
-            rr += row_template.format('answer', c.answer)
-            rr += row_template.format('category', c.category)
-            rr += row_template.format('topic', self.topic_words[np.argmax(c.qrep)])
-            rr += row_template.format('prev_date', prev_date)
-            rr += row_template.format('prev_response', prev_response)
-
-            for k, v in scores[i].items():
-                rr += row_template_3.format(k, v, user.params.__dict__.get(k, 0))
-
-            rr += '<tr><td><b>{}</b></td> <td>{:.4f}</td></tr>'.format('sum', scores[i]['sum'])
-            rr += row_template.format('ltn box', user.leitner_box.get(c.fact_id, '-'))
-            rr += row_template.format('ltn dat', user.leitner_scheduled_date.get(c.fact_id, '-'))
-            rr += row_template.format('sm2 rep', user.sm2_repetition.get(c.fact_id, '-'))
-            rr += row_template.format('sm2 inv', user.sm2_interval.get(c.fact_id, '-'))
-            rr += row_template.format('sm2 e_f', user.sm2_efactor.get(c.fact_id, '-'))
-            rr += row_template.format('sm2 dat', user.sm2_scheduled_date.get(c.fact_id, '-'))
-            rr += '</table>'
-        return rr
-
-    def get_facts_info(
-            self,
-            user: User,
-            facts: List[Fact],
-            date: datetime,
-            scores: List[Dict[str, float]],
-            order: List[int],
-            top_n_facts=3
-    ) -> List[Dict]:
-        """
-        Detailed ranking information for each card.
-
-        :param user:
-        :param facts:
-        :param date: current study date passed to `schedule`.
-        :param scores: the computed scores.
-        :param order: the ordering of cards.
-        :param top_n_facts: number of cards to explain.
-        :return: an dictionary for each card.
-        """
-        facts_info = []
-        for i in order[:top_n_facts]:
-            fact_info = copy.deepcopy({
-                k: v for k, v in facts[i].__dict__.items()
-                if k != '_sa_instance_state'
-            })
-            fact_info['scores'] = scores[i]
-            prev_date, prev_response = user.previous_study.get(fact_info['fact_id'], ('-', '-'))
-            fact_info.update({
-                'current date': str(date),
-                'topic': self.topic_words[np.argmax(fact_info['qrep'])],
-                'prev_response': prev_response,
-                'prev_date': str(prev_date),
-            })
-            fact_info.pop('qrep')
-            fact_info.pop('skill')
-            # fact_info.pop('results')
-            facts_info.append(fact_info)
-        return facts_info
-
-    def rank_facts_for_user(
-            self,
-            user: User,
-            facts: List[Fact],
-            date: datetime,
-            plot=False
-    ) -> SchedulerOutputSchema:
-        """
-        Score facts for user, rank them, and create rationale & card information.
-
-        :param user:
-        :param facts:
-        :param date: current study date passed to `schedule`.
-        :param plot: on-off switch for visualization.
-        :return: everything.
-        """
-        scores = self.score(user, facts, date)
-        order = np.argsort([s['sum'] for s in scores]).tolist()
-        fact = facts[order[0]]
-
-        # if len(user.records) == 0:
-        #     user_qrep = np.array([1 / self.n_topics for _ in range(self.n_topics)])
-        # else:
-        #     recent_facts = [record.fact for record in user.records[::-1][:user.params.max_recent_facts]]
-        #     user_qrep = self.get_discounted_average([x.qrep for x in recent_facts],
-        #                                             user.params.decay_qrep)
-        # plot_polar(user_qrep, '/fs/www-users/shifeng/temp/user.jpg', fill='green')
-        # plot_polar(fact.qrep, '/fs/www-users/shifeng/temp/fact.jpg', fill='yellow')
-
-        dump_dict = {
-            'user_id': user.user_id,
-            'fact_id': fact.fact_id,
-            'date': date.strftime('%Y-%m-%dT%H:%M:%S%z'),
-        }
-        debug_id = hashlib.md5(json.dumps(dump_dict).encode('utf8')).hexdigest()
-        rationale = self.get_rationale(debug_id, user, facts, date, scores, order)
-        self.debug_id[user.user_id] = debug_id
-
-        if plot:
-            figname = '{}_{}_{}.jpg'.format(user.user_id, fact.fact_id, date.strftime('%Y-%m-%d-%H-%M'))
-            # local_filename = '/fs/www-users/shifeng/temp/' + figname
-            remote_filename = 'http://users.umiacs.umd.edu/~shifeng/temp/' + figname
-            # self.plot_histogram(user_qrep, fact.qrep, local_filename)
-
-            rationale += "</br>"
-            rationale += "</br>"
-            rationale += "<img src={}>".format(remote_filename)
-            # rr += "<img src='http://users.umiacs.umd.edu/~shifeng/temp/fact.jpg'>"
-            # rr += "<img src='http://users.umiacs.umd.edu/~shifeng/temp/user.jpg'>"
-
-        facts_info = self.get_facts_info(user, facts, date, scores, order)
-        return SchedulerOutputSchema(
-            order=order,
-            scores=scores,
-            details=facts_info,
-            rationale=rationale,
-            debug_id=debug_id,
-        )
-
-    def schedule(
-            self,
-            session,
-            requests: List[ScheduleRequest],
-            date: datetime,
-            plot=False
-    ) -> SchedulerOutputSchema:
-        """
-        The main schedule function.
-        1. Load user and fact from database, insert if new.
-            2.1. If preemptive is off or no committed preemptive schedule exists, compute schedule.
-            2.2. Otherwise, load committed preemptive schedule, score new cards if any and merge.
-        4. If preemptive is on, spin up two threads to compute the next-step schedule for both
-           possible outcomes.
-        5. Return the schedule.
-
-        Note that we assume the list of requests only contains that of one user.
-
-        :param requests: a list of scheduling requests containing both user and fact information.
-        :param datetime: current study time.
-        :param plot: on-off switch of visualizations.
-        :return: a dictionary of everything about the schedule.
-        """
-        if len(requests) == 0:
-            return {}
-
-        # time the scheduler
-        schedule_timing_profile = {}
-
-        # mapping from user to scheduling requests
-        # not used since we assume only one user
-        user_to_requests = defaultdict(list)
-        for i, request in enumerate(requests):
-            user_to_requests[request.user_id].append(i)
-        if len(user_to_requests) != 1:
-            raise ValueError('Schedule only accpets 1 user. Received {}'.format(len(user_to_requests)))
-
-        # load fact and user from db
-        t0 = datetime.now()
-        facts = self.get_facts(session, requests)
-        t1 = datetime.now()
-        schedule_timing_profile['get_facts'] = (len(requests), t1 - t0)
-
-        user, indices = list(user_to_requests.items())[0]
-        user = self.get_user(session, user)
-        facts = [facts[i] for i in indices]
-
-        if not self.preemptive:
-            output = self.rank_facts_for_user(user, facts, date, plot=plot)
-            scheduler_output = SchedulerOutput(
-                debug_id=output.debug_id,
-                order=output.order,
-                scores=output.scores,
-                details=output.details,
-                rationale=output.rationale,
-            )
-            session.add(scheduler_output)
-            return output
-        else:
-            t1 = datetime.now()
-
-            # using preemptived schedules
-            # read confirmed update & corresponding schedule
-            if user.user_id not in self.preemptive_commit:
-                # no existing precomupted schedule, do regular schedule
-                t0 = datetime.now()
-                output_dict = self.rank_facts_for_user(user, facts, date, plot=plot)
-                t1 = datetime.now()
-                schedule_timing_profile['rank_facts_for_user (pre not found)'] = (len(facts), t1 - t0)
-            elif self.preemptive_commit[user.user_id] == 'done':
-                # preemptive threads didn't finish before user responded and is marked as done by update
-                # TODO this might be too conservative
-                t0 = datetime.now()
-                output_dict = self.rank_facts_for_user(user, facts, date, plot=plot)
-                t1 = datetime.now()
-                schedule_timing_profile['rank_facts_for_user (pre marked done)'] = (len(facts), t1 - t0)
-            else:
-                # read preemptived schedule, check if new facts are added
-                # if so, compute score for new facts, re-sort facts
-                # no need to update previous fact / user
-                # since updates does the commit after updating user & fact in db
-                prev_results = self.preemptive_commit[user.user_id]
-                prev_fact_ids = [c.fact_id for c in prev_results['facts']]
-
-                new_facts = []
-                # prev_facts -> facts
-                prev_fact_indices = {}
-                # new_facts -> facts
-                new_fact_indices = {}
-                for i, c in enumerate(facts):
-                    if c.fact_id in prev_fact_ids:
-                        prev_idx = prev_fact_ids.index(c.fact_id)
-                        prev_fact_indices[prev_idx] = i
-                    else:
-                        new_fact_indices[len(new_facts)] = i
-                        new_facts.append(c)
-
-                if len(new_fact_indices) + len(prev_fact_indices) != len(facts):
-                    raise ValueError('len(new_fact_indices) + len(prev_fact_indices) != len(facts)')
-
-                t0 = datetime.now()
-                # gather scores for both new and previous facts
-                scores = [None] * len(facts)
-                if len(new_facts) > 0:
-                    new_results = self.rank_facts_for_user(user, new_facts, date, plot=plot)
-                    for i, idx in new_fact_indices.items():
-                        scores[idx] = new_results['scores'][i]
-                for i, idx in prev_fact_indices.items():
-                    scores[idx] = prev_results['scores'][i]
-                t1 = datetime.now()
-                schedule_timing_profile['rank_facts_for_user (new facts)'] = (len(new_facts), t1 - t0)
-
-                t0 = datetime.now()
-                order = np.argsort([s['sum'] for s in scores]).tolist()
-
-                # NOTE redo rationale
-
-                dump_dict = {
-                    'user_id': user.user_id,
-                    'fact_id': fact.fact_id,
-                    'date': date.strftime('%Y-%m-%dT%H:%M:%S%z'),
-                }
-                debug_id = hashlib.md5(json.dumps(dump_dict).encode('utf8')).hexdigest()
-                rationale = self.get_rationale(debug_id, user, facts, date, scores, order)
-                self.debug_id[user.user_id] = debug_id
-
-                facts_info = self.get_facts_info(user, facts, date, scores, order)
-                t1 = datetime.now()
-                schedule_timing_profile['get rationale and facts info'] = (len(facts), t1 - t0)
-
-                output_dict = {
-                    'order': order,
-                    'debug_id': debug_id,
-                    'scores': scores,
-                    'rationale': rationale,
-                    'facts_info': facts_info,
-                }
-
-            # output_dict generated
-            fact_idx = output_dict['order'][0]
-
-            if user.user_id in self.preemptive_commit:
-                # necessary to remove 'done' marked by update if exists
-                self.preemptive_commit.pop(user.user_id)
-
-            # CORRECT branch
-            thr_correct = threading.Thread(
-                target=self.branch,
-                args=(
-                    copy.deepcopy(user),
-                    copy.deepcopy(facts),
-                    date,
-                    fact_idx,
-                    CORRECT,
-                    plot,
-                ),
-                kwargs={}
-            )
-            thr_correct.start()
-            # thr_correct.join()
-
-            # WRONG branch
-            thr_wrong = threading.Thread(
-                target=self.branch,
-                args=(
-                    copy.deepcopy(user),
-                    copy.deepcopy(facts),
-                    date,
-                    fact_idx,
-                    WRONG,
-                    plot,
-                ),
-                kwargs={}
-            )
-            thr_wrong.start()
-            # thr_wrong.join()
-
-            # self.branch(copy.deepcopy(user), copy.deepcopy(facts),
-            #             date, fact_idx, CORRECT, plot=plot)
-            # self.branch(copy.deepcopy(user), copy.deepcopy(facts),
-            #             date, fact_idx, WRONG, plot=plot)
-
-            output_dict['profile'] = schedule_timing_profile
-            logger.info('scheduled fact {}'.format(facts[fact_idx].answer))
-            profile_str = [
-                '{}: {} ({})'.format(k, v, c)
-                for k, (c, v) in schedule_timing_profile.items()
-            ]
-            logger.info('\n' + '\n'.join(profile_str))
-
-            return output_dict
-
-    def branch(
-            self,
-            user: User,
-            facts: List[Fact],
-            date: datetime,
-            fact_idx: int,
-            response: bool,
-            plot=False
+    def save_feature_vectors(
+        self,
+        record_id: str,
+        user_id: str,
+        card_id: str,
+        date: datetime,
+        session: Session,
     ) -> None:
-        """
-        Compute a next-step schedule based on a guessed user response.
-        1. Make copy of user and top fact.
-        2. Mpdate (copied) user and top fact by (guessed) response but don't write to database.
-        3. Compute next-step schedule with updated user and list of facts, where the top fact from
-           previous schedule is replaced by the updated version.
-        4. Store next-step schedule in the buffer, wait for an `update` call with the actual user
-           response to commit.
-
-        Note that the dates used in both update and score are not accurate since we don't know when
-        the user will respond and request for the next fact. But it should affect all facts (with
-        non-zero repetition) equally.
-
-        :param user:
-        :param facts:
-        :param date: current study time. Note that this usually is not the actual date of the next
-                     schedule request.
-        :param fact_idx: index of the top fact from previous schedule, which is current being shown
-                         to the user.
-        :param response: guessed response.
-        :param plot: on-off switch for visualizations.
-        """
-        self.update_user_fact(user, facts[fact_idx], date, response)
-        results = self.rank_facts_for_user(user, facts, date, plot=plot)
-        pre_schedule = {
-            'order': results['order'],
-            'rationale': results['rationale'],
-            'facts_info': results['facts_info'],
-            'scores': results['scores'],
-            'user': user,
-            'fact': facts[fact_idx],
-            'facts': facts,
-        }
-        if self.preemptive_commit.get(user.user_id, None) != 'done':
-            # if done, user already responded, marked as done by update
-            self.preemptive_future[response][user.user_id] = pre_schedule
-
-    def update_user_fact(
-            self,
-            user: User,
-            fact: Fact,
-            date: datetime,
-            response: bool
-    ) -> None:
-        """
-        Update the user with a response on this fact.
-
-        :param user:
-        :param fact:
-        :param date: date on which user studied fact.
-        :param response: user's response on this fact.
-        """
-        # update category and previous study (date and response)
-        user.previous_study[fact.fact_id] = (str(date), response)
-
-        # update retention features
-        fact.results.append(response == CORRECT)
-        user.results.append(response == CORRECT)
-        if fact.fact_id not in user.count_correct_before:
-            user.count_correct_before[fact.fact_id] = 0
-        if fact.fact_id not in user.count_wrong_before:
-            user.count_wrong_before[fact.fact_id] = 0
-        if response:
-            user.count_correct_before[fact.fact_id] += 1
-        else:
-            user.count_wrong_before[fact.fact_id] += 1
-
-        self.leitner_update(user, fact, response)
-        self.sm2_update(user, fact, response)
+        v_usercard, v_user, v_card = self.get_feature_vectors(user_id, card_id, session)
+        delta_usercard = None
+        if v_usercard.previous_study_date is not None:
+            delta_usercard = (date - v_usercard.previous_study_date).total_seconds()
+        session.add(
+            UserCardFeatureVector(
+                id=record_id,
+                user_id=user_id,
+                card_id=card_id,
+                date=date,
+                n_study_positive=v_usercard.n_study_positive,
+                n_study_negative=v_usercard.n_study_negative,
+                n_study_total=v_usercard.n_study_total,
+                delta=delta_usercard,
+                previous_delta=v_usercard.previous_delta,
+                previous_study_date=v_usercard.previous_study_date,
+                previous_study_response=v_usercard.previous_study_response,
+            ))
+        delta_user = None
+        if v_user.previous_study_date is not None:
+            delta_user = (date - v_user.previous_study_date).total_seconds()
+        session.add(
+            UserFeatureVector(
+                id=record_id,
+                user_id=user_id,
+                date=date,
+                n_study_positive=v_user.n_study_positive,
+                n_study_negative=v_user.n_study_negative,
+                n_study_total=v_user.n_study_total,
+                delta=delta_user,
+                previous_delta=v_user.previous_delta,
+                previous_study_date=v_user.previous_study_date,
+                previous_study_response=v_user.previous_study_response,
+            ))
+        delta_card = None
+        if v_card.previous_study_date is not None:
+            delta_card = (date - v_card.previous_study_date).total_seconds()
+        session.add(
+            CardFeatureVector(
+                id=record_id,
+                card_id=card_id,
+                date=date,
+                n_study_positive=v_card.n_study_positive,
+                n_study_negative=v_card.n_study_negative,
+                n_study_total=v_card.n_study_total,
+                delta=delta_card,
+                previous_delta=v_card.previous_delta,
+                previous_study_date=v_card.previous_study_date,
+                previous_study_response=v_card.previous_study_response,
+            ))
 
     def update(
-            self,
-            session,
-            requests: List[UpdateRequest],
-            date: datetime
+        self,
+        session,
+        request: UpdateRequestSchema,
+        date: datetime
     ) -> dict:
-        """
-        The main update function.
-        1. Read user and facts from database.
-        2. Create history entry.
-            3.1. If preemptive is off, update user and fact
-            3.2. If otherwise but preemptive scheduling is not done, mark it as obsolete.
-            3.3. If scheduling is finished, commit the one corresponding to the actual response.
-        4. Update user and fact in database.
-        5. Return update details.
+        # read debug_id from request, find corresponding record
+        record = session.query(Record).get(request.debug_id)
 
-        :param requests:
-        :param date: date of the study.
-        :return: details.
-        """
-        # mapping from user to fact indices
-        # not used since we assume only one user
-        user_to_requests = defaultdict(list)
-        for i, request in enumerate(requests):
-            user_to_requests[request.user_id].append(i)
-        facts = self.get_facts(session, requests)
+        # add front_end_id to record, response, elapsed_times to record
+        record.date = date
+        record.front_end_id = request.history_id
+        record.response = request.label
+        record.elapsed_milliseconds_text = request.elapsed_milliseconds_text
+        record.elapsed_milliseconds_answer = request.elapsed_milliseconds_answer
 
-        if len(user_to_requests) != 1:
-            raise ValueError('Update only accpets 1 user. Received {}'.format(len(user_to_requests)))
-        user, indices = list(user_to_requests.items())[0]
-        user = self.get_user(session, user)
-
-        if len(indices) != 1:
-            raise ValueError('Update only accpets 1 fact. Received {}'.format(len(indices)))
-        request = requests[indices[0]]
-        fact = facts[indices[0]]
-
-        # find the scheduler output saved to the debug_id
-        debug_id = requests[0].debug_id
-        if debug_id is None:
-            debug_id = self.debug_id[request.user_id]
-        scheduler_output = session.query(SchedulerOutput).get(debug_id)
-
-        # save user snapshot before update
-        user_snapshot = UserSnapshot(
-            debug_id=debug_id,
-            user_id=user.user_id,
-            record_id=request.history_id,
-            date=date,
-            recent_facts=[record.fact_id for record in user.records[::-1][:user.params.max_recent_facts]],
-            previous_study=user.previous_study,
-            leitner_box=user.leitner_box,
-            leitner_scheduled_date={k: str(v) for k, v in user.leitner_scheduled_date.items()},
-            sm2_efactor=user.sm2_efactor,
-            sm2_interval=user.sm2_interval,
-            sm2_repetition=user.sm2_repetition,
-            sm2_scheduled_date={k: str(v) for k, v in user.sm2_scheduled_date.items()},
-            results=user.results,
-            count_correct_before=user.count_correct_before,
-            count_wrong_before=user.count_wrong_before,
-            params=user.params,
-        )
-
-        # save fact snapshot before update
-        # old_fact_snapshot = session.query(FactSnapshot).order_by(FactSnapshot.id.desc()).first()
-        # old_record = session.query(Record).get(old_fact_snapshot.record_id)
-        # new_fact_snapshot = FactSnapshot(
-        #     debug_id=debug_id,
-        #     fact_id=record.fact_id,
-        #     record_id=record.record_id,
-        #     count_correct_before=old_fact_snapshot.count_correct_before + old_record.response,
-        #     count_wrong_before=old_fact_snapshot.count_wrong_before + 1 - old_record.response,
-        # )
-
-        # update user and fact
-        # (optionally) commit preemptive compute
-        if not self.preemptive:
-            self.update_user_fact(user, fact, date, request.label)
-        elif user.user_id not in self.preemptive_future[request.label]:
-            self.update_user_fact(user, fact, date, request.label)
-            # NOTE preemptive did not finish before user responded
-            # mark commit as taken
-            self.preemptive_commit[user.user_id] = 'done'
-        else:
-            results = self.preemptive_future[request.label][user.user_id]
-            self.preemptive_commit[user.user_id] = results
-            user = results['user']
-            fact = results['fact']
-        
-        elapsed_seconds_text = request.elapsed_milliseconds_text * 1000
-        elapsed_seconds_answer = request.elapsed_milliseconds_answer * 1000
-
-        is_new_fact = True
-        if session.query(Record).\
-                filter(Record.user_id == request.user_id).\
-                filter(Record.fact_id == fact.fact_id).\
-                filter(Record.deck_id == fact.deck_id).\
-                first() is not None:
-            is_new_fact = False
-
-        record = Record(
-            record_id=request.history_id,
-            debug_id=debug_id,
-            user_id=request.user_id,
-            fact_id=fact.fact_id,
-            deck_id=fact.deck_id,
-            response=request.label,
-            judgement=request.label,
-            fact_ids=json.dumps([x.fact_id for x in facts]),
-            elapsed_seconds_text=elapsed_seconds_text,
-            elapsed_seconds_answer=elapsed_seconds_answer,
-            elapsed_milliseconds_text=request.elapsed_milliseconds_text,
-            elapsed_milliseconds_answer=request.elapsed_milliseconds_answer,
-            is_new_fact=is_new_fact,
-            date=date,
-            # user_snapshot_id=user_snapshot.debug_id,
-            # fact_snapshot_id=new_fact_snapshot.debug_id,
-            # scheduler_output_id=scheduler_output.debug_id,
-        )
+        # update leitner
+        self.update_leitner(record, date, session)
+        # update sm2
+        self.update_sm2(record, date, session)
 
         # update user stats
-        self.update_user_stats(session, user, record, deck_id='all')
-        if fact.deck_id is not None:
-            self.update_user_stats(session, user, record, deck_id=fact.deck_id)
+        utc_date = date.astimezone(pytz.utc).date()
+        self.update_user_stats(record, deck_id='all', utc_date=utc_date, session=session)
+        if record.deck_id is not None:
+            self.update_user_stats(record, deck_id=record.deck_id, utc_date=utc_date, session=session)
 
-        session.add(record)
+        # update current features
+        # NOTE do this last, especially after leitner and sm2
+        self.update_feature_vectors(record, date, session)
 
-    def update_user_stats(self, session, user: User, record: Record, deck_id: str):
+    def update_feature_vectors(self, record: Record, date: datetime, session: Session):
+        v_usercard, v_user, v_card = self.get_feature_vectors(record.user_id, record.card_id, session)
+
+        delta_usercard = None
+        if v_usercard.previous_study_date is not None:
+            delta_usercard = (date - v_usercard.previous_study_date).total_seconds()
+        v_usercard.n_study_positive += record.response
+        v_usercard.n_study_negative += (not record.response)
+        v_usercard.n_study_total += 1
+        v_usercard.previous_delta = delta_usercard
+        v_usercard.previous_study_date = date
+        v_usercard.previous_study_response = record.response
+
+        delta_user = None
+        if v_user.previous_study_date is not None:
+            delta_user = (date - v_user.previous_study_date).total_seconds()
+        v_user.n_study_positive += record.response
+        v_user.n_study_negative += (not record.response)
+        v_user.n_study_total += 1
+        v_user.previous_delta = delta_user
+        v_user.previous_study_date = date
+        v_user.previous_study_response = record.response
+
+        delta_card = None
+        if v_card.previous_study_date is not None:
+            delta_card = (date - v_card.previous_study_date).total_seconds()
+        v_card.n_study_positive += record.response
+        v_card.n_study_negative += (not record.response)
+        v_card.n_study_total += 1
+        v_card.previous_delta = delta_card
+        v_card.previous_study_date = date
+        v_card.previous_study_response = record.response
+
+    def update_user_stats(self, record: Record, utc_date, deck_id: str, session: Session):
         # get the latest user_stat ordered by date
-        curr_stat = session.query(UserStat).\
-            filter(UserStat.user_id == user.user_id).\
-            filter(UserStat.deck_id == deck_id).\
-            order_by(UserStat.date.desc()).first()
+        curr_stats = session.query(UserStats).\
+            filter(UserStats.user_id == record.user_id).\
+            filter(UserStats.deck_id == deck_id).\
+            order_by(UserStats.date.desc()).first()
 
         is_new_stat = False
-        if curr_stat is None:
-            user_stat_id = json.dumps({
-                'user_id': user.user_id,
-                'date': str(record.date.date()),
+        if curr_stats is None:
+            stats_id = json.dumps({
+                'user_id': record.user_id,
                 'deck_id': deck_id,
+                'date': str(utc_date),
             })
-            curr_stat = UserStat(
-                user_stat_id=user_stat_id,
-                user_id=user.user_id,
+            curr_stats = UserStats(
+                id=stats_id,
+                user_id=record.user_id,
                 deck_id=deck_id,
-                date=record.date.date(),
-                new_facts=0,
-                reviewed_facts=0,
-                new_correct=0,
-                reviewed_correct=0,
-                total_seen=0,
-                total_milliseconds=0,
-                total_seconds=0,
-                total_minutes=0,
+                date=utc_date,
+                n_cards_total=0,
+                n_cards_positive=0,
+                n_new_cards_total=0,
+                n_old_cards_total=0,
+                n_new_cards_positive=0,
+                n_old_cards_positive=0,
                 elapsed_milliseconds_text=0,
                 elapsed_milliseconds_answer=0,
-                elapsed_seconds_text=0,
-                elapsed_seconds_answer=0,
-                elapsed_minutes_text=0,
-                elapsed_minutes_answer=0,
                 n_days_studied=0,
             )
             is_new_stat = True
 
-        if record.date.date() != curr_stat.date:
+        if utc_date != curr_stats.date:
             # there is a previous user_stat, but not from today
             # copy user stat to today
-            user_stat_id = json.dumps({
-                'user_id': user.user_id,
-                'date': str(record.date.date()),
+            stats_id = json.dumps({
+                'user_id': record.user_id,
                 'deck_id': deck_id,
+                'date': str(utc_date),
             })
-            new_stat = UserStat(
-                user_stat_id=user_stat_id,
-                user_id=user.user_id,
+            new_stat = UserStats(
+                id=stats_id,
+                user_id=record.user_id,
                 deck_id=deck_id,
-                date=record.date.date(),
-                new_facts=curr_stat.new_facts,
-                reviewed_facts=curr_stat.reviewed_facts,
-                new_correct=curr_stat.new_correct,
-                reviewed_correct=curr_stat.reviewed_correct,
-                total_seen=curr_stat.total_seen,
-                total_milliseconds=curr_stat.total_milliseconds,
-                total_seconds=curr_stat.total_seconds,
-                total_minutes=curr_stat.total_minutes,
-                elapsed_milliseconds_text=curr_stat.elapsed_milliseconds_text,
-                elapsed_milliseconds_answer=curr_stat.elapsed_milliseconds_answer,
-                elapsed_seconds_text=curr_stat.elapsed_seconds_text,
-                elapsed_seconds_answer=curr_stat.elapsed_seconds_answer,
-                elapsed_minutes_text=curr_stat.elapsed_minutes_text,
-                elapsed_minutes_answer=curr_stat.elapsed_minutes_answer,
-                n_days_studied=curr_stat.n_days_studied + 1,
+                date=utc_date,
+                n_cards_total=curr_stats.n_cards_total,
+                n_cards_positive=curr_stats.n_cards_positive,
+                n_new_cards_total=curr_stats.n_new_cards_total,
+                n_old_cards_total=curr_stats.n_old_cards_total,
+                n_new_cards_positive=curr_stats.n_new_cards_positive,
+                n_old_cards_positive=curr_stats.n_old_cards_positive,
+                elapsed_milliseconds_text=curr_stats.elapsed_milliseconds_text,
+                elapsed_milliseconds_answer=curr_stats.elapsed_milliseconds_answer,
+                n_days_studied=curr_stats.n_days_studied + 1,
             )
-            curr_stat = new_stat
+            curr_stats = new_stat
             is_new_stat = True
 
         if record.is_new_fact:
-            curr_stat.new_facts += 1
-            curr_stat.new_correct += record.response
+            curr_stats.n_new_cards_total += 1
+            curr_stats.n_new_cards_positive += record.response
         else:
-            curr_stat.reviewed_facts += 1
-            curr_stat.reviewed_correct += record.response
+            curr_stats.n_old_cards_total += 1
+            curr_stats.n_old_cards_positive += record.response
 
-        total_milliseconds = record.elapsed_milliseconds_text + record.elapsed_milliseconds_answer
-        curr_stat.total_seen += 1
-        curr_stat.total_milliseconds += total_milliseconds
-        curr_stat.total_seconds += total_milliseconds // 1000
-        curr_stat.total_minutes += total_milliseconds // 60000
-        curr_stat.elapsed_milliseconds_text += record.elapsed_milliseconds_text
-        curr_stat.elapsed_milliseconds_answer += record.elapsed_milliseconds_answer
-        curr_stat.elapsed_seconds_text += record.elapsed_milliseconds_text // 1000
-        curr_stat.elapsed_seconds_answer += record.elapsed_milliseconds_answer // 1000
-        curr_stat.elapsed_minutes_text += record.elapsed_milliseconds_text // 60000
-        curr_stat.elapsed_minutes_answer += record.elapsed_milliseconds_answer // 60000
+        curr_stats.n_cards_total += 1
+        curr_stats.n_cards_positive += record.response
+        curr_stats.elapsed_milliseconds_text += record.elapsed_milliseconds_text
+        curr_stats.elapsed_milliseconds_answer += record.elapsed_milliseconds_answer
 
         if is_new_stat:
-            session.add(curr_stat)
+            session.add(curr_stats)
 
-    def leitner_update(self, user: User, fact: Fact, response: bool) -> None:
-        """
-        Update Leitner box and scheduled date of card.
-
-        :param user:
-        :param fact:
-        :param response: CORRECT or WRONG.
-        """
-        # TODO handle correct on first try
-
+    def update_leitner(self, record: Record, date: datetime, session: Session) -> None:
         # leitner boxes 1~10
         # days[0] = None as placeholder since we don't have box 0
         # days[9] and days[10] = 999 to make it never repeat
         days = [0, 0, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 999, 999]
         increment_days = {i: x for i, x in enumerate(days)}
 
-        # boxes: 1 ~ 10
-        cur_box = user.leitner_box.get(fact.fact_id, None)
-        if cur_box is None:
-            cur_box = 1
-        new_box = cur_box + (1 if response == CORRECT else -1)
-        new_box = max(min(new_box, 10), 1)
-        user.leitner_box[fact.fact_id] = new_box
-        interval = timedelta(days=increment_days[new_box])
-        # NOTE we increment on top `previous_study`, so it should be updated in
-        # `update` before `leitner_update` is called.
-        # it should correpond to the latest study date.
-        prev_date, _ = user.previous_study[fact.fact_id]
-        if isinstance(prev_date, str):
-            prev_date = parse_date(prev_date)
-        user.leitner_scheduled_date[fact.fact_id] = str(prev_date + interval)
+        leitner = session.query(Leitner).get((record.user_id, record.card_id))
+        if leitner is None:
+            # boxes: 1 ~ 10
+            leitner = Leitner(user_id=record.user_id, card_id=record.card_id, box=1)
+            session.add(leitner)
 
-    def sm2_update(self, user: User, fact: Fact, response: bool) -> None:
-        """
-        Update SM-2 e_factor, repetition, and interval.
+        leitner.box += (1 if record.response else -1)
+        leitner.box = max(min(leitner.box, 10), 1)
+        interval = timedelta(days=increment_days[leitner.box])
+        leitner.scheduled_date = date + interval
 
-
-        :param user:
-        :param fact:
-        :param response:
-        """
+    def update_sm2(self, record: Record, date: datetime, session: Session) -> None:
         def get_quality_from_response(response: bool) -> int:
-            return 4 if response == CORRECT else 1
+            return 4 if response else 1
 
-        # TODO handle correct on first try
+        sm2 = session.query(SM2).get((record.user_id, record.card_id))
+        if sm2 is None:
+            sm2 = SM2(
+                user_id=record.user_id,
+                card_id=record.card_id,
+                efactor=2.5,
+                interval=1,
+                repetition=0,
+            )
 
-        e_f = user.sm2_efactor.get(fact.fact_id, 2.5)
-        inv = user.sm2_interval.get(fact.fact_id, 1)
-        rep = user.sm2_repetition.get(fact.fact_id, 0) + 1
+        q = get_quality_from_response(record.response)
+        sm2.repetition += 1
+        sm2.efactor = max(1.3, sm2.efactor + 0.1 - (5.0 - q) * (0.08 + (5.0 - q) * 0.02))
 
-        q = get_quality_from_response(response)
-        e_f = max(1.3, e_f + 0.1 - (5.0 - q) * (0.08 + (5.0 - q) * 0.02))
-
-        if response != CORRECT:
-            inv = 0
-            rep = 0
+        if not record.response:
+            sm2.interval = 0
+            sm2.repetition = 0
         else:
-            if rep == 1:
-                inv = 1
-            elif rep == 2:
-                inv = 6
+            if sm2.repeptition == 1:
+                sm2.interval = 1
+            elif sm2.repetition == 2:
+                sm2.interval = 6
             else:
-                inv = inv * e_f
+                sm2.interval *= sm2.efactor
 
-        user.sm2_repetition[fact.fact_id] = rep
-        user.sm2_efactor[fact.fact_id] = e_f
-        user.sm2_interval[fact.fact_id] = inv
-        prev_date, prev_response = user.previous_study[fact.fact_id]
-        if isinstance(prev_date, str):
-            prev_date = parse_date(prev_date)
-        user.sm2_scheduled_date[fact.fact_id] = str(prev_date + timedelta(days=inv))
-
-    def plot_histogram(self, user_qrep: np.ndarray, fact_qrep: np.ndarray, filename: str) -> None:
-        """
-        Visualize the topic distribution, overlap user with fact.
-
-        :param fact_qrep: question representation of the fact.
-        :param user_qrep: the accumulated question representation of the user.
-        :param filename: save figure to this path.
-        """
-        pass
-        # max_qrep = np.max((fact_qrep, user_qrep), axis=0)
-        # top_topics = np.argsort(-max_qrep)[:10]
-        # fact_qrep = np.array(fact_qrep)[top_topics].tolist()
-        # user_qrep = np.array(user_qrep)[top_topics].tolist()
-        # top_topic_words = [self.topic_words[i] for i in top_topics]
-        # topic_type = CategoricalDtype(categories=top_topic_words, ordered=True)
-        # df = pd.DataFrame({
-        #     'topics': top_topic_words * 2,
-        #     'weight': fact_qrep + user_qrep,
-        #     'label': ['fact' for _ in top_topics] + ['user' for _ in top_topics]
-        # })
-        # df['topics'] = df['topics'].astype(str).astype(topic_type)
-
-        # TODO use altair
-        # p = (
-        #     ggplot(df)
-        #     + geom_bar(
-        #         aes(x='topics', y='weight', fill='label'),
-        #         stat='identity',
-        #         position='identity',
-        #         alpha=0.3,
-        #     )
-        #     + coord_flip()
-        #     # + theme_fs()
-        #     # + theme(axis_text_x=(element_text(rotation=90)))
-        # )
-        # p.save(filename, verbose=False)
+        sm2.scheduled_date = date + timedelta(days=sm2.interval)

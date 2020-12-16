@@ -44,6 +44,8 @@ def data_upgrade():
 
     users = session_remote.query(OldUser)
     for user_old in tqdm(users, total=users.count()):
+        if not user_old.user_id.isdigit():
+            continue
         user_new = User(id=user_old.user_id)
         session.add(user_new)
 

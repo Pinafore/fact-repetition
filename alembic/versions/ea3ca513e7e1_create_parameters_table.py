@@ -57,6 +57,9 @@ def data_upgrade():
 
     users = session_remote.query(OldUser)
     for user_old in tqdm(users, total=users.count()):
+        if not user_old.user_id.isdigit():
+            continue
+
         params_old = user_old.params.__dict__
         params_new = Parameters(
             id=user_old.user_id,

@@ -48,6 +48,9 @@ def data_upgrade():
 
     users = session_remote.query(OldUser)
     for user in tqdm(users, total=users.count()):
+        if not user.user_id.isdigit():
+            continue
+
         for card_id, date in user.sm2_scheduled_date.items():
             if card_id not in user.sm2_efactor:
                 continue

@@ -2,18 +2,12 @@
 # coding: utf-8
 
 import argparse
-import numpy as np
-from typing import List
-from datetime import datetime, timedelta
-from dateutil.parser import parse as parse_date
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim.lr_scheduler import StepLR
 
-from karl.models import User, Fact
 from karl.retention.data import RetentionDataset, apply_parallel, get_split_dfs
 
 
@@ -211,121 +205,6 @@ class RetentionModel:
         self.model = TemperatureScaledNet(n_input=n_input).to(self.device)
         self.model.load_state_dict(torch.load(checkpoint_dir))
         self.model.eval()
-
-    def compute_features(
-        self,
-        user: User,
-        fact: Fact,
-        date: datetime,
-    ):
-        uq_correct = user.count_correct_before.get(fact.fact_id, 0)
-        uq_wrong = user.count_wrong_before.get(fact.fact_id, 0)
-        uq_total = uq_correct + uq_wrong
-        if fact.fact_id in user.previous_study:
-            prev_date, prev_response = user.previous_study[fact.fact_id]
-        else:
-            # TODO this really shouldn't be the current date.
-            # the default prev_date should be something much earlier
-            # prev_date = str(date)
-            prev_response = False
-            prev_date = str(date - timedelta(days=10))
-            # prev_date = '2020-06-01'
-        prev_date = parse_date(prev_date)
-
-        features = [
-            uq_correct,  # user_count_correct
-            uq_wrong,  # user_count_wrong
-            uq_total,  # user_count_total
-            0 if len(user.results) == 0 else np.mean(user.results),  # user_average_overall_accuracy
-            0 if uq_total == 0 else uq_correct / uq_total,  # user_average_question_accuracy
-            prev_response,
-            (date - prev_date).total_seconds() / (60 * 60),  # user_gap_from_previous
-            0 if len(fact.results) == 0 else np.mean(fact.results),  # question_average_overall_accuracy
-            len(fact.results),  # question_count_total
-            sum(fact.results),  # question_count_correct
-            len(fact.results) - sum(fact.results),  # question_count_wrong
-            1  # bias
-        ]
-        feature_names = [
-            'user_count_correct',
-            'user_count_wrong',
-            'user_count_total',
-            'user_average_overall_accuracy',
-            'user_average_question_accuracy',
-            'user_previous_result',
-            'user_gap_from_previous',
-            'question_average_overall_accuracy',
-            'question_count_total',
-            'question_count_correct',
-            'question_count_wrong',
-            'bias',
-        ]
-        feature_dict = {k: v for k, v in zip(feature_names, features)}
-        return features, feature_dict
-
-    def predict(
-        self,
-        user: User,
-        facts: List[Fact],
-        date: datetime = None,
-    ) -> np.ndarray:
-        if date is None:
-            date = parse_date(datetime.now().strftime('%Y-%m-%dT%H:%M:%S%z'))
-        xs = [self.compute_features(user, fact, date)[0] for fact in facts]
-        xs = np.array(xs).astype(np.float32)
-        xs = (xs - self.dataset.mean) / self.dataset.std
-        ys = []
-        batch_size = 128
-        for i in range(0, xs.shape[0], batch_size):
-            x = xs[i: i + batch_size]
-            x = torch.from_numpy(x).to(self.device)
-            logits = self.model.forward(x)
-            # return the probability of positive (1)
-            y = F.softmax(logits, dim=1).detach().cpu().numpy()[:, 1]
-            ys.append(y)
-        return np.concatenate(ys)
-
-    def predict_one(
-        self,
-        user: User,
-        fact: Fact,
-        date: datetime
-    ) -> float:
-        '''recall probability of a single fact'''
-        return self.predict(user, [fact], date)[0]  # batch size is 1
-
-
-def test_wrapper():
-    user = User(
-        user_id='user 1',
-        qrep=[np.array([0.1, 0.2, 0.3])],
-        skill=[np.array([0.1, 0.2, 0.3])],
-        category='History',
-        previous_study={'fact 1': (datetime.now(), True)},
-        leitner_box={'fact 1': 2},
-        leitner_scheduled_date={'fact 2': datetime.now()},
-        sm2_efactor={'fact 1': 0.5},
-        sm2_interval={'fact 1': 6},
-        sm2_repetition={'fact 1': 10},
-        sm2_scheduled_date={'fact 2': datetime.now()},
-        results=[True, False, True],
-        count_correct_before={'fact 1': 1},
-        count_wrong_before={'fact 1': 3}
-    )
-
-    fact = Fact(
-        fact_id='fact 1',
-        text='This is the question text',
-        answer='Answer Text III',
-        category='WORLD',
-        qrep=np.array([1, 2, 3, 4]),
-        skill=np.array([0.1, 0.2, 0.3, 0.4]),
-        results=[True, False, True, True]
-    )
-
-    model = RetentionModel()
-    print(1 - model.predict(user, [fact, fact, fact], datetime.now()))
-    print(model.predict_one(user, fact, datetime.now()))
 
 
 def test_majority():

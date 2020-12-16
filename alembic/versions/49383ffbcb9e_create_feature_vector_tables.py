@@ -124,6 +124,11 @@ def data_upgrade():
         # and that's the input we store with `record.id`.
         # Then we update the None feature vector with response from this record,
         # which becomes the new current feature vector for the next round.
+        if record.response is None:
+            continue
+
+        if not record.user_id.isdigit():
+            continue
 
         curr_usercard_vector = session.query(CurrUserCardFeatureVector).get((record.user_id, record.card_id))
         if curr_usercard_vector is None:
