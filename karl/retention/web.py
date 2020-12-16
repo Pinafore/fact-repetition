@@ -11,6 +11,7 @@ import torch.nn.functional as F
 from karl.retention.data import RetentionDataset
 from karl.retention.baseline import TemperatureScaledNet
 from karl.schemas import RetentionFeaturesSchema
+from karl.config import settings
 
 
 class RetentionModel:
@@ -91,7 +92,7 @@ class RetentionModel:
 logger = logging.getLogger('retention')
 logger.setLevel(logging.DEBUG)
 # create file handler which logs even debug messages
-fh = logging.FileHandler('/fs/clip-quiz/shifeng/karl-dev/retention.log')
+fh = logging.FileHandler(f'{settings.CODE_DIR}/retention.log')
 fh.setLevel(logging.DEBUG)
 # create console handler with a higher log level
 ch = logging.StreamHandler()

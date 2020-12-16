@@ -8,6 +8,7 @@ import pickle
 import codecs
 import logging
 import itertools
+import warnings
 import numpy as np
 import pandas as pd
 import multiprocessing
@@ -25,9 +26,11 @@ from allennlp.data.tokenizers import Tokenizer, Token
 from allennlp.data.dataset_readers import DatasetReader
 from allennlp.data.token_indexers import TokenIndexer, SingleIdTokenIndexer
 
-import warnings
+from karl.config import settings
+
+
 warnings.filterwarnings('ignore', module='torch.data.dataloader')
-DATA_DIR = '/fs/clip-quiz/shifeng/karl/data/protobowl/'
+DATA_DIR = f'{settings.DATA_DIR}/protobowl/'
 log = logging.getLogger(__name__)
 
 
