@@ -4,6 +4,7 @@
 import json
 import pytz
 import logging
+import atexit
 from typing import Generator, List
 from datetime import datetime
 from fastapi import FastAPI, Depends
@@ -17,7 +18,7 @@ from karl.schemas import UserStatsSchema, RankingSchema, LeaderboardSchema, \
     ScheduleResponseSchema, ScheduleRequestSchema, UpdateRequestSchema
 from karl.models import User, UserStats, Parameters
 from karl.scheduler import KARLScheduler
-from karl.db.session import SessionLocal
+from karl.db.session import SessionLocal, engine
 from karl.config import settings
 
 
@@ -182,6 +183,31 @@ def get_user_stats(
     env: str = None,
     session: Session = Depends(get_session),
 ) -> UserStatsSchema:
+    return _get_user_stats(
+        user_id,
+        deck_id,
+        min_studied,
+        date_start,
+        date_end,
+        env,
+        session,
+    )
+
+
+def _get_user_stats(
+    user_id: str,
+    deck_id: str = None,
+    min_studied: int = 0,
+    date_start: str = '2008-06-01 08:00:00+00:00',
+    date_end: str = '2038-06-01 08:00:00+00:00',
+    env: str = None,
+    session: Session = None,
+) -> UserStatsSchema:
+    close_session = False
+    if session is None:
+        close_session = True
+        session = SessionLocal()
+
     date_start = parse_date(date_start).date()
     date_end = parse_date(date_end).date()
 
@@ -205,6 +231,9 @@ def get_user_stats(
         first()
 
     if after is None or after.date < date_start:
+        if close_session:
+            session.close()
+
         return UserStatsSchema(
             user_id=user_id,
             deck_id=deck_id,
@@ -312,6 +341,9 @@ def get_user_stats(
         n_days_studied=n_days_studied,
     )
 
+    if close_session:
+        session.close()
+
     return user_stat_schema
 
 
@@ -330,24 +362,7 @@ def get_leaderboard(
     session: Session = Depends(get_session),
 ) -> LeaderboardSchema:
     stats = {}
-    if False:
-        executor = ProcessPoolExecutor()
-        for user in session.query(User):
-            if not user.id.isdigit():
-                continue
-
-            stats[user.id] = executor.submit(
-                get_user_stats,
-                user_id=user.id,
-                deck_id=deck_id,
-                min_studied=min_studied,
-                date_start=date_start,
-                date_end=date_end,
-            )
-
-        for user_id, future in stats.items():
-            stats[user_id] = future.result()
-    else:
+    if not settings.USE_MULTIPROCESSING:
         stats = {}
         for user in session.query(User):
             if not user.id.isdigit():
@@ -361,6 +376,23 @@ def get_leaderboard(
                 date_end=date_end,
                 session=session,
             )
+    else:
+        executor = ProcessPoolExecutor(max_workers=8)
+        for user in session.query(User):
+            if not user.id.isdigit():
+                continue
+
+            stats[user.id] = executor.submit(
+                _get_user_stats,
+                user_id=user.id,
+                deck_id=deck_id,
+                min_studied=min_studied,
+                date_start=date_start,
+                date_end=date_end,
+            )
+
+        for user_id, future in stats.items():
+            stats[user_id] = future.result()
 
     # from high value to low
     stats = sorted(stats.items(), key=lambda x: x[1].__dict__[rank_type])[::-1]
@@ -443,3 +475,8 @@ def update(
 @app.get('/api/karl/status')
 def status():
     return True
+
+
+@atexit.register
+def dispose():
+    engine.dispose()

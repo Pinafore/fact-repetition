@@ -17,6 +17,8 @@ from karl.models import User, Card, Record, Parameters, UserStats,\
     UserCardFeatureVector, UserFeatureVector, CardFeatureVector,\
     CurrUserCardFeatureVector, CurrUserFeatureVector, CurrCardFeatureVector,\
     Leitner, SM2
+from karl.db.session import SessionLocal
+from karl.config import settings
 
 
 class KARLScheduler:
@@ -126,12 +128,30 @@ class KARLScheduler:
         t0 = datetime.now(pytz.utc)
         # gather card features
         vs_usercard, vs_user, vs_card = [], [], []
-        for card in cards:
-            v_usercard, v_user, v_card = self.get_feature_vectors(user.id, card.id, session, expunge=True)
-            vs_usercard.append(v_usercard)
-            vs_user.append(v_user)
-            vs_card.append(v_card)
-        # session.commit()
+        if not settings.USE_MULTIPROCESSING:
+            for card in cards:
+                v_usercard, v_user, v_card = self.get_feature_vectors(
+                    user.id, card.id, session, expunge=True
+                )
+                vs_usercard.append(v_usercard)
+                vs_user.append(v_user)
+                vs_card.append(v_card)
+        else:
+            executor = ProcessPoolExecutor()
+            futures = []
+            for card in cards:
+                futures.append(
+                    executor.submit(
+                        self.get_feature_vectors,
+                        user.id, card.id,
+                        expunge=True
+                    )
+                )
+            for future in futures:
+                v_usercard, v_user, v_card = future.result()
+                vs_usercard.append(v_usercard)
+                vs_user.append(v_user)
+                vs_card.append(v_card)
 
         t1 = datetime.now(pytz.utc)
         print('======== gather features 1', (t1 - t0).total_seconds())
@@ -148,6 +168,8 @@ class KARLScheduler:
             scores = self.score_user_cards(
                 user, cards, date, vs_usercard, vs_user, vs_card, session,
             )
+
+        session.commit()
 
         # computer total score
         for i, _ in enumerate(scores):
@@ -210,9 +232,14 @@ class KARLScheduler:
         self,
         user_id: str,
         card_id: str,
-        session: Session,
+        session: Session = None,
         expunge: bool = False,
     ):
+        close_session = False
+        if session is None:
+            close_session = True
+            session = SessionLocal()
+
         v_usercard = session.query(CurrUserCardFeatureVector).get((user_id, card_id))
         if v_usercard is None:
             v_usercard = CurrUserCardFeatureVector(
@@ -264,6 +291,9 @@ class KARLScheduler:
             # session.commit()
         elif expunge:
             session.expunge(v_card)
+
+        if close_session:
+            session.close()
 
         return v_usercard, v_user, v_card
 
@@ -348,7 +378,7 @@ class KARLScheduler:
         t0 = datetime.now(pytz.utc)
 
         feature_vectors = []
-        if False:
+        if not settings.USE_MULTIPROCESSING:
             for v_usercard, v_user, v_card in zip(vs_usercard, vs_user, vs_card):
                 feature_vectors.append(self.vectors_to_features(v_usercard, v_user, v_card, date))
         else:
@@ -523,6 +553,9 @@ class KARLScheduler:
     ) -> dict:
         # read debug_id from request, find corresponding record
         record = session.query(Record).get(request.debug_id)
+
+        if record is None:
+            return
 
         # add front_end_id to record, response, elapsed_times to record
         record.date = date
