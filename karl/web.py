@@ -2,15 +2,20 @@
 # coding: utf-8
 
 import json
+import time
 import pytz
 import logging
 import atexit
+import threading
+import multiprocessing
+from os import getpid
 from typing import Generator, List
 from datetime import datetime
 from fastapi import FastAPI, Depends
 from dateutil.parser import parse as parse_date
 from cachetools import cached, TTLCache
-from concurrent.futures import ProcessPoolExecutor
+# from concurrent.futures import ProcessPoolExecutor
+from functools import partial
 from sqlalchemy.orm import Session
 
 from karl.schemas import UserStatsSchema, RankingSchema, LeaderboardSchema, \
@@ -173,7 +178,7 @@ def set_repetition_model(
 
 
 @app.get('/api/karl/get_user_stats', response_model=UserStatsSchema)
-@cached(cache=TTLCache(maxsize=1024, ttl=600))
+# @cached(cache=TTLCache(maxsize=1024, ttl=600))
 def get_user_stats(
     user_id: str,
     deck_id: str = None,
@@ -348,7 +353,7 @@ def _get_user_stats(
 
 
 @app.get('/api/karl/leaderboard', response_model=LeaderboardSchema)
-@cached(cache=TTLCache(maxsize=1024, ttl=1800))
+# @cached(cache=TTLCache(maxsize=1024, ttl=1800))
 def get_leaderboard(
     user_id: str = None,
     env: str = None,
@@ -377,22 +382,19 @@ def get_leaderboard(
                 session=session,
             )
     else:
-        executor = ProcessPoolExecutor(max_workers=8)
-        for user in session.query(User):
-            if not user.id.isdigit():
-                continue
+        user_ids = [user.id for user in session.query(User) if user.id.isdigit()]
+        worker = partial(
+            _get_user_stats,
+            deck_id=deck_id,
+            min_studied=min_studied,
+            date_start=date_start,
+            date_end=date_end,
+        )
+        with multiprocessing.get_context('spawn').Pool() as pool:
+            stat_list = pool.map(worker, user_ids)
 
-            stats[user.id] = executor.submit(
-                _get_user_stats,
-                user_id=user.id,
-                deck_id=deck_id,
-                min_studied=min_studied,
-                date_start=date_start,
-                date_end=date_end,
-            )
-
-        for user_id, future in stats.items():
-            stats[user_id] = future.result()
+        for user_id, stat in zip(user_ids, stat_list):
+            stats[user_id] = stat
 
     # from high value to low
     stats = sorted(stats.items(), key=lambda x: x[1].__dict__[rank_type])[::-1]
@@ -419,28 +421,6 @@ def get_leaderboard(
         limit=limit,
     )
 
-
-@app.get('/api/karl/predict_recall')
-def predict_recall(
-    user_id: str,
-    card_id: str,
-    env: str = None,
-    date: datetime = datetime.now(pytz.utc),
-    session: Session = Depends(get_session),
-):
-    return scheduler.predict_recall(
-        user_id=user_id,
-        card_id=card_id,
-        date=date,
-        session=session,
-    )
-
-# @app.post('/api/karl/schedule')
-# def fake_schedule(
-#     body: List[dict],
-# ):
-#     with open('example_request.json', 'w') as f:
-#         json.dump(body, f)
 
 @app.post('/api/karl/schedule')
 def schedule(
@@ -480,3 +460,10 @@ def status():
 @atexit.register
 def dispose():
     engine.dispose()
+
+@app.get('/api/karl/wait_and_print')
+def wait_and_print(wait: int, what: str):
+    print('wait and print starts at', time.strftime('%X'), threading.get_ident(), getpid())
+    time.sleep(wait)
+    print(what)
+    print('wait and print finishes at', time.strftime('%X'), threading.get_ident(), getpid())
