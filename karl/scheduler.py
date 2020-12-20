@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+import os
 import json
 import pytz
 import requests
@@ -10,6 +11,8 @@ from typing import List, Dict
 from datetime import datetime, timedelta
 from concurrent.futures import ProcessPoolExecutor
 from sqlalchemy.orm import Session
+from sqlalchemy import event
+from sqlalchemy import exc
 
 from karl.schemas import ScheduleRequestSchema, UpdateRequestSchema, ScheduleResponseSchema,\
     RetentionFeaturesSchema, ParametersSchema
@@ -17,8 +20,25 @@ from karl.models import User, Card, Record, Parameters, UserStats,\
     UserCardFeatureVector, UserFeatureVector, CardFeatureVector,\
     CurrUserCardFeatureVector, CurrUserFeatureVector, CurrCardFeatureVector,\
     Leitner, SM2
-from karl.db.session import SessionLocal
+from karl.db.session import SessionLocal, engine
 from karl.config import settings
+
+
+@event.listens_for(engine, "connect")
+def connect(dbapi_connection, connection_record):
+    connection_record.info['pid'] = os.getpid()
+
+
+@event.listens_for(engine, "checkout")
+def checkout(dbapi_connection, connection_record, connection_proxy):
+    pid = os.getpid()
+    if connection_record.info['pid'] != pid:
+        connection_record.connection = connection_proxy.connection = None
+        raise exc.DisconnectionError(
+                "Connection record belongs to pid %s, "
+                "attempting to check out in pid %s" %
+                (connection_record.info['pid'], pid)
+        )
 
 
 class KARLScheduler:
@@ -157,8 +177,9 @@ class KARLScheduler:
     def get_curr_user_vector(
         self,
         user_id: str,
-        session: Session = SessionLocal(),
     ) -> CurrUserFeatureVector:
+        session = SessionLocal()
+
         v_user = session.query(CurrUserFeatureVector).get(user_id)
         if v_user is None:
             v_user = CurrUserFeatureVector(
@@ -177,8 +198,9 @@ class KARLScheduler:
     def get_curr_card_vector(
         self,
         card_id: str,
-        session: Session = SessionLocal(),
     ) -> CurrCardFeatureVector:
+        session = SessionLocal()
+
         v_card = session.query(CurrCardFeatureVector).get(card_id)
         if v_card is None:
             v_card = CurrCardFeatureVector(
@@ -198,8 +220,9 @@ class KARLScheduler:
         self,
         user_id: str,
         card_id: str,
-        session: Session = SessionLocal(),
     ) -> CurrUserCardFeatureVector:
+        session = SessionLocal()
+
         v_usercard = session.query(CurrUserCardFeatureVector).get((user_id, card_id))
         if v_usercard is None:
             v_usercard = CurrUserCardFeatureVector(
@@ -262,10 +285,15 @@ class KARLScheduler:
                 v_usercard = self.get_curr_usercard_vector(user.id, card.id)
                 feature_vectors.append(self.vectors_to_features(v_usercard, v_user, v_card, date))
         else:
-            executor = ProcessPoolExecutor(mp_context=multiprocessing.get_context('spawn'))
+            executor = ProcessPoolExecutor(
+                mp_context=multiprocessing.get_context(settings.MP_CONTEXT),
+                initializer=engine.dispose,
+            )
+            v_card_futures, v_usercard_futures = [], []
             for card in cards:
-                v_card_future = executor.submit(self.get_curr_card_vector, card.id)
-                v_usercard_future = executor.submit(self.get_curr_usercard_vector, user.id, card.id)
+                v_card_futures.append(executor.submit(self.get_curr_card_vector, card.id))
+                v_usercard_futures.append(executor.submit(self.get_curr_usercard_vector, user.id, card.id))
+            for v_card_future, v_usercard_future in zip(v_card_futures, v_usercard_futures):
                 feature_vectors.append(self.vectors_to_features(v_usercard_future.result(), v_user, v_card_future.result(), date))
 
         t1 = datetime.now(pytz.utc)
@@ -364,11 +392,12 @@ class KARLScheduler:
         user_id: str,
         card_id: str,
         date: datetime,
-        session: Session = SessionLocal(),
     ) -> None:
         v_user = self.get_curr_user_vector(user_id)
         v_card = self.get_curr_card_vector(card_id)
         v_usercard = self.get_curr_usercard_vector(user_id, card_id)
+
+        session = SessionLocal()
 
         delta_usercard = None
         if v_usercard.previous_study_date is not None:
@@ -421,6 +450,7 @@ class KARLScheduler:
                 previous_study_date=v_card.previous_study_date,
                 previous_study_response=v_card.previous_study_response,
             ))
+        session.close()
 
     def update(
         self,
@@ -491,7 +521,13 @@ class KARLScheduler:
         v_card.previous_study_date = date
         v_card.previous_study_response = record.response
 
-    def update_user_stats(self, record: Record, utc_date, deck_id: str, session: Session):
+    def update_user_stats(
+        self,
+        record: Record,
+        utc_date,
+        deck_id: str,
+        session: Session,
+    ):
         # get the latest user_stat ordered by date
         curr_stats = session.query(UserStats).\
             filter(UserStats.user_id == record.user_id).\

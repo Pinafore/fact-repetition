@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+import os
 import json
 import time
 import pytz
@@ -14,9 +15,10 @@ from datetime import datetime
 from fastapi import FastAPI, Depends
 from dateutil.parser import parse as parse_date
 from cachetools import cached, TTLCache
-# from concurrent.futures import ProcessPoolExecutor
-from functools import partial
+from concurrent.futures import ProcessPoolExecutor
 from sqlalchemy.orm import Session
+from sqlalchemy import event
+from sqlalchemy import exc
 
 from karl.schemas import UserStatsSchema, RankingSchema, LeaderboardSchema, \
     OldParametersSchema, ParametersSchema, \
@@ -25,6 +27,23 @@ from karl.models import User, UserStats, Parameters
 from karl.scheduler import KARLScheduler
 from karl.db.session import SessionLocal, engine
 from karl.config import settings
+
+
+@event.listens_for(engine, "connect")
+def connect(dbapi_connection, connection_record):
+    connection_record.info['pid'] = os.getpid()
+
+
+@event.listens_for(engine, "checkout")
+def checkout(dbapi_connection, connection_record, connection_proxy):
+    pid = os.getpid()
+    if connection_record.info['pid'] != pid:
+        connection_record.connection = connection_proxy.connection = None
+        raise exc.DisconnectionError(
+                "Connection record belongs to pid %s, "
+                "attempting to check out in pid %s" %
+                (connection_record.info['pid'], pid)
+        )
 
 
 app = FastAPI()
@@ -58,7 +77,7 @@ def get_session() -> Generator:
 
 @app.put('/api/karl/set_params', response_model=ParametersSchema)
 def set_params(
-    env: str,
+    # env: str,
     user_id: str,
     params: OldParametersSchema,
     session: Session = Depends(get_session),
@@ -93,7 +112,7 @@ def set_params(
 
 @app.get('/api/karl/get_params', response_model=ParametersSchema)
 def get_params(
-    env: str,
+    # env: str,
     user_id: str,
     session: Session = Depends(get_session),
 ) -> ParametersSchema:
@@ -105,7 +124,7 @@ def get_params(
 
 @app.put('/api/karl/set_repetition_model', response_model=ParametersSchema)
 def set_repetition_model(
-    env: str,
+    # env: str,
     user_id: str,
     repetition_model: str,
     session: Session = Depends(get_session),
@@ -180,38 +199,38 @@ def set_repetition_model(
 @app.get('/api/karl/get_user_stats', response_model=UserStatsSchema)
 # @cached(cache=TTLCache(maxsize=1024, ttl=600))
 def get_user_stats(
+    # env: str,
     user_id: str,
     deck_id: str = None,
     min_studied: int = 0,
     date_start: str = '2008-06-01 08:00:00+00:00',
     date_end: str = '2038-06-01 08:00:00+00:00',
-    env: str = None,
-    session: Session = Depends(get_session),
 ) -> UserStatsSchema:
-    return _get_user_stats(
+    # print('user_stats starts at', time.strftime('%X'), f'tid={threading.get_ident()}', f'pid={getpid()}')
+    stats = _get_user_stats(
         user_id,
         deck_id,
         min_studied,
         date_start,
         date_end,
-        env,
-        session,
+        True,
     )
+    # print('user_stats finishes at', time.strftime('%X'), f'tid={threading.get_ident()}', f'pid={getpid()}')
+    return stats
 
 
 def _get_user_stats(
+    # env: str,
     user_id: str,
     deck_id: str = None,
     min_studied: int = 0,
     date_start: str = '2008-06-01 08:00:00+00:00',
     date_end: str = '2038-06-01 08:00:00+00:00',
-    env: str = None,
-    session: Session = None,
+    from_user_stats: bool = False
 ) -> UserStatsSchema:
-    close_session = False
-    if session is None:
-        close_session = True
-        session = SessionLocal()
+    session = SessionLocal()
+
+    # print('_user_stats', from_user_stats, f'tid={threading.get_ident()}', f'pid={getpid()}', session.hash_key)
 
     date_start = parse_date(date_start).date()
     date_end = parse_date(date_end).date()
@@ -236,8 +255,7 @@ def _get_user_stats(
         first()
 
     if after is None or after.date < date_start:
-        if close_session:
-            session.close()
+        session.close()
 
         return UserStatsSchema(
             user_id=user_id,
@@ -346,8 +364,7 @@ def _get_user_stats(
         n_days_studied=n_days_studied,
     )
 
-    if close_session:
-        session.close()
+    session.close()
 
     return user_stat_schema
 
@@ -355,8 +372,8 @@ def _get_user_stats(
 @app.get('/api/karl/leaderboard', response_model=LeaderboardSchema)
 # @cached(cache=TTLCache(maxsize=1024, ttl=1800))
 def get_leaderboard(
+    # env: str,
     user_id: str = None,
-    env: str = None,
     skip: int = 0,
     limit: int = 10,
     rank_type: str = 'total_seen',
@@ -364,8 +381,10 @@ def get_leaderboard(
     deck_id: str = None,
     date_start: str = '2008-06-01 08:00:00+00:00',
     date_end: str = '2038-06-01 08:00:00+00:00',
-    session: Session = Depends(get_session),
 ) -> LeaderboardSchema:
+    session = SessionLocal()
+    # print('leaderboard starts at', time.strftime('%X'), f'tid={threading.get_ident()}', f'pid={getpid()}', session.hash_key)
+
     stats = {}
     if not settings.USE_MULTIPROCESSING:
         stats = {}
@@ -373,28 +392,31 @@ def get_leaderboard(
             if not user.id.isdigit():
                 continue
 
-            stats[user.id] = get_user_stats(
+            stats[user.id] = _get_user_stats(
                 user_id=user.id,
                 deck_id=deck_id,
                 min_studied=min_studied,
                 date_start=date_start,
                 date_end=date_end,
-                session=session,
             )
     else:
-        user_ids = [user.id for user in session.query(User) if user.id.isdigit()]
-        worker = partial(
-            _get_user_stats,
-            deck_id=deck_id,
-            min_studied=min_studied,
-            date_start=date_start,
-            date_end=date_end,
+        executor = ProcessPoolExecutor(
+            mp_context=multiprocessing.get_context(settings.MP_CONTEXT),
+            initializer=engine.dispose,
         )
-        with multiprocessing.get_context('spawn').Pool() as pool:
-            stat_list = pool.map(worker, user_ids)
-
-        for user_id, stat in zip(user_ids, stat_list):
-            stats[user_id] = stat
+        for user in session.query(User):
+            if not user.id.isdigit():
+                continue
+            stats[user.id] = executor.submit(
+                _get_user_stats,
+                user_id=user.id,
+                deck_id=deck_id,
+                min_studied=min_studied,
+                date_start=date_start,
+                date_end=date_end,
+            )
+        for user_id, future in stats.items():
+            stats[user_id] = future.result()
 
     # from high value to low
     stats = sorted(stats.items(), key=lambda x: x[1].__dict__[rank_type])[::-1]
@@ -410,6 +432,7 @@ def get_leaderboard(
             rank=i + 1,
             value=v.__dict__[rank_type]
         ))
+    session.close()
 
     return LeaderboardSchema(
         leaderboard=rankings[skip: skip + limit],
@@ -428,6 +451,8 @@ def schedule(
     schedule_requests: List[ScheduleRequestSchema],
     session: Session = Depends(get_session),
 ) -> ScheduleResponseSchema:
+    # print('schedule starts at', time.strftime('%X'), f'tid={threading.get_ident()}', f'pid={getpid()}')
+
     if schedule_requests[0].date is not None:
         date = parse_date(schedule_requests[0].date)
     else:
@@ -450,6 +475,7 @@ def update(
         date = datetime.now(pytz.utc)
     scheduler.update(session, update_request, date)
     session.commit()
+    return
 
 
 @app.get('/api/karl/status')
@@ -460,10 +486,14 @@ def status():
 @atexit.register
 def dispose():
     engine.dispose()
+    return
 
 @app.get('/api/karl/wait_and_print')
 def wait_and_print(wait: int, what: str):
-    print('wait and print starts at', time.strftime('%X'), threading.get_ident(), getpid())
+    print('wait and print starts at', time.strftime('%X'), f'tid={threading.get_ident()}', f'pid={getpid()}')
+
     time.sleep(wait)
+
     print(what)
-    print('wait and print finishes at', time.strftime('%X'), threading.get_ident(), getpid())
+    print('wait and print finishes at', time.strftime('%X'), f'tid={threading.get_ident()}', f'pid={getpid()}')
+    return
