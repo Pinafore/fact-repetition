@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-import os
 import json
 import time
 import pytz
@@ -17,8 +16,6 @@ from dateutil.parser import parse as parse_date
 from cachetools import cached, TTLCache
 from concurrent.futures import ProcessPoolExecutor
 from sqlalchemy.orm import Session
-from sqlalchemy import event
-from sqlalchemy import exc
 
 from karl.schemas import UserStatsSchema, RankingSchema, LeaderboardSchema, \
     OldParametersSchema, ParametersSchema, \
@@ -27,23 +24,6 @@ from karl.models import User, UserStats, Parameters
 from karl.scheduler import KARLScheduler
 from karl.db.session import SessionLocal, engine
 from karl.config import settings
-
-
-@event.listens_for(engine, "connect")
-def connect(dbapi_connection, connection_record):
-    connection_record.info['pid'] = os.getpid()
-
-
-@event.listens_for(engine, "checkout")
-def checkout(dbapi_connection, connection_record, connection_proxy):
-    pid = os.getpid()
-    if connection_record.info['pid'] != pid:
-        connection_record.connection = connection_proxy.connection = None
-        raise exc.DisconnectionError(
-                "Connection record belongs to pid %s, "
-                "attempting to check out in pid %s" %
-                (connection_record.info['pid'], pid)
-        )
 
 
 app = FastAPI()
@@ -65,6 +45,15 @@ ch.setFormatter(formatter)
 # add the handlers to the logger
 logger.addHandler(fh)
 logger.addHandler(ch)
+
+
+def conditional_decorator(dec, condition, **kwargs):
+    def decorator(func):
+        if not condition:
+            # Return the function unchanged, not decorated.
+            return func(**kwargs)
+        return dec(func)
+    return decorator
 
 
 def get_session() -> Generator:
@@ -197,7 +186,6 @@ def set_repetition_model(
 
 
 @app.get('/api/karl/get_user_stats', response_model=UserStatsSchema)
-# @cached(cache=TTLCache(maxsize=1024, ttl=600))
 def get_user_stats(
     # env: str,
     user_id: str,
@@ -370,7 +358,7 @@ def _get_user_stats(
 
 
 @app.get('/api/karl/leaderboard', response_model=LeaderboardSchema)
-# @cached(cache=TTLCache(maxsize=1024, ttl=1800))
+# @cached(cache=TTLCache(maxsize=1024, ttl=600))
 def get_leaderboard(
     # env: str,
     user_id: str = None,
