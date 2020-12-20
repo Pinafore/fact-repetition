@@ -3,15 +3,17 @@ import os
 import bisect
 import numpy as np
 import pandas as pd
+import altair as alt
 from tqdm import tqdm
 from datetime import timedelta
 from dateutil.parser import parse as parse_date
-import altair as alt
+from sqlalchemy.orm import Session
+
+from karl.models import User, Record
+from karl.db.session import SessionLocal
+
 alt.data_transformers.disable_max_rows()
 alt.renderers.enable('mimetype')
-
-from karl.util import get_session_makers
-from karl.models import User, Record, UserSnapshot
 
 
 def save_chart_and_pdf(chart, path):
@@ -20,9 +22,9 @@ def save_chart_and_pdf(chart, path):
 
 
 def get_record_df(
-    session,
     date_start: str = '2020-08-23',
     date_end: str = '2024-08-23',
+    session: Session = SessionLocal()
 ):
     '''Gather records into a DataFrame'''
     user_start_date = {}  # user_id -> first day of study

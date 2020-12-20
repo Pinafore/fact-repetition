@@ -400,6 +400,7 @@ class KARLScheduler:
         delta_user = None
         if v_user.previous_study_date is not None:
             delta_user = (date - v_user.previous_study_date).total_seconds()
+        params = ParametersSchema(**session.query(User).get(user_id).parameters.__dict__)
         session.add(
             UserFeatureVector(
                 id=record_id,
@@ -412,6 +413,7 @@ class KARLScheduler:
                 previous_delta=v_user.previous_delta,
                 previous_study_date=v_user.previous_study_date,
                 previous_study_response=v_user.previous_study_response,
+                parameters=json.dumps(params.__dict__)
             ))
 
         delta_card = None
