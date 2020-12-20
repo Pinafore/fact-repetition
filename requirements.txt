@@ -1,6 +1,7 @@
 uvicorn
 fastapi
 sqlalchemy
+alembic
 pytz
 python-dateutil
 cachetools

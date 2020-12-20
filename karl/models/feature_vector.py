@@ -1,4 +1,5 @@
 from sqlalchemy import Column, ForeignKey, Integer, Boolean, String, TIMESTAMP
+from sqlalchemy.dialects.postgresql import JSONB
 
 from karl.db.base_class import Base
 from karl.models import User, Card, Record
@@ -29,6 +30,7 @@ class UserFeatureVector(Base):
     previous_delta = Column(Integer)
     previous_study_date = Column(TIMESTAMP(timezone=True))
     previous_study_response = Column(Boolean)
+    parameters = Column(JSONB)
 
 
 class CardFeatureVector(Base):
