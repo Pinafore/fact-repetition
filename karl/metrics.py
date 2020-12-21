@@ -3,7 +3,6 @@ import os
 import json
 import pytz
 import bisect
-import numpy as np
 import pandas as pd
 import altair as alt
 import multiprocessing
@@ -175,10 +174,6 @@ def get_processed_df(
     n_bins = int((df.n_minutes_spent.max()) // n_minutes_bin_size + 1)
     n_minutes_bins = [i * n_minutes_bin_size for i in range(n_bins)]
     df['n_minutes_spent_binned'] = df.n_facts_shown.apply(func(n_minutes_bins))
-
-    # df.date = df.date.astype(np.datetime64)
-    # df.datetime = df.datetime.astype(np.datetime64)
-    # df.date_binned = df.date_binned.astype(np.datetime64)
 
     '''Compute derivative metrics'''
     df['n_new_facts_correct'] = df.groupby('user_id', group_keys=False).apply(lambda x: x.is_new_fact & x.result)
@@ -583,6 +578,9 @@ def get_user_charts(
         order_by(Record.date)
 
     for record in records:
+        if record.response is None:
+            continue
+
         if record.card_id not in correct_on_first_try:
             correct_on_first_try[record.card_id] = record.response
 
@@ -642,8 +640,8 @@ def get_user_charts(
     source = pd.merge(source, df_right, how='left', on='datetime')
 
     source['date'] = source['datetime'].apply(lambda x: x.date())
-    # source.date = pd.to_datetime(source.date)
-    # source.datetime = pd.to_datetime(source.datetime)
+    source.date = pd.to_datetime(source.date, utc=True)
+    source.datetime = pd.to_datetime(source.datetime, utc=True)
 
     source = source.replace({
         'level': {
@@ -700,8 +698,8 @@ def get_user_charts(
     ]).drop(['index_x', 'index_y'], axis=1)
     source['ratio'] = source.value_x / (source.value_x + source.value_y)
     source['date'] = source['datetime'].apply(lambda x: x.date())
-    # source.date = pd.to_datetime(source.date)
-    # source.datetime = pd.to_datetime(source.datetime)
+    source.date = pd.to_datetime(source.date, utc=True)
+    source.datetime = pd.to_datetime(source.datetime, utc=True)
     chart = alt.Chart(source).mark_line().encode(
         alt.X('date', title='Date'),
         alt.Y('mean(ratio)', title='Recall rate'),
@@ -712,15 +710,12 @@ def get_user_charts(
     ).configure_legend(
         labelFontSize=15,
     )
-
     # .properties(
     #     title=f'user: {user.user_id} {repetition_model}'
     # )
-
     charts['user_level_ratio'] = chart
 
     session.close()
-
     return charts
 
 
@@ -741,6 +736,9 @@ def figure_n_users_and_records(
     n_records = 0
     curr_date = records.first().date.date()
     for record in records:
+        if record.result is None:
+            continue
+
         date = record.date.date()
         user_ids.add(record.user_id)
         if date != curr_date:
@@ -833,39 +831,23 @@ def figure_n_users_and_records(
     chart.save(f'{output_path}/n_users_and_n_records.json')
 
 
-# %%
-df = get_processed_df()
-# %%
-output_path = '/fs/clip-quiz/shifeng/karl-dev/figures'
-# figure_new_old_successful_failed(df, output_path)
-# figure_model_level_vs_effort(df, output_path)
-# figure_model_level_ratio(df, output_path)
-# figure_karl100_vs_karl85_level_ratio(df, output_path)
-for user_id in ['463', '413', '123', '38']:
-    charts = get_user_charts(user_id)
-    charts['user_level_vs_effort'].save(f'{output_path}/{user_id}_user_level_vs_effort.json')
-    charts['user_level_ratio'].save(f'{output_path}/{user_id}_user_level_ratio.json')
-
-# %%
-
 def figures():
-    output_path = 'figures'
-    session = SessionLocal()
-
+    output_path = '/fs/clip-quiz/shifeng/karl-dev/figures'
     date_start = '2020-08-23'
     date_end = '2020-12-21'
-    # figure_n_users_and_records(session, output_path, date_start, date_end)
 
-    df = get_processed_df(session=session, date_start=date_start, date_end=date_end)
+    df = get_processed_df(date_start=date_start, date_end=date_end)
+
+    figure_n_users_and_records(output_path, date_start, date_end)
     figure_new_old_successful_failed(df, output_path)
-    # figure_model_level_vs_effort(df, output_path)
-    # figure_model_level_ratio(df, output_path)
-    # figure_karl100_vs_karl85_level_ratio(df, output_path)
+    figure_model_level_vs_effort(df, output_path)
+    figure_model_level_ratio(df, output_path)
+    figure_karl100_vs_karl85_level_ratio(df, output_path)
 
-    # for user_id in ['463', '413', '123', '38']:
-    #     charts = get_user_charts(session, user_id)
-    #     charts['user_level_vs_effort'].save(f'{output_path}/{user_id}_user_level_vs_effort.json')
-    #     charts['user_level_ratio'].save(f'{output_path}/{user_id}_user_level_ratio.json')
+    for user_id in ['463', '413', '123', '38']:
+        charts = get_user_charts(user_id)
+        charts['user_level_vs_effort'].save(f'{output_path}/{user_id}_user_level_vs_effort.json')
+        charts['user_level_ratio'].save(f'{output_path}/{user_id}_user_level_ratio.json')
 
 
 if __name__ == '__main__':
