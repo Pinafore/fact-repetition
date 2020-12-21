@@ -52,15 +52,18 @@ def get_record_df(
         #         filter(Record.date <= date_end).\
         #         order_by(Record.date):
         for record in user.records:
+            feature_vector = session.query(UserFeatureVector).get(record.id)
+            if feature_vector is None:
+                continue
+            repetition_model = ParametersSchema(**json.loads(feature_vector.parameters)).repetition_model
             elapsed_seconds = record.elapsed_milliseconds_text / 1000
             elapsed_seconds += record.elapsed_milliseconds_answer / 1000
             elapsed_minutes = elapsed_seconds / 60
-            user_snapshot = session.query(UserSnapshot).get(record.debug_id)
             rows.append({
                 'record_id': record.record_id,
                 'user_id': user.user_id,
                 'fact_id': record.fact_id,
-                'repetition_model': user_snapshot.params.repetition_model,
+                'repetition_model': repetition_model,
                 'is_new_fact': record.is_new_fact,
                 'result': record.response,
                 'datetime': record.date,
