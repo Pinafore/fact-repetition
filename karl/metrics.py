@@ -553,110 +553,19 @@ def figure_karl100_vs_karl85_level_ratio(
 
 
 def get_user_charts(
+    df: pd.DataFrame,
     user_id: str,
     deck_id: str = None,
-    date_start: str = '2008-06-01 08:00:00.000001 -0400',
-    date_end: str = '2038-06-01 08:00:00.000001 -0400',
     session: Session = SessionLocal(),
 ):
-    # returns a dict of chart_name -> chart
-
-    '''Gather records into a single dataframe'''
-    correct_on_first_try = {}
-    rows = []
-
-    date_start = parse_date(date_start)
-    date_end = parse_date(date_end)
-
-    records = session.query(Record).\
-        filter(Record.user_id == user_id)
+    df = df[df.user_id == user_id]
     if deck_id is not None:
-        records = records.filter(Record.deck_id == deck_id)
-    records = records.\
-        filter(Record.date >= date_start).\
-        filter(Record.date <= date_end).\
-        order_by(Record.date)
-
-    for record in records:
-        if record.response is None:
-            continue
-
-        if record.card_id not in correct_on_first_try:
-            correct_on_first_try[record.card_id] = record.response
-
-        v_user = session.query(UserFeatureVector).get(record.id)
-        v_usercard = session.query(UserCardFeatureVector).get(record.id)
-        if v_user is None or v_usercard is None:
-            continue
-
-        repetition_model = ParametersSchema(**json.loads(v_user.parameters)).repetition_model
-        leitner_box = 0 if v_usercard.leitner_box is None else v_usercard.leitner_box
-
-        rows.append({
-            'record_id': record.id,
-            'user_id': user_id,
-            'card_id': record.card_id,
-            'repetition_model': repetition_model,
-            'is_new_fact': record.is_new_fact,
-            'result': record.response,
-            'datetime': record.date,
-            'elapsed_milliseconds': record.elapsed_milliseconds_text + record.elapsed_milliseconds_answer,
-            'is_known_fact': correct_on_first_try[record.card_id],
-            'leitner_box': leitner_box,
-        })
-    df = pd.DataFrame(rows).sort_values('datetime', axis=0)
-
-    df['initial_O_'] = df.apply(lambda x: (x.leitner_box == 0) & x.result, axis=1)
-    df['initial_X_'] = df.apply(lambda x: (x.leitner_box == 0) & ~x.result, axis=1)
-    df['initial_O'] = df['initial_O_'].cumsum()
-    df['initial_X'] = df['initial_X_'].cumsum()
-    progress_names = ['initial_O', 'initial_X']
-    for i in df.leitner_box.unique():
-        if i == 0:
-            continue
-        df[f'level_{i}_O_'] = df.apply(lambda x: (x.leitner_box == i) & x.result & (~x.is_known_fact), axis=1)
-        df[f'level_{i}_X_'] = df.apply(lambda x: (x.leitner_box == i) & (~x.result) & (~x.is_known_fact), axis=1)
-        df[f'level_{i}_O'] = df[f'level_{i}_O_'].cumsum()
-        df[f'level_{i}_X'] = df[f'level_{i}_X_'].cumsum()
-        progress_names += [f'level_{i}_O', f'level_{i}_X']
+        df = df[df.deck_id == deck_id]
 
     charts = {}  # chart name -> chart
+    source = df
 
-    '''Progress (count on each level) vs datetime + bars for effort'''
-    source = pd.melt(
-        df,
-        id_vars='datetime',
-        value_vars=progress_names,
-        var_name='name',
-        value_name='value',
-    ).reset_index()
-    source['type'] = source.name.apply(lambda x: 'Successful' if x[-1] == 'O' else 'Failed')
-    source['level'] = source.name.apply(lambda x: x[:-2])
-
-    df_right = df[df.user_id == user_id][[
-        'datetime',
-        'elapsed_milliseconds',
-    ]]
-    source = pd.merge(source, df_right, how='left', on='datetime')
-
-    source['date'] = source['datetime'].apply(lambda x: x.date())
-    source.date = pd.to_datetime(source.date, utc=True)
-    source.datetime = pd.to_datetime(source.datetime, utc=True)
-
-    source = source.replace({
-        'level': {
-            'initial': 'Initial',
-            'level_1': 'Level 0',
-            'level_2': 'Level 1',
-            'level_3': 'Level 2',
-            'level_4': 'Level 3',
-            'level_5': 'Level 4',
-            'level_6': 'Level 5',
-            'level_7': 'Level 6',
-            'level_8': 'Level 7',
-            'level_9': 'Level 8',
-        },
-    })
+    t2 = datetime.now()
 
     selection = alt.selection_multi(fields=['level'], bind='legend')
     base = alt.Chart(source).encode(
@@ -684,12 +593,13 @@ def get_user_charts(
     ).configure_legend(
         labelFontSize=15,
     )
-
-    # .properties(
-    #     title=f'user: {user.user_id} {repetition_model}'
-    # )
-
+    .properties(
+        title=f'user: {user.user_id} {repetition_model}'
+    )
     charts['user_level_vs_effort'] = chart
+
+    t3 = datetime.now()
+    print('===== level vs effort', t3 - t2)
 
     df_left = source[source.type == 'Successful'].drop(['name', 'date'], axis=1)
     df_right = source[source.type == 'Failed'].drop(['name', 'date'], axis=1)
@@ -710,12 +620,14 @@ def get_user_charts(
     ).configure_legend(
         labelFontSize=15,
     )
-    # .properties(
-    #     title=f'user: {user.user_id} {repetition_model}'
-    # )
+    .properties(
+        title=f'user: {user.user_id} {repetition_model}'
+    )
     charts['user_level_ratio'] = chart
 
-    session.close()
+    t4 = datetime.now()
+    print('===== level vs ratio', t4 - t3)
+
     return charts
 
 
@@ -831,27 +743,88 @@ def figure_n_users_and_records(
     chart.save(f'{output_path}/n_users_and_n_records.json')
 
 
-def figures():
-    output_path = '/fs/clip-quiz/shifeng/karl-dev/figures'
-    date_start = '2020-08-23'
-    date_end = '2020-12-21'
+def get_user_progress_df():
+    df = get_processed_df()
+    df = df.sort_values('datetime', axis=0)
 
-    df = get_processed_df(date_start=date_start, date_end=date_end)
+    df['initial_O_'] = df.apply(lambda x: (x.leitner_box == 0) & x.result, axis=1)
+    df['initial_X_'] = df.apply(lambda x: (x.leitner_box == 0) & ~x.result, axis=1)
+    df['initial_O'] = df.groupby('user_id')['initial_O_'].cumsum()
+    df['initial_X'] = df.groupby('user_id')['initial_X_'].cumsum()
+    progress_names = ['initial_O', 'initial_X']
+    for i in df.leitner_box.unique():
+        if i == 0:
+            continue
+        df[f'level_{i}_O_'] = df.apply(lambda x: (x.leitner_box == i) & x.result & (~x.is_known_fact), axis=1)
+        df[f'level_{i}_X_'] = df.apply(lambda x: (x.leitner_box == i) & (~x.result) & (~x.is_known_fact), axis=1)
+        df[f'level_{i}_O'] = df.groupby('user_id')[f'level_{i}_O_'].cumsum()
+        df[f'level_{i}_X'] = df.groupby('user_id')[f'level_{i}_X_'].cumsum()
+        progress_names += [f'level_{i}_O', f'level_{i}_X']
 
-    figure_n_users_and_records(output_path, date_start, date_end)
-    figure_new_old_successful_failed(df, output_path)
-    figure_model_level_vs_effort(df, output_path)
-    figure_model_level_ratio(df, output_path)
-    figure_karl100_vs_karl85_level_ratio(df, output_path)
+    source = pd.melt(
+        df,
+        id_vars=['datetime', 'user_id'],
+        value_vars=progress_names,
+        var_name='name',
+        value_name='value',
+    ).reset_index()
+    source['type'] = source.name.apply(lambda x: 'Successful' if x[-1] == 'O' else 'Failed')
+    source['level'] = source.name.apply(lambda x: x[:-2])
 
-    for user_id in ['463', '413', '123', '38']:
-        charts = get_user_charts(user_id)
-        charts['user_level_vs_effort'].save(f'{output_path}/{user_id}_user_level_vs_effort.json')
-        charts['user_level_ratio'].save(f'{output_path}/{user_id}_user_level_ratio.json')
+    df_right = df[[
+        'user_id',
+        'datetime',
+        'elapsed_milliseconds',
+    ]]
+
+    source = pd.merge(source, df_right, how='left', on=['datetime', 'user_id'])
+
+    source['date'] = source['datetime'].apply(lambda x: x.date())
+    source.date = pd.to_datetime(source.date, utc=True)
+    source.datetime = pd.to_datetime(source.datetime, utc=True)
+
+    source = source.replace({
+        'level': {
+            'initial': 'Initial',
+            'level_1': 'Level 0',
+            'level_2': 'Level 1',
+            'level_3': 'Level 2',
+            'level_4': 'Level 3',
+            'level_5': 'Level 4',
+            'level_6': 'Level 5',
+            'level_7': 'Level 6',
+            'level_8': 'Level 7',
+            'level_9': 'Level 8',
+        },
+    })
+    return source
+
+
+# def figures():
+#     output_path = '/fs/clip-quiz/shifeng/karl-dev/figures'
+#     date_start = '2020-08-23'
+#     date_end = '2020-12-21'
+#
+#     df = get_processed_df(date_start=date_start, date_end=date_end)
+#     user_processed_df = get_user_df(df)
+#     user_processed_df.to_hdf('user_processed_df.h5', key='df', mode='w')
+#
+#     figure_n_users_and_records(output_path, date_start, date_end)
+#     figure_new_old_successful_failed(df, output_path)
+#     figure_model_level_vs_effort(df, output_path)
+#     figure_model_level_ratio(df, output_path)
+#     figure_karl100_vs_karl85_level_ratio(df, output_path)
+#
+#     for user_id in ['463', '413', '123', '38']:
+#         charts = get_user_charts(user_id)
+#         charts['user_level_vs_effort'].save(f'{output_path}/{user_id}_user_level_vs_effort.json')
+#         charts['user_level_ratio'].save(f'{output_path}/{user_id}_user_level_ratio.json')
 
 
 if __name__ == '__main__':
-    figures()
+    # figures()
+    df = get_user_progress_df()
+    df.to_hdf('/fs/clip-quiz/shifeng/karl-dev/user_processed_df.h5', key='df', mode='w')
 
 
 """

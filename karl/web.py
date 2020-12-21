@@ -6,6 +6,7 @@ import pytz
 import logging
 import atexit
 import multiprocessing
+import pandas as pd
 from typing import Generator, List
 from datetime import datetime
 from fastapi import FastAPI, Depends
@@ -22,11 +23,12 @@ from karl.models import User, UserStats, Parameters
 from karl.scheduler import KARLScheduler
 from karl.db.session import SessionLocal, engine
 from karl.config import settings
-from karl.metrics import get_user_charts
+from karl import metrics
 
 
 app = FastAPI()
 scheduler = KARLScheduler()
+user_progress_df = pd.read_hdf(f'{settings.CODE_DIR}/user_processed_df.h5', 'df')
 
 # create logger with 'scheduler'
 logger = logging.getLogger('scheduler')
@@ -465,24 +467,22 @@ def update(
     return
 
 
-@app.get('/api/karl/user_charts')
-def user_charts(
+@app.get('/api/karl/get_user_charts')
+def get_user_charts(
+    # env: str = None,
     user_id: str = None,
-    env: str = None,
     deck_id: str = None,
-    date_start: str = '2008-06-01 08:00:00.000001 -0400',
-    date_end: str = '2038-06-01 08:00:00.000001 -0400',
+    date_start: str = '2008-06-01 08:00:00+00:00',
+    date_end: str = '2038-06-01 08:00:00+00:00',
     session: Session = Depends(get_session),
 ) -> List[Visualization]:
-    # env = 'dev' if env == 'dev' else 'prod'
-    # session = get_session(env)
 
-    charts = get_user_charts(
-        session=session,
+    charts = metrics.get_user_charts(
+        df=user_progress_df,
         user_id=user_id,
         deck_id=deck_id,
-        date_start=date_start,
-        date_end=date_end,
+        # date_start=date_start,
+        # date_end=date_end,
     )
 
     visualizations = []
@@ -492,7 +492,6 @@ def user_charts(
                 name=chart_name,
                 specs=chart.to_json(),
                 user_id=user_id,
-                env=env,
                 deck_id=deck_id,
                 date_start=date_start,
                 date_end=date_end,
