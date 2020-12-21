@@ -556,10 +556,17 @@ def get_user_charts(
     df: pd.DataFrame,
     user_id: str,
     deck_id: str = None,
+    date_start: str = '2020-08-23',
+    date_end: str = '2024-08-23',
 ):
+    date_start = parse_date(date_start).astimezone(pytz.utc)
+    date_end = parse_date(date_end).astimezone(pytz.utc)
+
     df = df[df.user_id == user_id]
     if deck_id is not None:
         df = df[df.deck_id == deck_id]
+    df = df[df.date >= date_start]
+    df = df[df.date <= date_end]
 
     charts = {}  # chart name -> chart
     source = df
