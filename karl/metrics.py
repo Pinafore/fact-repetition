@@ -1,16 +1,22 @@
 # %%
 import os
+import json
+import pytz
 import bisect
 import numpy as np
 import pandas as pd
 import altair as alt
-from tqdm import tqdm
-from datetime import timedelta
+import multiprocessing
+from typing import Dict
+from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_date
+from concurrent.futures import ProcessPoolExecutor
 from sqlalchemy.orm import Session
 
-from karl.models import User, Record
-from karl.db.session import SessionLocal
+from karl.models import User, Record, UserFeatureVector, UserCardFeatureVector
+from karl.schemas import ParametersSchema
+from karl.db.session import SessionLocal, engine
+from karl.config import settings
 
 alt.data_transformers.disable_max_rows()
 alt.renderers.enable('mimetype')
@@ -21,64 +27,112 @@ def save_chart_and_pdf(chart, path):
     os.system(f'vl2vg {path}.json | vg2pdf > {path}.pdf')
 
 
+def _get_correct_on_first_try(
+    user_id: str,
+    session: Session = SessionLocal(),
+) -> Dict[str, bool]:
+    '''Dict of card_id -> bool of whether
+    user_id got card_id correct on the first try
+    '''
+    user = session.query(User).get(user_id)
+    correct_on_first_try = {}
+    for record in user.records:
+        if record.response is None:
+            continue
+        if record.card_id in correct_on_first_try:
+            continue
+        correct_on_first_try[record.card_id] = record.response
+
+    session.close()
+    return correct_on_first_try
+
+def _get_user_records(
+    user_id: str,
+    correct_on_first_try: dict,  # card_id -> bool
+    user_start_date: datetime,
+    session: Session = SessionLocal(),
+):
+    user = session.query(User).get(user_id)
+    rows = []
+    for record in user.records:
+        if record.response is None:
+            continue
+
+        v_user = session.query(UserFeatureVector).get(record.id)
+        v_usercard = session.query(UserCardFeatureVector).get(record.id)
+        if v_user is None or v_usercard is None:
+            continue
+
+        repetition_model = ParametersSchema(**json.loads(v_user.parameters)).repetition_model
+        leitner_box = 0 if v_usercard.leitner_box is None else v_usercard.leitner_box
+        rows.append({
+            'record_id': record.id,
+            'user_id': user_id,
+            'card_id': record.card_id,
+            'repetition_model': repetition_model,
+            'is_new_fact': record.is_new_fact,
+            'result': record.response,
+            'datetime': record.date,
+            'elapsed_milliseconds': record.elapsed_milliseconds_text + record.elapsed_milliseconds_answer,
+            'user_start_date': user_start_date,
+            'is_known_fact': correct_on_first_try[record.card_id],
+            'leitner_box': leitner_box,
+        })
+    session.close()
+    return rows
+
+
 def get_record_df(
     date_start: str = '2020-08-23',
     date_end: str = '2024-08-23',
-    session: Session = SessionLocal()
+    session: Session = SessionLocal(),
 ):
     '''Gather records into a DataFrame'''
+    executor = ProcessPoolExecutor(
+        mp_context=multiprocessing.get_context(settings.MP_CONTEXT),
+        initializer=engine.dispose,
+    )
+
+    # gather user_start_date and correct_on_first_try
     user_start_date = {}  # user_id -> first day of study
-    correct_on_first_try = {}  # user_id -> {fact_id -> bool}
-    for user in tqdm(session.query(User), total=session.query(User).count()):
-        if len(user.records) > 0:
-            user_start_date[user.user_id] = user.records[0].date.date()
-        correct_on_first_try[user.user_id] = {}
-        for record in user.records:
-            if record.fact_id in correct_on_first_try[user.user_id]:
-                continue
-            correct_on_first_try[user.user_id][record.fact_id] = record.response
+    correct_on_first_try = {}  # user_id -> {card_id -> bool}
+    for user in session.query(User):
+        if not user.id.isdigit() or len(user.records) == 0:
+            continue
+        user_start_date[user.id] = user.records[0].date.astimezone(pytz.utc).date()
+        correct_on_first_try[user.id] = executor.submit(_get_correct_on_first_try, user_id=user.id)
+    for user_id, future in correct_on_first_try.items():
+        correct_on_first_try[user_id] = future.result()
 
     date_start = parse_date(date_start)
     date_end = parse_date(date_end)
 
-    rows = []
-    for user in tqdm(session.query(User), total=session.query(User).count()):
-        if len(user.records) == 0:
+    futures = []
+    for user in session.query(User):
+        if not user.id.isdigit() or len(user.records) == 0:
             continue
+        futures.append(executor.submit(
+            _get_user_records,
+            user_id=user.id,
+            correct_on_first_try=correct_on_first_try[user.id],
+            user_start_date=user_start_date[user.id],
+        ))
 
-        # for record in session.query(Record).\
-        #         filter(Record.user_id == user.user_id).\
-        #         filter(Record.date >= date_start).\
-        #         filter(Record.date <= date_end).\
-        #         order_by(Record.date):
-        for record in user.records:
-            elapsed_seconds = record.elapsed_milliseconds_text / 1000
-            elapsed_seconds += record.elapsed_milliseconds_answer / 1000
-            elapsed_minutes = elapsed_seconds / 60
-            user_snapshot = session.query(UserSnapshot).get(record.debug_id)
-            rows.append({
-                'record_id': record.record_id,
-                'user_id': user.user_id,
-                'fact_id': record.fact_id,
-                'repetition_model': user_snapshot.params.repetition_model,
-                'is_new_fact': record.is_new_fact,
-                'result': record.response,
-                'datetime': record.date,
-                'elapsed_minutes': elapsed_minutes,
-                'user_start_date': user_start_date[user.user_id],
-                'is_known_fact': correct_on_first_try[user.user_id][record.fact_id],
-                'leitner_box': user_snapshot.leitner_box.get(record.fact_id, 0),
-            })
-    return pd.DataFrame(rows).sort_values('datetime', axis=0)
+    rows = []
+    for future in futures:
+        rows.extend(future.result())
+
+    return pd.DataFrame(rows)
 
 
 def get_processed_df(
-        session,
-        date_start: str = '2020-08-23',
-        date_end: str = '2024-08-23',
+    date_start: str = '2020-08-23',
+    date_end: str = '2024-08-23',
+    session: Session = SessionLocal(),
 ):
     '''Computer varoius x-axis and metrics'''
-    df = get_record_df(session, date_start, date_end)
+    df = get_record_df(session=session, date_start=date_start, date_end=date_end)
+    df = df.sort_values('datetime', axis=0)
     df['date'] = df['datetime'].apply(lambda x: x.date())
     '''Compute x-axis'''
     # number of total facts shown since start
@@ -86,7 +140,8 @@ def get_processed_df(
     # number of days since start
     df['n_days_since_start'] = (df.date - df.user_start_date).dt.days
     # number of total minutes
-    df['n_minutes_spent'] = df.groupby('user_id')['elapsed_minutes'].cumsum()
+    df['n_milliseconds_spent'] = df.groupby('user_id')['elapsed_milliseconds'].cumsum()
+    df['n_minutes_spent'] = df['n_milliseconds_spent'] // 60000
 
     def func(bins):
         def find_bin(n):
@@ -121,9 +176,9 @@ def get_processed_df(
     n_minutes_bins = [i * n_minutes_bin_size for i in range(n_bins)]
     df['n_minutes_spent_binned'] = df.n_facts_shown.apply(func(n_minutes_bins))
 
-    df.date = df.date.astype(np.datetime64)
-    df.datetime = df.datetime.astype(np.datetime64)
-    df.date_binned = df.date_binned.astype(np.datetime64)
+    # df.date = df.date.astype(np.datetime64)
+    # df.datetime = df.datetime.astype(np.datetime64)
+    # df.date_binned = df.date_binned.astype(np.datetime64)
 
     '''Compute derivative metrics'''
     df['n_new_facts_correct'] = df.groupby('user_id', group_keys=False).apply(lambda x: x.is_new_fact & x.result)
@@ -152,6 +207,7 @@ def get_processed_df(
             df[f'level_{i}_X'] = df.groupby('user_id')[f'level_{i}_X_'].cumsum()
             progress_names += [f'level_{i}_O', f'level_{i}_X']
     return df
+
 
 def figure_new_old_successful_failed(
     df: pd.DataFrame,
@@ -497,16 +553,16 @@ def figure_karl100_vs_karl85_level_ratio(
     )
 
     # save_chart_and_pdf(chart, 'figures/repetition_model_ratio')
-    chart.save(f'{output_path}/100vs85_level_ratio.json')
+    chart.save(f'{output_path}/karl100vs85_level_ratio.json')
     # chart.save('test.json')
 
 
 def get_user_charts(
-    session,
     user_id: str,
     deck_id: str = None,
     date_start: str = '2008-06-01 08:00:00.000001 -0400',
     date_end: str = '2038-06-01 08:00:00.000001 -0400',
+    session: Session = SessionLocal(),
 ):
     # returns a dict of chart_name -> chart
 
@@ -527,25 +583,29 @@ def get_user_charts(
         order_by(Record.date)
 
     for record in records:
-        if record.fact_id not in correct_on_first_try:
-            correct_on_first_try[record.fact_id] = record.response
-        elapsed_seconds = record.elapsed_milliseconds_text / 1000
-        elapsed_seconds += record.elapsed_milliseconds_answer / 1000
-        elapsed_minutes = elapsed_seconds / 60
-        user_snapshot = session.query(UserSnapshot).get(record.debug_id)
-        if user_snapshot is not None:
-            rows.append({
-                'record_id': record.record_id,
-                'user_id': user_id,
-                'fact_id': record.fact_id,
-                'repetition_model': user_snapshot.params.repetition_model,
-                'is_new_fact': record.is_new_fact,
-                'result': record.response,
-                'datetime': record.date,
-                'elapsed_minutes': elapsed_minutes,
-                'is_known_fact': correct_on_first_try[record.fact_id],
-                'leitner_box': user_snapshot.leitner_box.get(record.fact_id, 0),
-            })
+        if record.card_id not in correct_on_first_try:
+            correct_on_first_try[record.card_id] = record.response
+
+        v_user = session.query(UserFeatureVector).get(record.id)
+        v_usercard = session.query(UserCardFeatureVector).get(record.id)
+        if v_user is None or v_usercard is None:
+            continue
+
+        repetition_model = ParametersSchema(**json.loads(v_user.parameters)).repetition_model
+        leitner_box = 0 if v_usercard.leitner_box is None else v_usercard.leitner_box
+
+        rows.append({
+            'record_id': record.id,
+            'user_id': user_id,
+            'card_id': record.card_id,
+            'repetition_model': repetition_model,
+            'is_new_fact': record.is_new_fact,
+            'result': record.response,
+            'datetime': record.date,
+            'elapsed_milliseconds': record.elapsed_milliseconds_text + record.elapsed_milliseconds_answer,
+            'is_known_fact': correct_on_first_try[record.card_id],
+            'leitner_box': leitner_box,
+        })
     df = pd.DataFrame(rows).sort_values('datetime', axis=0)
 
     df['initial_O_'] = df.apply(lambda x: (x.leitner_box == 0) & x.result, axis=1)
@@ -577,13 +637,13 @@ def get_user_charts(
 
     df_right = df[df.user_id == user_id][[
         'datetime',
-        'elapsed_minutes',
+        'elapsed_milliseconds',
     ]]
     source = pd.merge(source, df_right, how='left', on='datetime')
 
     source['date'] = source['datetime'].apply(lambda x: x.date())
-    source.date = pd.to_datetime(source.date)
-    source.datetime = pd.to_datetime(source.datetime)
+    # source.date = pd.to_datetime(source.date)
+    # source.datetime = pd.to_datetime(source.datetime)
 
     source = source.replace({
         'level': {
@@ -606,7 +666,7 @@ def get_user_charts(
     )
     bar = base.mark_bar(opacity=0.3, color='#57A44C').encode(
         alt.Y(
-            'sum(elapsed_minutes)',
+            'sum(elapsed_milliseconds)',
             axis=alt.Axis(title='Minutes spent on app', titleColor='#57A44C')
         )
     )
@@ -618,7 +678,6 @@ def get_user_charts(
     ).add_selection(
         selection
     )
-    # repetition_model = user.records[-1].user_snapshot.params.repetition_model
     chart = alt.layer(
         bar,
         line
@@ -637,12 +696,12 @@ def get_user_charts(
     df_left = source[source.type == 'Successful'].drop(['name', 'date'], axis=1)
     df_right = source[source.type == 'Failed'].drop(['name', 'date'], axis=1)
     source = pd.merge(df_left, df_right, how='left', on=[
-        'datetime', 'level', 'elapsed_minutes',
+        'datetime', 'level', 'elapsed_milliseconds',
     ]).drop(['index_x', 'index_y'], axis=1)
     source['ratio'] = source.value_x / (source.value_x + source.value_y)
     source['date'] = source['datetime'].apply(lambda x: x.date())
-    source.date = pd.to_datetime(source.date)
-    source.datetime = pd.to_datetime(source.datetime)
+    # source.date = pd.to_datetime(source.date)
+    # source.datetime = pd.to_datetime(source.datetime)
     chart = alt.Chart(source).mark_line().encode(
         alt.X('date', title='Date'),
         alt.Y('mean(ratio)', title='Recall rate'),
@@ -660,14 +719,16 @@ def get_user_charts(
 
     charts['user_level_ratio'] = chart
 
+    session.close()
+
     return charts
 
 
 def figure_n_users_and_records(
-        session, 
-        output_path,
-        date_start: str = '2020-08-23',
-        date_end: str = '2024-08-23',
+    output_path: str,
+    date_start: str = '2020-08-23',
+    date_end: str = '2024-08-23',
+    session: Session = SessionLocal(),
 ):
     rows = []
     user_ids = set()  # to check if its new user
@@ -772,16 +833,31 @@ def figure_n_users_and_records(
     chart.save(f'{output_path}/n_users_and_n_records.json')
 
 
-def figures():
-    output_path = '/fs/clip-quiz/shifeng/ihsgnef.github.io/images'
-    session = get_sessions()['prod']
-    date_start = '2020-08-23'
-    date_end = '2020-11-01'
-    chart = figure_n_users_and_records(session, output_path, date_start, date_end)
-    save_chart_and_pdf(chart, f'figures/new_old_correct_wrong')
+# %%
+df = get_processed_df()
+# %%
+output_path = '/fs/clip-quiz/shifeng/karl-dev/figures'
+# figure_new_old_successful_failed(df, output_path)
+# figure_model_level_vs_effort(df, output_path)
+# figure_model_level_ratio(df, output_path)
+# figure_karl100_vs_karl85_level_ratio(df, output_path)
+for user_id in ['463', '413', '123', '38']:
+    charts = get_user_charts(user_id)
+    charts['user_level_vs_effort'].save(f'{output_path}/{user_id}_user_level_vs_effort.json')
+    charts['user_level_ratio'].save(f'{output_path}/{user_id}_user_level_ratio.json')
 
-    # df = get_processed_df(session, date_start, date_end)
-    # figure_new_old_successful_failed(df, output_path)
+# %%
+
+def figures():
+    output_path = 'figures'
+    session = SessionLocal()
+
+    date_start = '2020-08-23'
+    date_end = '2020-12-21'
+    # figure_n_users_and_records(session, output_path, date_start, date_end)
+
+    df = get_processed_df(session=session, date_start=date_start, date_end=date_end)
+    figure_new_old_successful_failed(df, output_path)
     # figure_model_level_vs_effort(df, output_path)
     # figure_model_level_ratio(df, output_path)
     # figure_karl100_vs_karl85_level_ratio(df, output_path)
