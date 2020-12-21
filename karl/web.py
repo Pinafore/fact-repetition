@@ -2,32 +2,33 @@
 # coding: utf-8
 
 import json
-import time
 import pytz
 import logging
 import atexit
-import threading
 import multiprocessing
-from os import getpid
+import pandas as pd
 from typing import Generator, List
 from datetime import datetime
 from fastapi import FastAPI, Depends
 from dateutil.parser import parse as parse_date
-from cachetools import cached, TTLCache
 from concurrent.futures import ProcessPoolExecutor
 from sqlalchemy.orm import Session
+# from cachetools import cached, TTLCache
 
 from karl.schemas import UserStatsSchema, RankingSchema, LeaderboardSchema, \
     OldParametersSchema, ParametersSchema, \
-    ScheduleResponseSchema, ScheduleRequestSchema, UpdateRequestSchema
+    ScheduleResponseSchema, ScheduleRequestSchema, UpdateRequestSchema, \
+    Visualization
 from karl.models import User, UserStats, Parameters
 from karl.scheduler import KARLScheduler
 from karl.db.session import SessionLocal, engine
 from karl.config import settings
+from karl import metrics
 
 
 app = FastAPI()
 scheduler = KARLScheduler()
+user_progress_df = pd.read_hdf(f'{settings.CODE_DIR}/user_progress_df.h5', 'df')
 
 # create logger with 'scheduler'
 logger = logging.getLogger('scheduler')
@@ -466,9 +467,37 @@ def update(
     return
 
 
-@app.get('/api/karl/status')
-def status():
-    return True
+@app.get('/api/karl/get_user_charts')
+def get_user_charts(
+    # env: str = None,
+    user_id: str = None,
+    deck_id: str = None,
+    date_start: str = '2008-06-01 08:00:00+00:00',
+    date_end: str = '2038-06-01 08:00:00+00:00',
+    session: Session = Depends(get_session),
+) -> List[Visualization]:
+
+    charts = metrics.get_user_charts(
+        df=user_progress_df,
+        user_id=user_id,
+        deck_id=deck_id,
+        # date_start=date_start,
+        # date_end=date_end,
+    )
+
+    visualizations = []
+    for chart_name, chart in charts.items():
+        visualizations.append(
+            Visualization(
+                name=chart_name,
+                specs=chart.to_json(),
+                user_id=user_id,
+                deck_id=deck_id,
+                date_start=date_start,
+                date_end=date_end,
+            )
+        )
+    return visualizations
 
 
 @atexit.register
@@ -476,12 +505,7 @@ def dispose():
     engine.dispose()
     return
 
-@app.get('/api/karl/wait_and_print')
-def wait_and_print(wait: int, what: str):
-    print('wait and print starts at', time.strftime('%X'), f'tid={threading.get_ident()}', f'pid={getpid()}')
 
-    time.sleep(wait)
-
-    print(what)
-    print('wait and print finishes at', time.strftime('%X'), f'tid={threading.get_ident()}', f'pid={getpid()}')
-    return
+@app.get('/api/karl/status')
+def status():
+    return True
