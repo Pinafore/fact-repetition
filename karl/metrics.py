@@ -556,7 +556,6 @@ def get_user_charts(
     df: pd.DataFrame,
     user_id: str,
     deck_id: str = None,
-    session: Session = SessionLocal(),
 ):
     df = df[df.user_id == user_id]
     if deck_id is not None:
@@ -592,9 +591,8 @@ def get_user_charts(
         y='independent'
     ).configure_legend(
         labelFontSize=15,
-    )
-    .properties(
-        title=f'user: {user.user_id} {repetition_model}'
+    ).properties(
+        title=f'user: {user_id}'
     )
     charts['user_level_vs_effort'] = chart
 
@@ -619,9 +617,8 @@ def get_user_charts(
         selection
     ).configure_legend(
         labelFontSize=15,
-    )
-    .properties(
-        title=f'user: {user.user_id} {repetition_model}'
+    ).properties(
+        title=f'user: {user_id}'
     )
     charts['user_level_ratio'] = chart
 
