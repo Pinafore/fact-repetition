@@ -382,6 +382,8 @@ class KARLScheduler:
         delta_usercard = None
         if v_usercard.previous_study_date is not None:
             delta_usercard = (date - v_usercard.previous_study_date).total_seconds()
+        leitner = session.query(Leitner).get((user_id, card_id))
+        sm2 = session.query(SM2).get((user_id, card_id))
         session.add(
             UserCardFeatureVector(
                 id=record_id,
@@ -395,6 +397,9 @@ class KARLScheduler:
                 previous_delta=v_usercard.previous_delta,
                 previous_study_date=v_usercard.previous_study_date,
                 previous_study_response=v_usercard.previous_study_response,
+                leitner_box=None if leitner is None else leitner.box,
+                leitner_scheduled_date=None if leitner is None else leitner.scheduled_date,
+                sm2_scheduled_date=None if sm2 is None else sm2.scheduled_date,
             ))
 
         delta_user = None

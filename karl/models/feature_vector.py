@@ -17,6 +17,9 @@ class UserCardFeatureVector(Base):
     previous_delta = Column(Integer)
     previous_study_date = Column(TIMESTAMP(timezone=True))
     previous_study_response = Column(Boolean)
+    leitner_box = Column(Integer)
+    leitner_scheduled_date = Column(TIMESTAMP(timezone=True))
+    sm2_scheduled_date = Column(TIMESTAMP(timezone=True))
 
 
 class UserFeatureVector(Base):
