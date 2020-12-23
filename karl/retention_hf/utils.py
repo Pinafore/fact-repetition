@@ -1,3 +1,4 @@
+# %%
 import os
 import json
 import logging
@@ -21,8 +22,6 @@ from transformers import (
     BertConfig,
     DistilBertConfig,
 )
-
-from karl.retention.data import get_split_numpy, get_split_dfs, get_questions
 
 logger = logging.getLogger(__name__)
 
@@ -57,14 +56,36 @@ class RetentionDataArguments:
         default=False, metadata={"help": "Overwrite the cached training and evaluation sets"}
     )
 
+# %%
+
+parser = HfArgumentParser((
+    ModelArguments,
+    TrainingArguments,
+    RetentionDataArguments,
+))
+
+tokenizer = DistilBertTokenizer.from_pretrained(
+    model_args.model_name_or_path,
+    cache_dir=model_args.cache_dir,
+)
+
+batch_encoding = tokenizer.batch_encode_plus(
+    [questions[row.qid] for row in df.itertuples()],
+    max_length=max_length,
+    pad_to_max_length=True,
+    truncation=True,
+)
+
+# %%
+
 
 class RetentionDataset(torch.utils.data.Dataset):
 
     def __init__(
-            self,
-            args: RetentionDataArguments,
-            fold: str,
-            tokenizer: PreTrainedTokenizer,
+        self,
+        args: RetentionDataArguments,
+        fold: str,
+        tokenizer: PreTrainedTokenizer,
     ):
         cached_features_file = os.path.join(
             args.data_dir,
@@ -126,6 +147,9 @@ class RetentionDataset(torch.utils.data.Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
         return self.features[idx]
+
+
+# %%
 
 
 def retention_data_collator(features: List[RetentionInputFeatures]) -> Dict[str, torch.Tensor]:

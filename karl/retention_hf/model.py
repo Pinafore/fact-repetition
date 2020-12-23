@@ -35,7 +35,7 @@ from transformers import (
     EvalPrediction,
 )
 
-from karl.retention_utils import (
+from karl.retention_hf.utils import (
     RetentionDataArguments,
     RetentionDataset,
     RetentionDistilBertConfig,
@@ -123,12 +123,6 @@ def train():
     # Set seed
     set_seed(training_args.seed)
 
-    # Load pretrained model and tokenizer
-    #
-    # Distributed training:
-    # The .from_pretrained methods guarantee that only one local process can concurrently
-    # download model & vocab.
-
     config = RetentionDistilBertConfig.from_pretrained(
         model_args.model_name_or_path,
         num_labels=2,
@@ -145,11 +139,6 @@ def train():
         config=config,
         cache_dir=model_args.cache_dir,
     )
-
-    # input_ids = torch.tensor(tokenizer.encode("Hello, my dog is cute", add_special_tokens=True)).unsqueeze(0)  # Batch size 1
-    # labels = torch.tensor([1]).unsqueeze(0)  # Batch size 1
-    # outputs = model(input_ids, labels=labels)
-    # loss, logits = outputs[:2]
 
     train_dataset = (
         RetentionDataset(data_args,
