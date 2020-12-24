@@ -41,6 +41,7 @@ class RetentionFeaturesSchema(BaseModel):
     delta_to_sm2_scheduled_date: int
     # sm2_efactor: float
 
+
 @dataclass(frozen=True)
 class RetentionInput:
     input_ids: List[int]
