@@ -37,9 +37,11 @@ class RetentionFeaturesSchema(BaseModel):
     usercard_delta_previous: int
     usercard_previous_study_response: bool
     leitner_box: int
+    sm2_efactor: float
+    sm2_interval: float
+    sm2_repetition: int
     delta_to_leitner_scheduled_date: int
     delta_to_sm2_scheduled_date: int
-    # sm2_efactor: float
 
 
 @dataclass(frozen=True)
@@ -101,6 +103,9 @@ def _get_user_features(
             usercard_delta_previous=v_usercard.previous_delta or 0,
             usercard_previous_study_response=v_usercard.previous_study_response or False,
             leitner_box=v_usercard.leitner_box or 0,
+            sm2_efactor=v_usercard.sm2_efactor or 0,
+            sm2_interval=v_usercard.sm2_interval or 0,
+            sm2_repetition=v_usercard.sm2_repetition or 0,
             delta_to_leitner_scheduled_date=delta_to_leitner_scheduled_date,
             delta_to_sm2_scheduled_date=delta_to_sm2_scheduled_date,
         ))

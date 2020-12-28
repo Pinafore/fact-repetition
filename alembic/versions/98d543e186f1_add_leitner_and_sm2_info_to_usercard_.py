@@ -62,13 +62,13 @@ def update_leitner(
     leitner_box[record.card_id] = max(min(leitner_box[record.card_id], 10), 1)
     interval = timedelta(days=increment_days[leitner_box[record.card_id]])
     leitner_scheduled_date[record.card_id] = date + interval
-    # return leitner_box, leitner_scheduled_date
+    return leitner_box, leitner_scheduled_date
 
 def update_sm2(
     record: Record,
     date: datetime,
-    sm2_interval: dict,
     sm2_efactor: dict,
+    sm2_interval: dict,
     sm2_repetition: dict,
     sm2_scheduled_date: dict,
 ) -> None:
@@ -96,7 +96,7 @@ def update_sm2(
             sm2_interval[record.card_id] *= sm2_efactor[record.card_id]
 
     sm2_scheduled_date[record.card_id] = date + timedelta(days=sm2_interval[record.card_id])
-    # return sm2_interval, sm2_efactor, sm2_repetition, sm2_scheduled_date
+    return sm2_efactor, sm2_interval, sm2_repetition, sm2_scheduled_date
 
 
 def data_upgrade():
@@ -116,8 +116,8 @@ def data_upgrade():
             usercard_feature_vector.leitner_scheduled_date = leitner_scheduled_date.get(record.card_id, None)
             usercard_feature_vector.sm2_scheduled_date = sm2_scheduled_date.get(record.card_id, None)
 
-            update_sm2(record, record.date, sm2_interval, sm2_efactor, sm2_repetition, sm2_scheduled_date)
-            update_leitner(record, record.date, leitner_box, leitner_scheduled_date)
+            sm2_efactor, sm2_interval, sm2_reptition, sm2_scheduled_date = update_sm2(record, record.date, sm2_efactor, sm2_interval, sm2_repetition, sm2_scheduled_date)
+            leitner_box, leitner_scheduled_date = update_leitner(record, record.date, leitner_box, leitner_scheduled_date)
 
     session.commit()
 

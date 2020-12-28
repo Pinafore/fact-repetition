@@ -45,8 +45,8 @@ def schema_downgrade():
 def update_sm2(
     record: Record,
     date: datetime,
-    sm2_interval: dict,
     sm2_efactor: dict,
+    sm2_interval: dict,
     sm2_repetition: dict,
     sm2_scheduled_date: dict,
 ) -> None:
@@ -74,7 +74,7 @@ def update_sm2(
             sm2_interval[record.card_id] *= sm2_efactor[record.card_id]
 
     sm2_scheduled_date[record.card_id] = date + timedelta(days=sm2_interval[record.card_id])
-    # return sm2_interval, sm2_efactor, sm2_repetition, sm2_scheduled_date
+    return sm2_efactor, sm2_interval, sm2_repetition, sm2_scheduled_date
 
 
 def data_upgrade():
@@ -93,7 +93,7 @@ def data_upgrade():
             usercard_feature_vector.sm2_interval = sm2_interval.get(record.card_id, None)
             usercard_feature_vector.sm2_repetition = sm2_repetition.get(record.card_id, None)
 
-            update_sm2(record, record.date, sm2_interval, sm2_efactor, sm2_repetition, sm2_scheduled_date)
+            sm2_efactor, sm2_interval, sm2_repetition, sm2_scheduled_date = update_sm2(record, record.date, sm2_efactor, sm2_interval, sm2_repetition, sm2_scheduled_date)
 
     session.commit()
 
