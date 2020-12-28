@@ -399,6 +399,9 @@ class KARLScheduler:
                 previous_study_response=v_usercard.previous_study_response,
                 leitner_box=None if leitner is None else leitner.box,
                 leitner_scheduled_date=None if leitner is None else leitner.scheduled_date,
+                sm2_efactor=None if sm2 is None else sm2.efactor,
+                sm2_interval=None if sm2 is None else sm2.interval,
+                sm2_repetition=None if sm2 is None else sm2.repetition,
                 sm2_scheduled_date=None if sm2 is None else sm2.scheduled_date,
             ))
 
