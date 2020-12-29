@@ -134,16 +134,20 @@ def figure_user_recall_by_repetition_over_time(
         alt.Y('response:Q'),
         color=f'{color_by}:N',
     )
-    return alt.layer(
+    chart = alt.layer(
         line, band, data=source
     )
+    save_chart_and_pdf(chart, f'{path}/user_{user_id}_recall_by_{color_by}_over_time')
 
 
 # %%
-# df = get_retention_features_df()
-# df['n_minutes_spent'] = df.groupby('user_id')['elapsed_milliseconds'].cumsum() // 60000
-# df.to_hdf(f'{settings.CODE_DIR}/figures.h5', key='df', mode='w')
-df = pd.read_hdf(f'{settings.CODE_DIR}/figures.h5', 'df')
-# %%
-# source = df.loc[np.random.choice(df.index, 3000, replace=False)]
-figure_user_recall_by_repetition_over_time(df, '', user_id='463', max_sm2_repetition=2)
+if __name__ == '__main__':
+    df = get_retention_features_df()
+    df['n_minutes_spent'] = df.groupby('user_id')['elapsed_milliseconds'].cumsum() // 60000
+    df.to_hdf(f'{settings.CODE_DIR}/figures.h5', key='df', mode='w')
+    # df = pd.read_hdf(f'{settings.CODE_DIR}/figures.h5', 'df')
+
+    figure_response_and_newness_over_time(df, 'new_figures')
+    figure_recall_by_repetition_or_model_over_time(df, 'new_figures', facet_by='sm2_repetition', color_by='repetition_model')
+    figure_recall_by_repetition_or_model_over_time(df, 'new_figures', facet_by='repetition_model', color_by='sm2_repetition')
+    figure_user_recall_by_repetition_over_time(df, 'new_figures', user_id='463', max_sm2_repetition=2)
