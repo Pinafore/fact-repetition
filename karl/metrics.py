@@ -26,25 +26,6 @@ def save_chart_and_pdf(chart, path):
     os.system(f'vl2vg {path}.json | vg2pdf > {path}.pdf')
 
 
-def _get_correct_on_first_try(
-    user_id: str,
-    session: Session = SessionLocal(),
-) -> Dict[str, bool]:
-    '''Dict of card_id -> bool of whether
-    user_id got card_id correct on the first try
-    '''
-    user = session.query(User).get(user_id)
-    correct_on_first_try = {}
-    for record in user.records:
-        if record.response is None:
-            continue
-        if record.card_id in correct_on_first_try:
-            continue
-        correct_on_first_try[record.card_id] = record.response
-
-    session.close()
-    return correct_on_first_try
-
 def _get_user_records(
     user_id: str,
     correct_on_first_try: dict,  # card_id -> bool
@@ -208,7 +189,7 @@ def figure_new_old_successful_failed(
     df: pd.DataFrame,
     output_path: str,
 ):
-    ''' breakdown by [new, old] x [successful, failed] '''
+    ''' breakdown by [new, old] x [successful, failed] over time '''
     x_axis_name = 'n_minutes_spent_binned'
     metrics = [
         'ratio_new_correct_vs_all',

@@ -214,6 +214,7 @@ class KARLScheduler:
                 previous_delta=None,
                 previous_study_date=None,
                 previous_study_response=None,
+                correct_on_first_try=None,
             )
             session.add(v_usercard)
         session.close()
@@ -403,6 +404,7 @@ class KARLScheduler:
                 sm2_interval=None if sm2 is None else sm2.interval,
                 sm2_repetition=None if sm2 is None else sm2.repetition,
                 sm2_scheduled_date=None if sm2 is None else sm2.scheduled_date,
+                correct_on_first_try=v_usercard.correct_on_first_try,
             ))
 
         delta_user = None
@@ -490,6 +492,12 @@ class KARLScheduler:
         v_usercard.previous_delta = delta_usercard
         v_usercard.previous_study_date = date
         v_usercard.previous_study_response = record.response
+        if v_usercard.correct_on_first_try is None:
+            v_usercard.correct_on_first_try = record.response
+            # NOTE the correponding `UserCardFeatureVector` saved in # `save_feature_vectors`
+            # from the scheduling request also has None in its `correct_on_first_try`.
+            # this is fine, we leave it as None, since that saved feature vector is what was
+            # visible to the scheduler before the response was sent by the user.
 
         delta_user = None
         if v_user.previous_study_date is not None:

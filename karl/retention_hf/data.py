@@ -18,6 +18,9 @@ from karl.models import User, Card, UserFeatureVector, CardFeatureVector, UserCa
 
 
 class RetentionFeaturesSchema(BaseModel):
+    '''
+    Essentially all you can tell about an individual study record.
+    '''
     user_id: str
     card_id: str
     is_new_fact: bool
@@ -42,6 +45,9 @@ class RetentionFeaturesSchema(BaseModel):
     sm2_repetition: int
     delta_to_leitner_scheduled_date: int
     delta_to_sm2_scheduled_date: int
+    repetition_model: str
+    elapsed_milliseconds: int
+    correct_on_first_try: Optional[bool]
 
 
 @dataclass(frozen=True)
@@ -83,6 +89,7 @@ def _get_user_features(
         else:
             delta_to_sm2_scheduled_date = 0
         labels.append(record.response)
+        elapsed_milliseconds = record.elapsed_milliseconds_text + record.elapsed_milliseconds_answer
         features.append(RetentionFeaturesSchema(
             user_id=record.user_id,
             card_id=record.card_id,
@@ -108,6 +115,9 @@ def _get_user_features(
             sm2_repetition=v_usercard.sm2_repetition or 0,
             delta_to_leitner_scheduled_date=delta_to_leitner_scheduled_date,
             delta_to_sm2_scheduled_date=delta_to_sm2_scheduled_date,
+            repetition_model=json.loads(v_user.parameters)['repetition_model'],
+            correct_on_first_try=v_usercard.correct_on_first_try,
+            elapsed_milliseconds=elapsed_milliseconds,
         ))
     session.close()
     return features, labels

@@ -1,4 +1,3 @@
-# %%
 import os
 import numpy as np
 import altair as alt
@@ -41,62 +40,45 @@ def get_retention_features_df():
     df = []
     for feature, label in zip(features, labels):
         row = feature.__dict__
-        row['label'] = label
+        row['response'] = label
         df.append(row)
     df = pd.DataFrame(df)
     return df
 
 
-def figure_recall_vs_delta(df, facet_by='sm2_repetition'):
-    # source = df.loc[np.random.choice(df.index, 3000, replace=False)]
+def figure_recall_vs_delta(df, groupby='sm2_repetition'):
     source = df[df.usercard_delta != 0]
-    source['usercard_delta_binned'] = pd.qcut(source.usercard_delta, q=20, labels=False)
-    chart = alt.Chart(source).mark_line().encode(
-        alt.X('usercard_delta_binned:Q'),
-        alt.Y('mean(label):Q'),
-        # color='leitner_box:N'
-    ).facet(
-        facet_by,
-        rows=1,
-    )
-    save_chart_and_pdf(chart, f'recall_vs_delta_by_{facet_by}')
+    # create bins from each group
+    source['usercard_delta_binned'] = source.groupby(groupby)['usercard_delta'].transform(lambda x: pd.qcut(x, q=10, labels=False, duplicates='drop'))
+    # alternatively, create bins from all examples
+    # source['usercard_delta_binned'] = pd.qcut(source.usercard_delta, q=20, labels=False)
 
-# %%
+    line = alt.Chart().mark_line().encode(
+        alt.X('usercard_delta_binned:Q'),
+        alt.Y('mean(response):Q'),
+    )
+    band = alt.Chart().mark_errorband(extent='ci').encode(
+        alt.X('usercard_delta_binned:Q'),
+        alt.Y('response:Q'),
+    )
+    density = alt.Chart().transform_density(
+        'usercard_delta_binned',
+        groupby=[groupby],
+        as_=['usercard_delta_binned', 'density'],
+    ).mark_area(opacity=0.5).encode(
+        alt.X('usercard_delta_binned:Q'),
+        alt.Y('density:Q'),
+    )
+    chart = alt.layer(
+        band, line, density, data=source
+    ).facet(
+        column=groupby,
+        # row='repetition_model:N',
+    )
+    save_chart_and_pdf(chart, f'recall_vs_delta_by_{groupby}')
+
+
 if __name__ == '__main__':
     df = get_retention_features_df()
-    figure_recall_vs_delta(df, facet_by='sm2_repetition')
-    figure_recall_vs_delta(df, facet_by='leitner_box')
-
-# %%
-df = get_retention_features_df()
-# %%
-# source = df.loc[np.random.choice(df.index, 3000, replace=False)]
-# source = source[source.usercard_delta != 0]
-source = df[df.usercard_delta != 0]
-source['usercard_delta_binned'] = pd.qcut(source.usercard_delta, q=20, labels=False)
-
-facet_by = 'sm2_repetition'
-
-line = alt.Chart().mark_line().encode(
-    alt.X('usercard_delta_binned:Q'),
-    alt.Y('mean(label):Q'),
-)
-band = alt.Chart().mark_errorband(extent='ci').encode(
-    alt.X('usercard_delta_binned:Q'),
-    alt.Y('label:Q'),
-)
-density = alt.Chart().transform_density(
-    'usercard_delta_binned',
-    groupby=[facet_by],
-    as_=['usercard_delta_binned', 'density'],
-    extent=[0, 20],
-).mark_area().encode(
-    alt.X('usercard_delta_binned:Q'),
-    alt.Y('density:Q')
-)
-chart = alt.layer(
-    band, line, density, data=source
-).facet(
-    facet_by
-)
-save_chart_and_pdf(chart, 'test')
+    figure_recall_vs_delta(df, groupby='sm2_repetition')
+    figure_recall_vs_delta(df, groupby='leitner_box')

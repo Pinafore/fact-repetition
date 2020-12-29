@@ -23,6 +23,7 @@ class UserCardFeatureVector(Base):
     sm2_interval = Column(Float)
     sm2_repetition = Column(Integer)
     sm2_scheduled_date = Column(TIMESTAMP(timezone=True))
+    correct_on_first_try = Column(Boolean)
 
 
 class UserFeatureVector(Base):
@@ -61,6 +62,7 @@ class CurrUserCardFeatureVector(Base):
     previous_delta = Column(Integer)
     previous_study_date = Column(TIMESTAMP(timezone=True))
     previous_study_response = Column(Boolean)
+    correct_on_first_try = Column(Boolean)
 
 
 class CurrUserFeatureVector(Base):
