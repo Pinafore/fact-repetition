@@ -1,4 +1,4 @@
-from sqlalchemy import Column, ForeignKey, Integer, Boolean, String, TIMESTAMP
+from sqlalchemy import Column, ForeignKey, Integer, Float, Boolean, String, TIMESTAMP
 from sqlalchemy.dialects.postgresql import JSONB
 
 from karl.db.base_class import Base
@@ -19,6 +19,9 @@ class UserCardFeatureVector(Base):
     previous_study_response = Column(Boolean)
     leitner_box = Column(Integer)
     leitner_scheduled_date = Column(TIMESTAMP(timezone=True))
+    sm2_efactor = Column(Float)
+    sm2_interval = Column(Float)
+    sm2_repetition = Column(Integer)
     sm2_scheduled_date = Column(TIMESTAMP(timezone=True))
 
 

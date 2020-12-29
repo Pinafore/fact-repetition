@@ -9,7 +9,7 @@ from tqdm import tqdm
 from datetime import datetime, timedelta
 from alembic import op
 from sqlalchemy import orm
-from sqlalchemy import Column, Integer, TIMESTAMP
+from sqlalchemy import Column, Integer, Float, TIMESTAMP
 
 from karl.models import User, Record, UserCardFeatureVector
 
@@ -32,6 +32,18 @@ def schema_upgrade():
     )
     op.add_column(
         'usercardfeaturevector',
+        Column('sm2_efactor', Float),
+    )
+    op.add_column(
+        'usercardfeaturevector',
+        Column('sm2_interval', Float),
+    )
+    op.add_column(
+        'usercardfeaturevector',
+        Column('sm2_repetition', Integer),
+    )
+    op.add_column(
+        'usercardfeaturevector',
         Column('sm2_scheduled_date', TIMESTAMP(timezone=True)),
     )
 
@@ -39,6 +51,9 @@ def schema_upgrade():
 def schema_downgrade():
     op.drop_column('usercardfeaturevector', 'leitner_box')
     op.drop_column('usercardfeaturevector', 'leitner_scheduled_date')
+    op.drop_column('usercardfeaturevector', 'sm2_efactor')
+    op.drop_column('usercardfeaturevector', 'sm2_interval')
+    op.drop_column('usercardfeaturevector', 'sm2_repetition')
     op.drop_column('usercardfeaturevector', 'sm2_scheduled_date')
 
 
@@ -62,13 +77,13 @@ def update_leitner(
     leitner_box[record.card_id] = max(min(leitner_box[record.card_id], 10), 1)
     interval = timedelta(days=increment_days[leitner_box[record.card_id]])
     leitner_scheduled_date[record.card_id] = date + interval
-    # return leitner_box, leitner_scheduled_date
+    return leitner_box, leitner_scheduled_date
 
 def update_sm2(
     record: Record,
     date: datetime,
-    sm2_interval: dict,
     sm2_efactor: dict,
+    sm2_interval: dict,
     sm2_repetition: dict,
     sm2_scheduled_date: dict,
 ) -> None:
@@ -96,7 +111,7 @@ def update_sm2(
             sm2_interval[record.card_id] *= sm2_efactor[record.card_id]
 
     sm2_scheduled_date[record.card_id] = date + timedelta(days=sm2_interval[record.card_id])
-    # return sm2_interval, sm2_efactor, sm2_repetition, sm2_scheduled_date
+    return sm2_efactor, sm2_interval, sm2_repetition, sm2_scheduled_date
 
 
 def data_upgrade():
@@ -114,10 +129,13 @@ def data_upgrade():
                 continue
             usercard_feature_vector.leitner_box = leitner_box.get(record.card_id, None)
             usercard_feature_vector.leitner_scheduled_date = leitner_scheduled_date.get(record.card_id, None)
+            usercard_feature_vector.sm2_efactor = sm2_efactor.get(record.card_id, None)
+            usercard_feature_vector.sm2_interval = sm2_interval.get(record.card_id, None)
+            usercard_feature_vector.sm2_repetition = sm2_repetition.get(record.card_id, None)
             usercard_feature_vector.sm2_scheduled_date = sm2_scheduled_date.get(record.card_id, None)
 
-            update_sm2(record, record.date, sm2_interval, sm2_efactor, sm2_repetition, sm2_scheduled_date)
-            update_leitner(record, record.date, leitner_box, leitner_scheduled_date)
+            sm2_efactor, sm2_interval, sm2_reptition, sm2_scheduled_date = update_sm2(record, record.date, sm2_efactor, sm2_interval, sm2_repetition, sm2_scheduled_date)
+            leitner_box, leitner_scheduled_date = update_leitner(record, record.date, leitner_box, leitner_scheduled_date)
 
     session.commit()
 
