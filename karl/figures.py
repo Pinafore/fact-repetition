@@ -47,7 +47,7 @@ def get_retention_features_df():
     return df
 
 
-def figure_response_and_newness_vs_time(df, path):
+def figure_response_and_newness_over_time(df, path):
     '''
     Break down of [new, old] x [positive, negative] over time.
     '''
@@ -60,16 +60,17 @@ def figure_response_and_newness_vs_time(df, path):
     source = source[source.repetition_model.isin(['karl100', 'leitner', 'sm2'])]
     source = source.groupby(['response_and_newness', 'repetition_model', 'n_minutes_spent_binned']).size().to_frame('size').reset_index()
 
-    return alt.Chart(source).mark_area().encode(
+    chart = alt.Chart(source).mark_area().encode(
         alt.X('n_minutes_spent_binned:Q'),
         alt.Y('size:Q', stack='normalize'),
         color='response_and_newness'
     ).facet(
         column='repetition_model'
     )
+    save_chart_and_pdf(chart, f'{path}/response_and_newness_over_time')
 
 
-def figure_recall_by_repetition_vs_time(
+def figure_recall_by_repetition_or_model_over_time(
     df,
     path,
     facet_by='sm2_repetition',
@@ -98,12 +99,44 @@ def figure_recall_by_repetition_vs_time(
         alt.Y('response:Q'),
         color=f'{color_by}:N',
     )
-    return alt.layer(
+    chart = alt.layer(
         line, band, data=source
     ).facet(
         column=facet_by,
     )
-    # save_chart_and_pdf(chart, 'test')
+    save_chart_and_pdf(chart, f'{path}/recall_by_{color_by}_over_time')
+
+
+def figure_user_recall_by_repetition_over_time(
+    df,
+    path,
+    user_id,
+    color_by='sm2_repetition',
+    max_sm2_repetition=4,
+):
+    '''
+    Recall rate broken down by number of repetition (to handle negative
+    response, follow either Leitner box or SM2 repetition rules) over time.
+    '''
+    source = df.copy()
+    source = df[df.user_id == user_id]
+    source = source[source.sm2_repetition <= max_sm2_repetition]
+    # don't use qcut here??
+    source['n_minutes_spent_binned'] = pd.qcut(source.n_minutes_spent, 20, labels=False)
+
+    line = alt.Chart().mark_line().encode(
+        alt.X('n_minutes_spent_binned:Q'),
+        alt.Y('mean(response):Q'),
+        color=f'{color_by}:N',
+    )
+    band = alt.Chart().mark_errorband(extent='ci', opacity=0.3).encode(
+        alt.X('n_minutes_spent_binned:Q'),
+        alt.Y('response:Q'),
+        color=f'{color_by}:N',
+    )
+    return alt.layer(
+        line, band, data=source
+    )
 
 
 # %%
@@ -113,4 +146,4 @@ def figure_recall_by_repetition_vs_time(
 df = pd.read_hdf(f'{settings.CODE_DIR}/figures.h5', 'df')
 # %%
 # source = df.loc[np.random.choice(df.index, 3000, replace=False)]
-figure_recall_by_repetition_vs_time(df, '', color_by='sm2_repetition', facet_by='repetition_model')
+figure_user_recall_by_repetition_over_time(df, '', user_id='463', max_sm2_repetition=2)
