@@ -6,21 +6,19 @@
 </head>
 
 <body>  
-  <div id="n_users_and_n_records"></div>
-  <div id="new_old_correct_wrong"></div>
-  <div id="repetition_model_level_vs_effort"></div>
-  <div id="repetition_model_level_ratio"></div>
-  <div id="karl100vs85_level_ratio"></div>
-  <div id="user463_user_level_vs_effort"></div>
-  <div id="user463_user_level_ratio"></div>
+  <div id="response_and_newness"></div>
+  <div id="recall_by_repetition_model"></div>
+  <div id="recall_by_sm2_repetition"></div>
+  <div id="recall_vs_delta_by_sm2_repetition"></div>
+  <div id="user_463_recall_by_sm2_repetition"></div>
+  <div id="user_463_recall_vs_delta_by_sm2_repetition"></div>
 
   <script>
-  	vegaEmbed("#n_users_and_n_records", "figures/n_users_and_n_records.json");
-  	vegaEmbed("#new_old_correct_wrong", "figures/new_old_correct_wrong.json");
-  	vegaEmbed("#repetition_model_level_vs_effort", "figures/repetition_model_level_vs_effort.json");
-  	vegaEmbed("#repetition_model_level_ratio", "figures/repetition_model_level_ratio.json");
-  	vegaEmbed("#karl100vs85_level_ratio", "figures/karl100vs85_level_ratio.json");
-  	vegaEmbed("#user463_user_level_vs_effort", "figures/user463_user_level_vs_effort.json");
-  	vegaEmbed("#user463_user_level_ratio", "figures/user463_user_level_ratio.json");
+  	vegaEmbed("#response_and_newness", "new_figures/response_and_newness_over_time.json");
+  	vegaEmbed("#recall_by_repetition_model", "new_figures/recall_by_repetition_model_over_time.json");
+  	vegaEmbed("#recall_by_sm2_repetition", "new_figures/recall_by_sm2_repetition_over_time.json");
+  	vegaEmbed("#recall_vs_delta_by_sm2_repetition", "new_figures/recall_vs_delta_by_sm2_repetition.json");
+  	vegaEmbed("#user_463_recall_by_sm2_repetition", "new_figures/user_463_recall_by_sm2_repetition_over_time.json");
+  	vegaEmbed("#user_463_recall_vs_delta_by_sm2_repetition", "new_figures/user_463_recall_vs_delta_by_sm2_repetition.json");
   </script>
 </body>
