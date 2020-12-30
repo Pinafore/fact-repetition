@@ -303,7 +303,7 @@ if __name__ == '__main__':
     # df.to_hdf(f'{settings.CODE_DIR}/figures.h5', key='df', mode='w')
     df = pd.read_hdf(f'{settings.CODE_DIR}/figures.h5', 'df')
 
-    path = f'{settings.CODE_DIR}/new_figures'
+    path = f'{settings.CODE_DIR}/figures'
     figure_response_and_newness_over_time(df, path)
     figure_recall_by_repetition_or_model_over_time(df, path=path, facet_by='sm2_repetition', color_by='repetition_model')
     figure_recall_by_repetition_or_model_over_time(df, path=path, facet_by='repetition_model', color_by='sm2_repetition')
