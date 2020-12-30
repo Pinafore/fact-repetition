@@ -103,7 +103,8 @@ def figure_recall_by_repetition_or_model_over_time(
     response, follow either Leitner box or SM2 repetition rules) over time.
     '''
     source = df.copy().drop('utc_date', axis=1)
-    source['n_minutes_spent_binned'] = pd.qcut(source.n_minutes_spent, 20, labels=False)
+    source['n_minutes_spent_binned'] = pd.qcut(source.n_minutes_spent, 20)
+    source['n_minutes_spent_binned'] = source['n_minutes_spent_binned'].transform(lambda x: round(x.left / 60, 2))  # hours
     source = source[source.repetition_model.isin(['karl100', 'leitner', 'sm2'])]
     source = source[source.sm2_repetition <= max_sm2_repetition]
     # first bin is very noisy
@@ -112,7 +113,7 @@ def figure_recall_by_repetition_or_model_over_time(
 
     selection = alt.selection_multi(fields=[color_by], bind='legend')
     line = alt.Chart().mark_line().encode(
-        alt.X('n_minutes_spent_binned:Q', title='Minutes spent on app'),
+        alt.X('n_minutes_spent_binned:Q', title='Hours'),
         alt.Y('mean(response):Q', title='Recall rate'),
         color=f'{color_by}:N',
         opacity=alt.condition(selection, alt.value(0.8), alt.value(0.2))
@@ -155,18 +156,19 @@ def figure_user_recall_by_repetition_over_time(
     source = source[source.user_id == user_id]
     source = source[source.sm2_repetition <= max_sm2_repetition]
     # don't use qcut here??
-    source['n_minutes_spent_binned'] = pd.qcut(source.n_minutes_spent, 20, labels=False)
+    source['n_minutes_spent_binned'] = pd.qcut(source.n_minutes_spent, 20)
+    source['n_minutes_spent_binned'] = source['n_minutes_spent_binned'].transform(lambda x: round(x.left / 60, 2))  # hours
 
     selection = alt.selection_multi(fields=[color_by], bind='legend')
     line = alt.Chart().mark_line().encode(
-        alt.X('n_minutes_spent_binned:Q'),
-        alt.Y('mean(response):Q'),
+        alt.X('n_minutes_spent_binned:Q', title='Hours'),
+        alt.Y('mean(response):Q', title='Recall rate'),
         color=f'{color_by}:N',
         opacity=alt.condition(selection, alt.value(0.8), alt.value(0.2))
     )
     band = alt.Chart().mark_errorband(extent='ci').encode(
-        alt.X('n_minutes_spent_binned:Q'),
-        alt.Y('response:Q'),
+        alt.X('n_minutes_spent_binned:Q', title='Hours'),
+        alt.Y('response:Q', title='Recall rate'),
         color=f'{color_by}:N',
         opacity=alt.condition(selection, alt.value(0.3), alt.value(0.2))
     )
@@ -246,18 +248,17 @@ def figure_user_recall_vs_delta(
     source = df.copy().drop('utc_date', axis=1)
     source = source[source.user_id == user_id]
     source = source[source.usercard_delta != 0]
-    # create bins from each group
-    source['usercard_delta_binned'] = source.groupby(groupby)['usercard_delta'].transform(lambda x: pd.qcut(x, q=10, labels=False, duplicates='drop'))
-    # alternatively, create bins from all examples
-    # source['usercard_delta_binned'] = pd.qcut(source.usercard_delta, q=20, labels=False)
+
+    source['usercard_delta_binned'] = source.groupby(groupby)['usercard_delta'].transform(lambda x: pd.qcut(x, q=10, duplicates='drop'))
+    source['usercard_delta_binned'] = source['usercard_delta_binned'].transform(lambda x: round(x.left / 3600, 2))  # hours
 
     line = alt.Chart().mark_line().encode(
-        alt.X('usercard_delta_binned:Q'),
-        alt.Y('mean(response):Q'),
+        alt.X('usercard_delta_binned:Q', title='Hours'),
+        alt.Y('mean(response):Q', title='Recall rate'),
     )
     band = alt.Chart().mark_errorband(extent='ci').encode(
-        alt.X('usercard_delta_binned:Q'),
-        alt.Y('response:Q'),
+        alt.X('usercard_delta_binned:Q', title='Hours'),
+        alt.Y('response:Q', title='Recall rate'),
     )
     chart = alt.layer(
         band, line, data=source
@@ -299,15 +300,15 @@ def get_user_charts(
 
 # %%
 if __name__ == '__main__':
-    # df = get_retention_features_df()
-    # df['n_minutes_spent'] = df.groupby('user_id')['elapsed_milliseconds'].cumsum() // 60000
-    # df.to_hdf(f'{settings.CODE_DIR}/figures.h5', key='df', mode='w')
-    df = pd.read_hdf(f'{settings.CODE_DIR}/figures.h5', 'df')
+    df = get_retention_features_df()
+    df['n_minutes_spent'] = df.groupby('user_id')['elapsed_milliseconds'].cumsum() // 60000
+    df.to_hdf(f'{settings.CODE_DIR}/figures.h5', key='df', mode='w')
+    # df = pd.read_hdf(f'{settings.CODE_DIR}/figures.h5', 'df')
 
     path = f'{settings.CODE_DIR}/figures'
     figure_response_and_newness_over_time(df, path)
-    # figure_recall_by_repetition_or_model_over_time(df, path=path, facet_by='sm2_repetition', color_by='repetition_model')
-    # figure_recall_by_repetition_or_model_over_time(df, path=path, facet_by='repetition_model', color_by='sm2_repetition')
-    # figure_recall_vs_delta(df, path=path, groupby='sm2_repetition', max_sm2_repetition=4)
-    # figure_user_recall_by_repetition_over_time(df, user_id='463', path=path, max_sm2_repetition=2)
-    # figure_user_recall_vs_delta(df, user_id='463', path=path, groupby='sm2_repetition')
+    figure_recall_by_repetition_or_model_over_time(df, path=path, facet_by='sm2_repetition', color_by='repetition_model')
+    figure_recall_by_repetition_or_model_over_time(df, path=path, facet_by='repetition_model', color_by='sm2_repetition')
+    figure_recall_vs_delta(df, path=path, groupby='sm2_repetition', max_sm2_repetition=4)
+    figure_user_recall_by_repetition_over_time(df, user_id='463', path=path, max_sm2_repetition=2)
+    figure_user_recall_vs_delta(df, user_id='463', path=path, groupby='sm2_repetition')
