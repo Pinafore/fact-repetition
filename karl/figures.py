@@ -1,9 +1,10 @@
 # %%
 import os
-import numpy as np
+import pytz
 import altair as alt
 import pandas as pd
 import multiprocessing
+from dateutil.parser import parse as parse_date
 from concurrent.futures import ProcessPoolExecutor
 from karl.retention_hf.data import _get_user_features
 from karl.db.session import SessionLocal, engine
@@ -51,7 +52,7 @@ def figure_response_and_newness_over_time(df, path):
     '''
     Break down of [new, old] x [positive, negative] over time.
     '''
-    source = df.copy()
+    source = df.copy().drop('utc_date', axis=1)
     source['n_minutes_spent_binned'] = pd.cut(source.n_minutes_spent, 20, labels=False)
     source['response_and_newness'] = (
         df.is_new_fact.transform(lambda x: 'New, ' if x else 'Old, ')
@@ -82,6 +83,8 @@ def figure_response_and_newness_over_time(df, path):
         facet=alt.Facet('repetition_model', title=None),
     ).properties(
         title='Response and newness breakdown over time',
+    ).configure_legend(
+        labelFontSize=15,
     )
     save_chart_and_pdf(chart, f'{path}/response_and_newness_over_time')
 
@@ -97,7 +100,7 @@ def figure_recall_by_repetition_or_model_over_time(
     Recall rate broken down by number of repetition (to handle negative
     response, follow either Leitner box or SM2 repetition rules) over time.
     '''
-    source = df.copy()
+    source = df.copy().drop('utc_date', axis=1)
     source['n_minutes_spent_binned'] = pd.qcut(source.n_minutes_spent, 20, labels=False)
     source = source[source.repetition_model.isin(['karl100', 'leitner', 'sm2'])]
     source = source[source.sm2_repetition <= max_sm2_repetition]
@@ -110,7 +113,6 @@ def figure_recall_by_repetition_or_model_over_time(
         alt.X('n_minutes_spent_binned:Q', title='Minutes spent on app'),
         alt.Y('mean(response):Q', title='Recall rate'),
         color=f'{color_by}:N',
-        size=alt.condition(selection, alt.value(3), alt.value(1)),
         opacity=alt.condition(selection, alt.value(0.8), alt.value(0.2))
     )
     band = alt.Chart().mark_errorband(extent='ci').encode(
@@ -130,14 +132,16 @@ def figure_recall_by_repetition_or_model_over_time(
         selection
     ).properties(
         title=f'Recall rate broken down by {color_by} over time',
+    ).configure_legend(
+        labelFontSize=15,
     )
     save_chart_and_pdf(chart, f'{path}/recall_by_{color_by}_over_time')
 
 
 def figure_user_recall_by_repetition_over_time(
-    df,
-    path,
-    user_id,
+    df: pd.DataFrame,
+    user_id: str = None,
+    path: str = None,
     color_by='sm2_repetition',
     max_sm2_repetition=4,
 ):
@@ -145,8 +149,8 @@ def figure_user_recall_by_repetition_over_time(
     Recall rate broken down by number of repetition (to handle negative
     response, follow either Leitner box or SM2 repetition rules) over time.
     '''
-    source = df.copy()
-    source = df[df.user_id == user_id]
+    source = df.copy().drop('utc_date', axis=1)
+    source = source[source.user_id == user_id]
     source = source[source.sm2_repetition <= max_sm2_repetition]
     # don't use qcut here??
     source['n_minutes_spent_binned'] = pd.qcut(source.n_minutes_spent, 20, labels=False)
@@ -172,8 +176,13 @@ def figure_user_recall_by_repetition_over_time(
         width=180,
         height=180,
         title=f'Recall rate of User {user_id} by {color_by} over time',
+    ).configure_legend(
+        labelFontSize=15,
     )
-    save_chart_and_pdf(chart, f'{path}/user_{user_id}_recall_by_{color_by}_over_time')
+    if path is not None:
+        save_chart_and_pdf(chart, f'{path}/user_{user_id}_recall_by_{color_by}_over_time')
+    else:
+        return chart
 
 
 def figure_recall_vs_delta(
@@ -185,7 +194,8 @@ def figure_recall_vs_delta(
     '''
     Recall vs delta broken down by # repetition
     '''
-    source = df[df.usercard_delta != 0]
+    source = df.copy().drop('utc_date', axis=1)
+    source = source[source.usercard_delta != 0]
     source = source[source.sm2_repetition <= max_sm2_repetition]
     # create bins from each group
     source['usercard_delta_binned'] = source.groupby(groupby)['usercard_delta'].transform(lambda x: pd.qcut(x, q=10, labels=False, duplicates='drop'))
@@ -217,20 +227,23 @@ def figure_recall_vs_delta(
         column=groupby,
     ).properties(
         title=f'Recall rate vs Delta broken down by {groupby} over time',
+    ).configure_legend(
+        labelFontSize=15,
     )
     save_chart_and_pdf(chart, f'{path}/recall_vs_delta_by_{groupby}')
 
 
 def figure_user_recall_vs_delta(
-    df,
-    path,
-    user_id,
+    df: pd.DataFrame,
+    user_id: str,
+    path: str = None,
     groupby='sm2_repetition',
 ):
     '''
     Recall vs delta broken down by # repetition
     '''
-    source = df[df.user_id == user_id]
+    source = df.copy().drop('utc_date', axis=1)
+    source = source[source.user_id == user_id]
     source = source[source.usercard_delta != 0]
     # create bins from each group
     source['usercard_delta_binned'] = source.groupby(groupby)['usercard_delta'].transform(lambda x: pd.qcut(x, q=10, labels=False, duplicates='drop'))
@@ -254,8 +267,33 @@ def figure_user_recall_vs_delta(
         column=groupby,
     ).properties(
         title=f'Recall rate of User {user_id} vs Delta broken down by {groupby} over time',
+    ).configure_legend(
+        labelFontSize=15,
     )
-    save_chart_and_pdf(chart, f'{path}/user_{user_id}_recall_vs_delta_by_{groupby}')
+    if path is not None:
+        save_chart_and_pdf(chart, f'{path}/user_{user_id}_recall_vs_delta_by_{groupby}')
+    else:
+        return chart
+
+
+def get_user_charts(
+    df: pd.DataFrame,
+    user_id: str,
+    deck_id: str = None,
+    date_start: str = '2020-08-23',
+    date_end: str = '2024-08-23',
+):
+    date_start = parse_date(date_start).astimezone(pytz.utc).date()
+    date_end = parse_date(date_end).astimezone(pytz.utc).date()
+    source = df[df.user_id == user_id]
+    if deck_id is not None:
+        source = source[source.deck_id == deck_id]
+    source = source[source.utc_date >= date_start]
+    source = source[source.utc_date <= date_end]
+    return {
+        'recall_by_repetition_over_time': figure_user_recall_by_repetition_over_time(source, user_id=user_id),
+        'recall_vs_delta': figure_user_recall_vs_delta(source, user_id=user_id),
+    }
 
 
 # %%
@@ -264,16 +302,22 @@ if __name__ == '__main__':
     # df['n_minutes_spent'] = df.groupby('user_id')['elapsed_milliseconds'].cumsum() // 60000
     # df.to_hdf(f'{settings.CODE_DIR}/figures.h5', key='df', mode='w')
     df = pd.read_hdf(f'{settings.CODE_DIR}/figures.h5', 'df')
+
     path = f'{settings.CODE_DIR}/new_figures'
-
     figure_response_and_newness_over_time(df, path)
-    figure_recall_by_repetition_or_model_over_time(df, path, facet_by='sm2_repetition', color_by='repetition_model')
-    figure_recall_by_repetition_or_model_over_time(df, path, facet_by='repetition_model', color_by='sm2_repetition')
-    figure_user_recall_by_repetition_over_time(df, path, user_id='463', max_sm2_repetition=2)
-    figure_recall_vs_delta(df, path, groupby='sm2_repetition')
-    figure_recall_vs_delta(df, path, groupby='leitner_box')
-    figure_user_recall_vs_delta(df, path, user_id='463', groupby='sm2_repetition')
+    figure_recall_by_repetition_or_model_over_time(df, path=path, facet_by='sm2_repetition', color_by='repetition_model')
+    figure_recall_by_repetition_or_model_over_time(df, path=path, facet_by='repetition_model', color_by='sm2_repetition')
+    figure_recall_vs_delta(df, path=path, groupby='sm2_repetition')
+    figure_recall_vs_delta(df, path=path, groupby='leitner_box')
+    figure_user_recall_by_repetition_over_time(df, user_id='463', path=path, max_sm2_repetition=2)
+    figure_user_recall_vs_delta(df, user_id='463', path=path, groupby='sm2_repetition')
+'''
 
 # %%
-# df = pd.read_hdf(f'{settings.CODE_DIR}/figures.h5', 'df')
+df = pd.read_hdf(f'{settings.CODE_DIR}/figures.h5', 'df')
 # %%
+source = df[df.usercard_delta != 0]
+# create bins from each group
+source['usercard_delta_binned'] = source.groupby(groupby)['usercard_delta'].transform(lambda x: pd.qcut(x, q=10, labels=False, duplicates='drop'))
+# %%
+'''

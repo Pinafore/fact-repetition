@@ -1,8 +1,10 @@
 import os
 import json
+import pytz
 import dataclasses
 import multiprocessing
 import numpy as np
+from datetime import date
 from pydantic import BaseModel
 from typing import Optional, List, Dict
 from dataclasses import dataclass
@@ -48,6 +50,7 @@ class RetentionFeaturesSchema(BaseModel):
     repetition_model: str
     elapsed_milliseconds: int
     correct_on_first_try: Optional[bool]
+    utc_date: date
 
 
 @dataclass(frozen=True)
@@ -118,6 +121,7 @@ def _get_user_features(
             repetition_model=json.loads(v_user.parameters)['repetition_model'],
             correct_on_first_try=v_usercard.correct_on_first_try,
             elapsed_milliseconds=elapsed_milliseconds,
+            utc_date=record.date.astimezone(pytz.utc).date(),
         ))
     session.close()
     return features, labels

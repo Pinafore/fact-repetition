@@ -23,12 +23,12 @@ from karl.models import User, UserStats, Parameters
 from karl.scheduler import KARLScheduler
 from karl.db.session import SessionLocal, engine
 from karl.config import settings
-from karl import metrics
+from karl import figures
 
 
 app = FastAPI()
 scheduler = KARLScheduler()
-user_progress_df = pd.read_hdf(f'{settings.CODE_DIR}/user_progress_df.h5', 'df')
+figures_df = pd.read_hdf(f'{settings.CODE_DIR}/figures.h5', 'df')
 
 # create logger with 'scheduler'
 logger = logging.getLogger('scheduler')
@@ -477,12 +477,12 @@ def get_user_charts(
     session: Session = Depends(get_session),
 ) -> List[Visualization]:
 
-    charts = metrics.get_user_charts(
-        df=user_progress_df,
+    charts = figures.get_user_charts(
+        df=figures_df,
         user_id=user_id,
         deck_id=deck_id,
-        # date_start=date_start,
-        # date_end=date_end,
+        date_start=date_start,
+        date_end=date_end,
     )
 
     visualizations = []
