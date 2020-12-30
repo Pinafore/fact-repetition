@@ -4,6 +4,7 @@ import pytz
 import altair as alt
 import pandas as pd
 import multiprocessing
+from datetime import timedelta
 from dateutil.parser import parse as parse_date
 from concurrent.futures import ProcessPoolExecutor
 from karl.retention_hf.data import _get_user_features
@@ -53,7 +54,8 @@ def figure_response_and_newness_over_time(df, path):
     Break down of [new, old] x [positive, negative] over time.
     '''
     source = df.copy().drop('utc_date', axis=1)
-    source['n_minutes_spent_binned'] = pd.cut(source.n_minutes_spent, 20, labels=False)
+    source['n_minutes_spent_binned'] = source.groupby('repetition_model')['n_minutes_spent'].transform(lambda x: pd.cut(x, 10, labels=False, duplicates='drop'))
+    # source['n_minutes_spent_binned'] = source['n_minutes_spent_binned'].transform(lambda x: round(x.left, 2))
     source['response_and_newness'] = (
         df.is_new_fact.transform(lambda x: 'New, ' if x else 'Old, ')
         + df.response.transform(lambda x: 'Positive' if x else 'Negative')
@@ -63,7 +65,7 @@ def figure_response_and_newness_over_time(df, path):
 
     selection = alt.selection_multi(fields=['response_and_newness'], bind='legend')
     chart = alt.Chart(source).mark_area().encode(
-        alt.X('n_minutes_spent_binned:Q', axis=alt.Axis(title='Minutes spent on app')),
+        alt.X('n_minutes_spent_binned:Q', axis=alt.Axis(title='Minutes')),
         alt.Y('size:Q', stack='normalize', axis=alt.Axis(title='Ratio')),
         color=alt.Color(
             'response_and_newness',
@@ -197,26 +199,25 @@ def figure_recall_vs_delta(
     source = df.copy().drop('utc_date', axis=1)
     source = source[source.usercard_delta != 0]
     source = source[source.sm2_repetition <= max_sm2_repetition]
-    # create bins from each group
-    source['usercard_delta_binned'] = source.groupby(groupby)['usercard_delta'].transform(lambda x: pd.qcut(x, q=10, labels=False, duplicates='drop'))
-    # alternatively, create bins from all examples
-    # source['usercard_delta_binned'] = pd.qcut(source.usercard_delta, q=20, labels=False)
+
+    source['usercard_delta_binned'] = source.groupby(groupby)['usercard_delta'].transform(lambda x: pd.qcut(x, q=10, duplicates='drop'))
+    source['usercard_delta_binned'] = source['usercard_delta_binned'].transform(lambda x: round(x.left / 3600, 2))  # hours
 
     line = alt.Chart().mark_line().encode(
-        alt.X('usercard_delta_binned:Q'),
-        alt.Y('mean(response):Q'),
+        alt.X('usercard_delta_binned:Q', title='Hours'),
+        alt.Y('mean(response):Q', title='Recall rate'),
     )
     band = alt.Chart().mark_errorband(extent='ci').encode(
-        alt.X('usercard_delta_binned:Q'),
-        alt.Y('response:Q'),
+        alt.X('usercard_delta_binned:Q', title='Hours'),
+        alt.Y('response:Q', title='Recall rate'),
     )
     # density = alt.Chart().transform_density(
-    #     'usercard_delta_binned',
+    #     'usercard_delta_binned:N',
     #     groupby=[groupby],
     #     as_=['usercard_delta_binned', 'density'],
-    # ).mark_area(opacity=0.5).encode(
-    #     alt.X('usercard_delta_binned:Q'),
-    #     alt.Y('density:Q'),
+    # ).mark_area(opacity=0.3).encode(
+    #     alt.X('usercard_delta_binned:N', title='Hours'),
+    #     alt.Y('density:Q', title=None),
     # )
     chart = alt.layer(
         band, line, data=source,
@@ -305,19 +306,8 @@ if __name__ == '__main__':
 
     path = f'{settings.CODE_DIR}/figures'
     figure_response_and_newness_over_time(df, path)
-    figure_recall_by_repetition_or_model_over_time(df, path=path, facet_by='sm2_repetition', color_by='repetition_model')
-    figure_recall_by_repetition_or_model_over_time(df, path=path, facet_by='repetition_model', color_by='sm2_repetition')
-    figure_recall_vs_delta(df, path=path, groupby='sm2_repetition')
-    figure_recall_vs_delta(df, path=path, groupby='leitner_box')
-    figure_user_recall_by_repetition_over_time(df, user_id='463', path=path, max_sm2_repetition=2)
-    figure_user_recall_vs_delta(df, user_id='463', path=path, groupby='sm2_repetition')
-'''
-
-# %%
-df = pd.read_hdf(f'{settings.CODE_DIR}/figures.h5', 'df')
-# %%
-source = df[df.usercard_delta != 0]
-# create bins from each group
-source['usercard_delta_binned'] = source.groupby(groupby)['usercard_delta'].transform(lambda x: pd.qcut(x, q=10, labels=False, duplicates='drop'))
-# %%
-'''
+    # figure_recall_by_repetition_or_model_over_time(df, path=path, facet_by='sm2_repetition', color_by='repetition_model')
+    # figure_recall_by_repetition_or_model_over_time(df, path=path, facet_by='repetition_model', color_by='sm2_repetition')
+    # figure_recall_vs_delta(df, path=path, groupby='sm2_repetition', max_sm2_repetition=4)
+    # figure_user_recall_by_repetition_over_time(df, user_id='463', path=path, max_sm2_repetition=2)
+    # figure_user_recall_vs_delta(df, user_id='463', path=path, groupby='sm2_repetition')
