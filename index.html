@@ -6,19 +6,17 @@
 </head>
 
 <body>  
-  <div id="response_and_newness"></div>
-  <div id="recall_by_repetition_model"></div>
-  <div id="recall_by_sm2_repetition"></div>
-  <div id="recall_vs_delta_by_sm2_repetition"></div>
-  <div id="user_463_recall_by_sm2_repetition"></div>
-  <div id="user_463_recall_vs_delta_by_sm2_repetition"></div>
+  <div id="composition"></div>
+  <div id="recall_rate"></div>
+  <div id="forgetting_curve"></div>
+  <div id="user_463_recall_rate"></div>
+  <div id="user_463_forgetting_curve"></div>
 
   <script>
-  	vegaEmbed("#response_and_newness", "figures/response_and_newness_over_time.json");
-  	vegaEmbed("#recall_by_repetition_model", "figures/recall_by_repetition_model_over_time.json");
-  	vegaEmbed("#recall_by_sm2_repetition", "figures/recall_by_sm2_repetition_over_time.json");
-  	vegaEmbed("#recall_vs_delta_by_sm2_repetition", "figures/recall_vs_delta_by_sm2_repetition.json");
-  	vegaEmbed("#user_463_recall_by_sm2_repetition", "figures/user_463_recall_by_sm2_repetition_over_time.json");
-  	vegaEmbed("#user_463_recall_vs_delta_by_sm2_repetition", "figures/user_463_recall_vs_delta_by_sm2_repetition.json");
+  	vegaEmbed("#composition", "figures/composition.json");
+  	vegaEmbed("#recall_rate", "figures/recall_by_sm2_repetition.json");
+  	vegaEmbed("#forgetting_curve", "figures/forgetting_curve_by_sm2_repetition.json");
+  	vegaEmbed("#user_463_recall_rate", "figures/user_463_recall_by_sm2_repetition.json");
+  	vegaEmbed("#user_463_forgetting_curve", "figures/user_463_forgetting_curve_by_sm2_repetition.json");
   </script>
 </body>
