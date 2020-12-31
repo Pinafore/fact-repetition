@@ -258,10 +258,13 @@ def get_user_charts(
 
 # %%
 if __name__ == '__main__':
-    # df = get_retention_features_df()
-    # df['n_minutes_spent'] = df.groupby('user_id')['elapsed_milliseconds'].cumsum() // 60000
-    # df.to_hdf(f'{settings.CODE_DIR}/figures.h5', key='df', mode='w')
-    df = pd.read_hdf(f'{settings.CODE_DIR}/figures.h5', 'df')
+    figure_df_path = f'{settings.CODE_DIR}/figures.h5'
+    if not os.path.exists(figure_df_path):
+        df = get_retention_features_df()
+        df['n_minutes_spent'] = df.groupby('user_id')['elapsed_milliseconds'].cumsum() // 60000
+        df.to_hdf(f'{settings.CODE_DIR}/figures.h5', key='df', mode='w')
+    else:
+        df = pd.read_hdf(figure_df_path, 'df')
 
     path = f'{settings.CODE_DIR}/figures'
     figure_composition(df, path)

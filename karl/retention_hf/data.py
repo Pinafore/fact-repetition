@@ -4,9 +4,9 @@ import pytz
 import dataclasses
 import multiprocessing
 import numpy as np
-from datetime import date
+from datetime import date, datetime
 from pydantic import BaseModel
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Union
 from dataclasses import dataclass
 from concurrent.futures import ProcessPoolExecutor
 from sqlalchemy.orm import Session
@@ -16,7 +16,9 @@ from transformers import DistilBertTokenizerFast
 
 from karl.db.session import SessionLocal, engine
 from karl.config import settings
-from karl.models import User, Card, UserFeatureVector, CardFeatureVector, UserCardFeatureVector
+from karl.models import User, Card, \
+    UserFeatureVector, CardFeatureVector, UserCardFeatureVector, \
+    CurrUserFeatureVector, CurrCardFeatureVector, CurrUserCardFeatureVector
 
 
 class RetentionFeaturesSchema(BaseModel):
@@ -25,6 +27,7 @@ class RetentionFeaturesSchema(BaseModel):
     '''
     user_id: str
     card_id: str
+    card_text: str
     is_new_fact: bool
     user_n_study_positive: int
     user_n_study_negative: int
@@ -53,6 +56,60 @@ class RetentionFeaturesSchema(BaseModel):
     utc_date: date
 
 
+def vectors_to_features(
+    v_usercard: Union[UserCardFeatureVector, CurrUserCardFeatureVector],
+    v_user: Union[UserFeatureVector, CurrUserFeatureVector],
+    v_card: Union[CardFeatureVector, CurrCardFeatureVector],
+    date: datetime,
+    card_text: str,
+    elapsed_milliseconds: int = 0,
+) -> RetentionFeaturesSchema:
+    # NOTE this function should be a replica of `_get_user_features` in `retention_hf.data`
+    if v_usercard.previous_study_date is not None:
+        usercard_delta = (date - v_usercard.previous_study_date).total_seconds()
+    else:
+        usercard_delta = 0
+    if v_usercard.leitner_scheduled_date is not None:
+        delta_to_leitner_scheduled_date = (v_usercard.leitner_scheduled_date - date).total_seconds()
+    else:
+        delta_to_leitner_scheduled_date = 0
+    if v_usercard.sm2_scheduled_date is not None:
+        delta_to_sm2_scheduled_date = (v_usercard.sm2_scheduled_date - date).total_seconds()
+    else:
+        delta_to_sm2_scheduled_date = 0
+    return RetentionFeaturesSchema(
+        user_id=v_usercard.user_id,
+        card_id=v_usercard.card_id,
+        card_text=card_text,
+        is_new_fact=(v_usercard.correct_on_first_try is None),
+        user_n_study_positive=v_user.n_study_positive,
+        user_n_study_negative=v_user.n_study_negative,
+        user_n_study_total=v_user.n_study_total,
+        card_n_study_positive=v_card.n_study_positive,
+        card_n_study_negative=v_card.n_study_negative,
+        card_n_study_total=v_card.n_study_total,
+        usercard_n_study_positive=v_usercard.n_study_positive,
+        usercard_n_study_negative=v_usercard.n_study_negative,
+        usercard_n_study_total=v_usercard.n_study_total,
+        acc_user=0 if v_user.n_study_total == 0 else v_user.n_study_positive / v_user.n_study_total,
+        acc_card=0 if v_card.n_study_total == 0 else v_card.n_study_positive / v_card.n_study_total,
+        acc_usercard=0 if v_usercard.n_study_total == 0 else v_usercard.n_study_positive / v_usercard.n_study_total,
+        usercard_delta=usercard_delta or 0,
+        usercard_delta_previous=v_usercard.previous_delta or 0,
+        usercard_previous_study_response=v_usercard.previous_study_response or False,
+        leitner_box=v_usercard.leitner_box or 0,
+        sm2_efactor=v_usercard.sm2_efactor or 0,
+        sm2_interval=v_usercard.sm2_interval or 0,
+        sm2_repetition=v_usercard.sm2_repetition or 0,
+        delta_to_leitner_scheduled_date=delta_to_leitner_scheduled_date,
+        delta_to_sm2_scheduled_date=delta_to_sm2_scheduled_date,
+        repetition_model=json.loads(v_user.parameters)['repetition_model'],
+        correct_on_first_try=v_usercard.correct_on_first_try or False,
+        elapsed_milliseconds=elapsed_milliseconds,
+        utc_date=date.astimezone(pytz.utc).date(),
+    )
+
+
 def _get_user_features(
     user_id: str,
     session: Session = SessionLocal()
@@ -67,50 +124,9 @@ def _get_user_features(
         v_usercard = session.query(UserCardFeatureVector).get(record.id)
         if v_user is None or v_card is None or v_usercard is None:
             continue
-        if v_usercard.previous_study_date is not None:
-            usercard_delta = (record.date - v_usercard.previous_study_date).total_seconds()
-        else:
-            usercard_delta = 0
-        if v_usercard.leitner_scheduled_date is not None:
-            delta_to_leitner_scheduled_date = (v_usercard.leitner_scheduled_date - record.date).total_seconds()
-        else:
-            delta_to_leitner_scheduled_date = 0
-        if v_usercard.sm2_scheduled_date is not None:
-            delta_to_sm2_scheduled_date = (v_usercard.sm2_scheduled_date - record.date).total_seconds()
-        else:
-            delta_to_sm2_scheduled_date = 0
-        labels.append(record.response)
         elapsed_milliseconds = record.elapsed_milliseconds_text + record.elapsed_milliseconds_answer
-        features.append(RetentionFeaturesSchema(
-            user_id=record.user_id,
-            card_id=record.card_id,
-            is_new_fact=record.is_new_fact,
-            user_n_study_positive=v_user.n_study_positive,
-            user_n_study_negative=v_user.n_study_negative,
-            user_n_study_total=v_user.n_study_total,
-            card_n_study_positive=v_card.n_study_positive,
-            card_n_study_negative=v_card.n_study_negative,
-            card_n_study_total=v_card.n_study_total,
-            usercard_n_study_positive=v_usercard.n_study_positive,
-            usercard_n_study_negative=v_usercard.n_study_negative,
-            usercard_n_study_total=v_usercard.n_study_total,
-            acc_user=0 if v_user.n_study_total == 0 else v_user.n_study_positive / v_user.n_study_total,
-            acc_card=0 if v_card.n_study_total == 0 else v_card.n_study_positive / v_card.n_study_total,
-            acc_usercard=0 if v_usercard.n_study_total == 0 else v_usercard.n_study_positive / v_usercard.n_study_total,
-            usercard_delta=usercard_delta or 0,
-            usercard_delta_previous=v_usercard.previous_delta or 0,
-            usercard_previous_study_response=v_usercard.previous_study_response or False,
-            leitner_box=v_usercard.leitner_box or 0,
-            sm2_efactor=v_usercard.sm2_efactor or 0,
-            sm2_interval=v_usercard.sm2_interval or 0,
-            sm2_repetition=v_usercard.sm2_repetition or 0,
-            delta_to_leitner_scheduled_date=delta_to_leitner_scheduled_date,
-            delta_to_sm2_scheduled_date=delta_to_sm2_scheduled_date,
-            repetition_model=json.loads(v_user.parameters)['repetition_model'],
-            correct_on_first_try=v_usercard.correct_on_first_try or False,
-            elapsed_milliseconds=elapsed_milliseconds,
-            utc_date=record.date.astimezone(pytz.utc).date(),
-        ))
+        features.append(vectors_to_features(v_usercard, v_user, v_card, record.date, record.card.text, elapsed_milliseconds))
+        labels.append(record.response)
     session.close()
     return features, labels
 
@@ -216,6 +232,9 @@ class RetentionDataset(torch.utils.data.Dataset):
             features['test_old_card'] = (features['test_old_card'] - mean_old) / std_old
             print('features["train_new_card"].shape', features['train_new_card'].shape)
             print('features["train_old_card"].shape', features['train_old_card'].shape)
+
+            self.mean = mean_old
+            self.std = std_old
 
             # create card encoding
             card_texts = []
