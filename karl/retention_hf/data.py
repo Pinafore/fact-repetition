@@ -53,18 +53,6 @@ class RetentionFeaturesSchema(BaseModel):
     utc_date: date
 
 
-@dataclass(frozen=True)
-class RetentionInput:
-    input_ids: List[int]
-    attention_mask: Optional[List[int]] = None
-    retention_features: Optional[List[float]] = None
-    label: Optional[int] = None
-
-    def to_json_string(self):
-        """Serializes this instance to a JSON string."""
-        return json.dumps(dataclasses.asdict(self)) + "\n"
-
-
 def _get_user_features(
     user_id: str,
     session: Session = SessionLocal()
@@ -119,12 +107,24 @@ def _get_user_features(
             delta_to_leitner_scheduled_date=delta_to_leitner_scheduled_date,
             delta_to_sm2_scheduled_date=delta_to_sm2_scheduled_date,
             repetition_model=json.loads(v_user.parameters)['repetition_model'],
-            correct_on_first_try=v_usercard.correct_on_first_try,
+            correct_on_first_try=v_usercard.correct_on_first_try or False,
             elapsed_milliseconds=elapsed_milliseconds,
             utc_date=record.date.astimezone(pytz.utc).date(),
         ))
     session.close()
     return features, labels
+
+
+@dataclass(frozen=True)
+class RetentionInput:
+    input_ids: List[int]
+    attention_mask: Optional[List[int]] = None
+    retention_features: Optional[List[float]] = None
+    label: Optional[int] = None
+
+    def to_json_string(self):
+        """Serializes this instance to a JSON string."""
+        return json.dumps(dataclasses.asdict(self)) + "\n"
 
 
 class RetentionDataset(torch.utils.data.Dataset):
@@ -158,15 +158,6 @@ class RetentionDataset(torch.utils.data.Dataset):
                     continue
                 futures.append(executor.submit(_get_user_features, user.id))
 
-            train_features, test_features = [], []
-            train_labels, test_labels = [], []
-            for future in futures:
-                f1, f2, f3, f4 = future.result()
-                train_features.extend(f1)
-                train_labels.extend(f2)
-                test_features.extend(f3)
-                test_labels.extend(f4)
-
             folds = [
                 'train_new_card',
                 'train_old_card',
@@ -176,30 +167,51 @@ class RetentionDataset(torch.utils.data.Dataset):
             features = {f: [] for f in folds}
             labels = {f: [] for f in folds}
             card_ids = {f: [] for f in folds}
-            feature_keys = [
-                key for key in RetentionFeaturesSchema.__fields__.keys()
-                if key not in ['user_id', 'card_id']
+
+            feature_fields = [
+                field_name for field_name, field_info in RetentionFeaturesSchema.__fields__.items()
+                if field_info.type_ in [int, float, bool]
             ]
-            for x, y in zip(train_features, train_labels):
-                f = 'train_new_card' if x.is_new_fact else 'train_old_card'
-                features[f].append([x.__dict__[key] for key in feature_keys])
-                labels[f].append(y)
-                card_ids[f].append(x.card_id)
-            for x, y in zip(test_features, test_labels):
-                f = 'test_new_card' if x.is_new_fact else 'test_old_card'
-                features[f].append([x.__dict__[key] for key in feature_keys])
-                labels[f].append(y)
-                card_ids[f].append(x.card_id)
+
+            for future in futures:
+                user_features, user_labels = future.result()
+                user_features_new, user_features_old = [], []
+                user_labels_new, user_labels_old = [], []
+                user_card_ids_new, user_card_ids_old = [], []
+                for x, y in zip(user_features, user_labels):
+                    if x.is_new_fact:
+                        # user_features_new.append([x.__dict__[field] for field in feature_fields if field != 'correct_on_first_try'])
+                        user_labels_new.append(y)
+                        user_card_ids_new.append(x.card_id)
+                    else:
+                        user_features_old.append([x.__dict__[field] for field in feature_fields])
+                        user_labels_old.append(y)
+                        user_card_ids_old.append(x.card_id)
+                # the first 3/4 of examples goes to train, the rest goes to test
+                n_train_new = int(len(user_labels_new) * 0.75)
+                n_train_old = int(len(user_labels_old) * 0.75)
+                features['train_new_card'].extend(user_features_new[:n_train_new])
+                features['train_old_card'].extend(user_features_old[:n_train_old])
+                features['test_new_card'].extend(user_features_new[n_train_new:])
+                features['test_old_card'].extend(user_features_old[n_train_old:])
+                labels['train_new_card'].extend(user_labels_new[:n_train_new])
+                labels['train_old_card'].extend(user_labels_old[:n_train_old])
+                labels['test_new_card'].extend(user_labels_new[n_train_new:])
+                labels['test_old_card'].extend(user_labels_old[n_train_old:])
+                card_ids['train_new_card'].extend(user_card_ids_new[:n_train_new])
+                card_ids['train_old_card'].extend(user_card_ids_old[:n_train_old])
+                card_ids['test_new_card'].extend(user_card_ids_new[n_train_new:])
+                card_ids['test_old_card'].extend(user_card_ids_old[n_train_old:])
 
             # normalize
             for f in folds:
                 features[f] = np.array(features[f])
-            mean_new = features['train_new_card'].mean(axis=0)
-            std_new = features['train_new_card'].std(axis=0)
+            # mean_new = features['train_new_card'].mean(axis=0)
+            # std_new = features['train_new_card'].std(axis=0)
             mean_old = features['train_old_card'].mean(axis=0)
             std_old = features['train_old_card'].std(axis=0)
-            features['train_new_card'] = (features['train_new_card'] - mean_new) / std_new
-            features['test_new_card'] = (features['test_new_card'] - mean_new) / std_new
+            # features['train_new_card'] = (features['train_new_card'] - mean_new) / std_new
+            # features['test_new_card'] = (features['test_new_card'] - mean_new) / std_new
             features['train_old_card'] = (features['train_old_card'] - mean_old) / std_old
             features['test_old_card'] = (features['test_old_card'] - mean_old) / std_old
             print('features["train_new_card"].shape', features['train_new_card'].shape)
@@ -215,16 +227,18 @@ class RetentionDataset(torch.utils.data.Dataset):
             cards = {f: [card_id_to_index[card_id] for card_id in card_ids[f]] for f in folds}
 
             # put everything together and cache
+            inputs = {}
             for f in folds:
-                inputs = []
+                inputs[f] = []
                 for i, label in enumerate(labels[f]):
                     example = {k: v[cards[f][i]] for k, v in card_encodings.items()}
-                    example['retention_features'] = features[f][i]
                     example['label'] = label
-                    inputs.append(RetentionInput(**example))
+                    if 'new' not in f:
+                        example['retention_features'] = features[f][i]
+                    inputs[f].append(RetentionInput(**example))
                 cached_inputs_file = f'{data_dir}/cached_{f}'
                 print(f"Saving features into cached file {cached_inputs_file}")
-                torch.save(inputs, cached_inputs_file)
+                torch.save(inputs[f], cached_inputs_file)
             session.close()
         self.inputs = inputs[fold]
 

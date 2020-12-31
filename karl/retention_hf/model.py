@@ -41,7 +41,7 @@ class DistilBertRetentionModelConfig(PretrainedConfig):
         qa_dropout=0.1,
         seq_classif_dropout=0.2,
         pad_token_id=0,
-        retention_feature_size=19,
+        retention_feature_size=0,
         **kwargs,
     ):
         super().__init__(**kwargs, pad_token_id=pad_token_id)
@@ -107,8 +107,6 @@ class DistilBertRetentionModel(DistilBertPreTrainedModel):
         )
         hidden_state = distilbert_output[0]  # (bs, seq_len, dim)
         pooled_output = hidden_state[:, 0]  # (bs, dim)
-        # assuming the whole batch is either all new or all old
-        # the first feature is `is_new_fact`
         if self.retention_feature_size > 0:
             pooled_output = torch.cat((pooled_output, retention_features), axis=1)
         pooled_output = self.pre_classifier(pooled_output)  # (bs, dim)
@@ -130,12 +128,12 @@ def compute_metrics(p: EvalPrediction) -> Dict:
     return {"acc": simple_accuracy(preds, p.label_ids)}
 
 
-def train_individual(fold='new_card'):
-    feature_keys = [
-        key for key in RetentionFeaturesSchema.__fields__.keys()
-        if key not in ['user_id', 'card_id', 'label']
+def train(fold='new_card'):
+    feature_fields = [
+        field_name for field_name, field_info in RetentionFeaturesSchema.__fields__.items()
+        if field_info.type_ in [int, float, bool]
     ]
-    retention_feature_size = 0 if fold == 'new_card' else len(feature_keys)
+    retention_feature_size = 0 if fold == 'new_card' else len(feature_fields)
     config = DistilBertRetentionModelConfig(retention_feature_size=retention_feature_size, num_labels=2)
     model = DistilBertRetentionModel(config=config)
     tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
@@ -153,14 +151,14 @@ def train_individual(fold='new_card'):
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=test_dataset,
-        data_collator=retention_data_collator,
+        data_collator=retention_data_collator if fold == 'old_card' else None,
         compute_metrics=compute_metrics,
     )
     trainer.train()
     trainer.save_model()
 
 
-def eval_individual(fold='new_card'):
+def eval(fold='new_card'):
     tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
     train_dataset = RetentionDataset(settings.DATA_DIR, f'train_{fold}', tokenizer)
     test_dataset = RetentionDataset(settings.DATA_DIR, f'test_{fold}', tokenizer)
@@ -180,7 +178,7 @@ def eval_individual(fold='new_card'):
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=test_dataset,
-        data_collator=retention_data_collator,
+        data_collator=retention_data_collator if fold == 'old_card' else None,
         compute_metrics=compute_metrics,
     )
 
@@ -200,9 +198,9 @@ def test_majority_baseline(fold='new_card'):
 
 
 if __name__ == '__main__':
-    # train_individual(fold='new_card')
-    # train_individual(fold='old_card')
-    # eval_individual(fold='new_card')
-    # eval_individual(fold='old_card')
-    test_majority_baseline(fold='new_card')
-    test_majority_baseline(fold='old_card')
+    # train(fold='new_card')
+    train(fold='old_card')
+    # eval(fold='new_card')
+    eval(fold='old_card')
+    # test_majority_baseline(fold='new_card')
+    # test_majority_baseline(fold='old_card')
