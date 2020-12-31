@@ -16,7 +16,7 @@ from karl.models import User, Card, Record, Parameters, UserStats,\
     UserCardFeatureVector, UserFeatureVector, CardFeatureVector,\
     CurrUserCardFeatureVector, CurrUserFeatureVector, CurrCardFeatureVector,\
     Leitner, SM2
-from karl.retention_hf.data import RetentionFeaturesSchema, vectors_to_features
+from karl.retention_hf.data import vectors_to_features
 from karl.db.session import SessionLocal, engine
 from karl.config import settings
 
@@ -237,7 +237,7 @@ class KARLScheduler:
             for card in cards:
                 v_card = self.get_curr_card_vector(card.id)
                 v_usercard = self.get_curr_usercard_vector(user.id, card.id)
-                feature_vectors.append(self.vectors_to_features(v_usercard, v_user, v_card, date, card.text))
+                feature_vectors.append(vectors_to_features(v_usercard, v_user, v_card, date, card.text))
         else:
             executor = ProcessPoolExecutor(
                 mp_context=multiprocessing.get_context(settings.MP_CONTEXT),
@@ -249,7 +249,7 @@ class KARLScheduler:
                 v_usercard_futures.append(executor.submit(self.get_curr_usercard_vector, user.id, card.id))
             for card, v_card_future, v_usercard_future in zip(cards, v_card_futures, v_usercard_futures):
                 feature_vectors.append(
-                    self.vectors_to_features(
+                    vectors_to_features(
                         v_usercard_future.result(), v_user, v_card_future.result(), date, card.text
                     ))
 

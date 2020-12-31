@@ -235,6 +235,8 @@ class RetentionDataset(torch.utils.data.Dataset):
 
             self.mean = mean_old
             self.std = std_old
+            torch.save(self.mean, f'{data_dir}/cached_mean')
+            torch.save(self.std, f'{data_dir}/cached_std')
 
             # create card encoding
             card_texts = []
@@ -260,6 +262,8 @@ class RetentionDataset(torch.utils.data.Dataset):
                 torch.save(inputs[f], cached_inputs_file)
             session.close()
         self.inputs = inputs[fold]
+        self.mean = torch.load(f'{data_dir}/cached_mean')
+        self.std = torch.load(f'{data_dir}/cached_std')
 
     def __len__(self):
         return len(self.inputs)
@@ -304,7 +308,7 @@ if __name__ == '__main__':
     tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
     train_dataset = RetentionDataset(
         data_dir=settings.DATA_DIR,
-        fold='train',
+        fold='train_new_card',
         tokenizer=tokenizer
     )
     print(len(train_dataset))

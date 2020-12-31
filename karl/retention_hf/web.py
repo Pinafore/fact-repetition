@@ -6,10 +6,11 @@ import logging
 import numpy as np
 from typing import List
 from fastapi import FastAPI
-import torch.nn.functional as F
+
+from transformers import DistilBertTokenizerFast, default_data_collator
 
 from karl.retention_hf.model import DistilBertRetentionModel
-from karl.retention_hf.data import RetentionDataset, RetentionFeaturesSchema, RetentionInput
+from karl.retention_hf.data import RetentionFeaturesSchema, RetentionInput, retention_data_collator
 from karl.config import settings
 
 
@@ -21,41 +22,46 @@ class RetentionModel:
         self.model_old_card = DistilBertRetentionModel.from_pretrained(f'{settings.CODE_DIR}/output/retention_hf_old_card')
         self.model_old_card.eval()
         self.tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
-        self.dataset = RetentionDataset()
+        self.mean = torch.load(f'{settings.DATA_DIR}/cached_mean')
+        self.std = torch.load(f'{settings.DATA_DIR}/cached_std')
         self.feature_fields = [
             field_name for field_name, field_info in RetentionFeaturesSchema.__fields__.items()
             if field_info.type_ in [int, float, bool]
         ]
 
+    def predict(
+        self,
+        feature_vectors: List[RetentionFeaturesSchema],
+    ):
+        card_encodings = self.tokenizer([x.card_text for x in feature_vectors], truncation=True, padding=True)
+
+        # TODO
+        if feature_vectors[0].is_new_fact:
+            examples = []
+            for i, _ in enumerate(feature_vectors):
+                example = {k: v[i] for k, v in card_encodings.items()}
+                examples.append(RetentionInput(**example))
+            inputs = default_data_collator(examples)
+            output = self.model_new_card.forward(**inputs)[0].detach().cpu().numpy().tolist()
+        else:
+            examples = []
+            for i, x in enumerate(feature_vectors):
+                retention_features = [x.__dict__[field] for field in self.feature_fields]
+                retention_features = np.array(retention_features)
+                retention_features = (retention_features - self.mean) / self.std
+                example = {k: v[i] for k, v in card_encodings.items()}
+                example['retention_features'] = retention_features
+                examples.append(RetentionInput(**example))
+            inputs = retention_data_collator(examples)
+            output = self.model_old_card.forward(**inputs)[0].detach().cpu().numpy().tolist()
+        # TODO check for NaN
+        return output
+
     def predict_one(
         self,
         feature_vector: RetentionFeaturesSchema,
     ) -> float:
-        card_encodings = self.tokenizer(card_texts, truncation=True, padding=True)
-        if feature_vector.is_new_fact:
-            example = RetentionInput(**card_encodings)
-        else:
-            retention_features = [feature_vector.__dict__[field] for field in self.feature_fields]
-            retention_features = np.array(retention_features)
-            retention_features = (retention_features - self.dataset.mean) / self.dataset.std
-            example = card_encodings
-            example['retention_features'] = retention_features
-        return self.model(RetentionInput(**example))
-
-    def predict(
-        self,
-        feature_vectors: List[RetentionFeaturesSchema],
-    ) -> List[float]:
-        card_encodings = self.tokenizer(card_texts, truncation=True, padding=True)
-        if feature_vector.is_new_fact:
-            example = RetentionInput(**card_encodings)
-        else:
-            retention_features = [feature_vector.__dict__[field] for field in self.feature_fields]
-            retention_features = np.array(retention_features)
-            retention_features = (retention_features - self.dataset.mean) / self.dataset.std
-            example = card_encodings
-            example['retention_features'] = retention_features
-        return self.model(RetentionInput(**example))
+        return self.predict([feature_vector])
 
 
 # create logger with 'retention'
