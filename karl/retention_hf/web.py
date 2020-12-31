@@ -34,26 +34,36 @@ class RetentionModel:
         feature_vectors: List[RetentionFeaturesSchema],
     ):
         card_encodings = self.tokenizer([x.card_text for x in feature_vectors], truncation=True, padding=True)
-
-        # TODO
-        if feature_vectors[0].is_new_fact:
-            examples = []
-            for i, _ in enumerate(feature_vectors):
+        new_indices, old_indices = [], []
+        new_examples, old_examples = [], []
+        for i, x in enumerate(feature_vectors):
+            if x.is_new_fact:
                 example = {k: v[i] for k, v in card_encodings.items()}
-                examples.append(RetentionInput(**example))
-            inputs = default_data_collator(examples)
-            output = self.model_new_card.forward(**inputs)[0].detach().cpu().numpy().tolist()
-        else:
-            examples = []
-            for i, x in enumerate(feature_vectors):
+                new_examples.append(RetentionInput(**example))
+                new_indices.append(i)
+            else:
                 retention_features = [x.__dict__[field] for field in self.feature_fields]
                 retention_features = np.array(retention_features)
                 retention_features = (retention_features - self.mean) / self.std
                 example = {k: v[i] for k, v in card_encodings.items()}
                 example['retention_features'] = retention_features
-                examples.append(RetentionInput(**example))
-            inputs = retention_data_collator(examples)
-            output = self.model_old_card.forward(**inputs)[0].detach().cpu().numpy().tolist()
+                old_examples.append(RetentionInput(**example))
+                old_indices.append(i)
+
+        output = [None for _ in feature_vectors]
+        if len(new_examples) > 0:
+            new_inputs = default_data_collator(new_examples)
+            new_output = self.model_new_card.forward(**new_inputs)[0].detach().cpu().numpy()
+            where_are_NaNs = np.isnan(new_output)
+            new_output[where_are_NaNs] = 0.5
+            for i, x in zip(new_indices, new_output.tolist()):
+                output[i] = x
+        if len(old_examples) > 0:
+            old_inputs = retention_data_collator(old_examples)
+            old_output = self.model_old_card.forward(**old_inputs)[0].detach().cpu().numpy().tolist()
+            old_output = np.nan_to_num(old_output)
+            for i, x in zip(old_indices, old_output.tolist()):
+                output[i] = x
         # TODO check for NaN
         return output
 

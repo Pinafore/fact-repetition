@@ -9,9 +9,10 @@ from karl.models import User, UserFeatureVector, CardFeatureVector, UserCardFeat
 
 # %%
 session = SessionLocal()
-records = [x for x in session.query(User).get('463').records if x.is_new_fact]
+new_records = [x for x in session.query(User).get('463').records if x.is_new_fact]
+old_records = [x for x in session.query(User).get('463').records if not x.is_new_fact]
 feature_vectors = []
-for record in records[:10]:
+for record in new_records[:10] + old_records[:10]:
     v_user = session.query(UserFeatureVector).get(record.id)
     v_card = session.query(CardFeatureVector).get(record.id)
     v_usercard = session.query(UserCardFeatureVector).get(record.id)
