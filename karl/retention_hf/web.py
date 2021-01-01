@@ -7,7 +7,6 @@ import numpy as np
 from typing import List
 from fastapi import FastAPI
 
-import torch.nn.functional as F
 from transformers import DistilBertTokenizerFast, default_data_collator
 
 from karl.retention_hf.model import DistilBertRetentionModel
@@ -26,10 +25,7 @@ class RetentionModel:
         self.mean = torch.load(f'{settings.DATA_DIR}/cached_mean')
         self.std = torch.load(f'{settings.DATA_DIR}/cached_std')
 
-    def predict(
-        self,
-        feature_vectors: List[RetentionFeaturesSchema],
-    ):
+    def predict(self, feature_vectors: List[RetentionFeaturesSchema]):
         card_encodings = self.tokenizer([x.card_text for x in feature_vectors], truncation=True, padding=True)
         new_indices, old_indices = [], []
         new_examples, old_examples = [], []
@@ -50,13 +46,13 @@ class RetentionModel:
         output = [None for _ in feature_vectors]
         if len(new_examples) > 0:
             new_inputs = default_data_collator(new_examples)
-            new_output = F.softmax(self.model_new_card.forward(**new_inputs)[0], dim=-1)
+            new_output = torch.sigmoid(self.model_new_card.forward(**new_inputs)[0])
             new_output = new_output.detach().cpu().numpy().tolist()
             for i, x in zip(new_indices, new_output):
                 output[i] = x
         if len(old_examples) > 0:
             old_inputs = retention_data_collator(old_examples)
-            old_output = F.softmax(self.model_old_card.forward(**old_inputs)[0], dim=-1)
+            old_output = torch.sigmoid(self.model_old_card.forward(**old_inputs)[0])
             old_output = old_output.detach().cpu().numpy().tolist()
             for i, x in zip(old_indices, old_output):
                 output[i] = x

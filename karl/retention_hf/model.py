@@ -76,7 +76,6 @@ class DistilBertRetentionModel(DistilBertPreTrainedModel):
 
     def __init__(self, config, **kwargs):
         super().__init__(config)
-        self.num_labels = config.num_labels
         self.retention_feature_size = config.retention_feature_size
         self.distilbert = DistilBertModel(config)
         self.dropout = nn.Dropout(config.seq_classif_dropout)
@@ -84,7 +83,8 @@ class DistilBertRetentionModel(DistilBertPreTrainedModel):
             self.pre_classifier = nn.Linear(config.dim, config.dim)
         else:
             self.pre_classifier = nn.Linear(config.dim + config.retention_feature_size, config.dim)
-        self.classifier = nn.Linear(config.dim, config.num_labels)
+        self.classifier = nn.Linear(config.dim, 1)
+        self.criterion = nn.BCELoss()
         self.init_weights()
 
     def forward(
@@ -105,31 +105,33 @@ class DistilBertRetentionModel(DistilBertPreTrainedModel):
             output_attentions=output_attentions,
         )
         hidden_state = distilbert_output[0]  # (bs, seq_len, dim)
-        pooled_output = hidden_state[:, 0]  # (bs, dim)
+        x = hidden_state[:, 0]  # (bs, dim)
         if self.retention_feature_size > 0:
-            pooled_output = torch.cat((pooled_output, retention_features), axis=1)
-        pooled_output = self.pre_classifier(pooled_output)  # (bs, dim)
-        pooled_output = nn.ReLU()(pooled_output)  # (bs, dim)
-        pooled_output = self.dropout(pooled_output)  # (bs, dim)
-        logits = self.classifier(pooled_output)  # (bs, dim)
+            x = torch.cat((x, retention_features), axis=1)
+        x = self.pre_classifier(x)  # (bs, dim)
+        x = nn.ReLU()(x)  # (bs, dim)
+        x = self.dropout(x)  # (bs, dim)
+        x = self.classifier(x)  # (bs, 1)
+        x = torch.sigmoid(x)
 
-        outputs = (logits,) + distilbert_output[1:]
+        outputs = (x,) + distilbert_output[1:]
+
         if labels is not None:
-            loss_fct = nn.CrossEntropyLoss()
-            loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
+            loss = self.criterion(x[:, 0], labels)
             outputs = (loss,) + outputs
 
         return outputs  # (loss), logits, (hidden_states), (attentions)
 
 
 def compute_metrics(p: EvalPrediction) -> Dict:
+    # TODO fix
     preds = np.argmax(p.predictions, axis=1)
     return {"acc": simple_accuracy(preds, p.label_ids)}
 
 
 def train(fold='new_card'):
     retention_feature_size = 0 if fold == 'new_card' else len(feature_fields)
-    config = DistilBertRetentionModelConfig(retention_feature_size=retention_feature_size, num_labels=2)
+    config = DistilBertRetentionModelConfig(retention_feature_size=retention_feature_size)
     model = DistilBertRetentionModel(config=config)
     tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
     train_dataset = RetentionDataset(settings.DATA_DIR, f'train_{fold}', tokenizer)
@@ -146,7 +148,7 @@ def train(fold='new_card'):
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=test_dataset,
-        data_collator=retention_data_collator if fold == 'old_card' else None,
+        data_collator=retention_data_collator,
         compute_metrics=compute_metrics,
     )
     trainer.train()
@@ -173,7 +175,7 @@ def eval(fold='new_card'):
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=test_dataset,
-        data_collator=retention_data_collator if fold == 'old_card' else None,
+        data_collator=retention_data_collator,
         compute_metrics=compute_metrics,
     )
 
@@ -193,9 +195,9 @@ def test_majority_baseline(fold='new_card'):
 
 
 if __name__ == '__main__':
-    train(fold='new_card')
-    # train(fold='old_card')
-    eval(fold='new_card')
-    # eval(fold='old_card')
+    # train(fold='new_card')
+    train(fold='old_card')
+    # eval(fold='new_card')
+    eval(fold='old_card')
     # test_majority_baseline(fold='new_card')
     # test_majority_baseline(fold='old_card')

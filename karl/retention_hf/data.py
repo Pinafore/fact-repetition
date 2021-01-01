@@ -268,19 +268,22 @@ class RetentionDataset(torch.utils.data.Dataset):
 
 
 def retention_data_collator(
-    features: List[RetentionInput]
+    inputs: List[RetentionInput]
 ) -> Dict[str, torch.Tensor]:
-    # In this method we'll make the assumption that all `features` in the batch
+    # In this method we'll make the assumption that all `inputs` in the batch
     # have the same attributes.
     # So we will look at the first element as a proxy for what attributes exist
     # on the whole batch.
-    first = features[0]
+    batch = {}
+    first = inputs[0]
 
-    if hasattr(first, "label") and first.label is not None:
-        labels = torch.tensor([f.label for f in features], dtype=torch.long)
-        batch = {"labels": labels}
-    else:
-        batch = {}
+    if hasattr(first, 'label') and first.label is not None:
+        labels = torch.tensor([f.label for f in inputs], dtype=torch.float)
+        batch['labels'] = labels
+
+    if hasattr(first, 'retention_features') and first.retention_features is not None:
+        retention_features = torch.tensor([f.retention_features for f in inputs], dtype=torch.float)
+        batch['retention_features'] = retention_features
 
     # Handling of all other possible attributes.
     # Again, we will use the first element to figure out which key/values are not None for this model.
@@ -290,9 +293,7 @@ def retention_data_collator(
             and v is not None
             and not isinstance(v, str)
         ):
-            batch[k] = torch.tensor([getattr(f, k) for f in features], dtype=torch.long)
-        elif k == 'retention_features':
-            batch[k] = torch.tensor([getattr(f, k) for f in features], dtype=torch.float)
+            batch[k] = torch.tensor([getattr(f, k) for f in inputs], dtype=torch.long)
 
     return batch
 
