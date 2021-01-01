@@ -3,6 +3,7 @@ import json
 import pytz
 import dataclasses
 import multiprocessing
+import pandas as pd
 import numpy as np
 from datetime import date, datetime
 from pydantic import BaseModel
@@ -16,8 +17,7 @@ from transformers import DistilBertTokenizerFast
 
 from karl.db.session import SessionLocal, engine
 from karl.config import settings
-from karl.models import User, Card, \
-    UserFeatureVector, CardFeatureVector, UserCardFeatureVector, \
+from karl.models import User, UserFeatureVector, CardFeatureVector, UserCardFeatureVector, \
     CurrUserFeatureVector, CurrCardFeatureVector, CurrUserCardFeatureVector
 
 
@@ -71,7 +71,6 @@ def vectors_to_features(
     card_text: str,
     elapsed_milliseconds: int = 0,
 ) -> RetentionFeaturesSchema:
-    # NOTE this function should be a replica of `_get_user_features` in `retention_hf.data`
     if v_usercard.previous_study_date is not None:
         usercard_delta = (date - v_usercard.previous_study_date).total_seconds()
     else:
@@ -138,6 +137,43 @@ def _get_user_features(
     return features, labels
 
 
+def get_retention_features_df():
+    df_path = f'{settings.CODE_DIR}/retention_features.h5'
+    if os.path.exists(df_path):
+        df = pd.read_hdf(df_path, 'df')
+    else:
+        session = SessionLocal()
+        # gather features
+        futures = []
+        executor = ProcessPoolExecutor(
+            mp_context=multiprocessing.get_context(settings.MP_CONTEXT),
+            initializer=engine.dispose,
+        )
+        for user in session.query(User):
+            if not user.id.isdigit() or len(user.records) == 0:
+                continue
+            futures.append(executor.submit(_get_user_features, user.id))
+
+        features, labels = [], []
+        for future in futures:
+            f1, f2 = future.result()
+            features.extend(f1)
+            labels.extend(f2)
+
+        df = []
+        for feature, label in zip(features, labels):
+            row = feature.__dict__
+            row['response'] = label
+            df.append(row)
+
+        df = pd.DataFrame(df)
+        df['n_minutes_spent'] = df.groupby('user_id')['elapsed_milliseconds'].cumsum() // 60000
+        df.to_hdf(f'{settings.CODE_DIR}/figures.h5', key='df', mode='w')
+        session.close()
+
+    return df
+
+
 @dataclass(frozen=True)
 class RetentionInput:
     input_ids: List[int]
@@ -169,106 +205,58 @@ class RetentionDataset(torch.utils.data.Dataset):
                 'test_old_card': torch.load(f'{data_dir}/cached_test_old_card'),
             }
         else:
-            session = SessionLocal()
             # gather features
-            futures = []
-            executor = ProcessPoolExecutor(
-                mp_context=multiprocessing.get_context(settings.MP_CONTEXT),
-                initializer=engine.dispose,
-            )
-            for user in session.query(User):
-                if not user.id.isdigit() or len(user.records) == 0:
-                    continue
-                futures.append(executor.submit(_get_user_features, user.id))
+            print('gather features')
+            df_all = get_retention_features_df()
+            df_new_card = df_all[df_all.is_new_fact == True]
+            df_old_card = df_all[df_all.is_new_fact == False]
+            df_by_fold = {
+                'train_new_card': df_new_card.groupby('user_id').apply(lambda x: x.iloc[:int(x.user_id.size * 0.75)]),
+                'test_new_card': df_new_card.groupby('user_id').apply(lambda x: x.iloc[int(x.user_id.size * 0.75):]),
+                'train_old_card': df_old_card.groupby('user_id').apply(lambda x: x.iloc[:int(x.user_id.size * 0.75)]),
+                'test_old_card': df_old_card.groupby('user_id').apply(lambda x: x.iloc[int(x.user_id.size * 0.75):]),
+            }
 
-            folds = [
-                'train_new_card',
-                'train_old_card',
-                'test_new_card',
-                'test_old_card',
-            ]
-            features = {f: [] for f in folds}
-            labels = {f: [] for f in folds}
-            card_ids = {f: [] for f in folds}
+            # token encodings
+            print('token encodings')
+            encodings_by_fold = {
+                fold: tokenizer(df.card_text.tolist(), truncation=True, padding=True)
+                for fold, df in df_by_fold.items()
+            }
 
-            for future in futures:
-                user_features, user_labels = future.result()
-                user_features_new, user_features_old = [], []
-                user_labels_new, user_labels_old = [], []
-                user_card_ids_new, user_card_ids_old = [], []
-                for x, y in zip(user_features, user_labels):
-                    if x.is_new_fact:
-                        # user_features_new.append([x.__dict__[field] for field in feature_fields if field != 'correct_on_first_try'])
-                        user_labels_new.append(y)
-                        user_card_ids_new.append(x.card_id)
-                    else:
-                        user_features_old.append([x.__dict__[field] for field in feature_fields])
-                        user_labels_old.append(y)
-                        user_card_ids_old.append(x.card_id)
-                # the first 3/4 of examples goes to train, the rest goes to test
-                n_train_new = int(len(user_labels_new) * 0.75)
-                n_train_old = int(len(user_labels_old) * 0.75)
-                features['train_new_card'].extend(user_features_new[:n_train_new])
-                features['train_old_card'].extend(user_features_old[:n_train_old])
-                features['test_new_card'].extend(user_features_new[n_train_new:])
-                features['test_old_card'].extend(user_features_old[n_train_old:])
-                labels['train_new_card'].extend(user_labels_new[:n_train_new])
-                labels['train_old_card'].extend(user_labels_old[:n_train_old])
-                labels['test_new_card'].extend(user_labels_new[n_train_new:])
-                labels['test_old_card'].extend(user_labels_old[n_train_old:])
-                card_ids['train_new_card'].extend(user_card_ids_new[:n_train_new])
-                card_ids['train_old_card'].extend(user_card_ids_old[:n_train_old])
-                card_ids['test_new_card'].extend(user_card_ids_new[n_train_new:])
-                card_ids['test_old_card'].extend(user_card_ids_old[n_train_old:])
+            # manually crafted features
+            print('normalize')
+            ndarray_by_fold = {
+                fold: df[feature_fields].to_numpy(dtype=np.float64)
+                for fold, df in df_by_fold.items()
+                if fold in ['train_old_card', 'test_old_card']
+            }
 
-            # normalize
-            for f in folds:
-                features[f] = np.array(features[f])
-            # mean_new = features['train_new_card'].mean(axis=0)
-            # std_new = features['train_new_card'].std(axis=0)
-            mean_old = features['train_old_card'].mean(axis=0)
-            std_old = features['train_old_card'].std(axis=0)
-            # features['train_new_card'] = (features['train_new_card'] - mean_new) / std_new
-            # features['test_new_card'] = (features['test_new_card'] - mean_new) / std_new
-            features['train_old_card'] = (features['train_old_card'] - mean_old) / std_old
-            features['test_old_card'] = (features['test_old_card'] - mean_old) / std_old
-            print('features["train_new_card"].shape', features['train_new_card'].shape)
-            print('features["train_old_card"].shape', features['train_old_card'].shape)
-
+            # normalize manually crafted features
+            mean = np.mean(ndarray_by_fold['train_old_card'], axis=0)
+            std = np.std(ndarray_by_fold['train_old_card'], axis=0)
+            torch.save(mean, f'{data_dir}/cached_mean')
+            torch.save(std, f'{data_dir}/cached_std')
+            ndarray_by_fold['train_old_card'] = (ndarray_by_fold['train_old_card'] - mean) / std
+            ndarray_by_fold['test_old_card'] = (ndarray_by_fold['test_old_card'] - mean) / std
             for i, field in enumerate(feature_fields):
-                print(field, '%.2f' % mean_old[i], '%.2f' % std_old[i])
-
-            self.mean = mean_old
-            self.std = std_old
-            torch.save(self.mean, f'{data_dir}/cached_mean')
-            torch.save(self.std, f'{data_dir}/cached_std')
-
-            # create card encoding
-            card_texts = []
-            card_id_to_index = {}
-            for card in session.query(Card):
-                card_id_to_index[card.id] = len(card_id_to_index)
-                card_texts.append(card.text)
-            card_encodings = tokenizer(card_texts, truncation=True, padding=True)
-            cards = {f: [card_id_to_index[card_id] for card_id in card_ids[f]] for f in folds}
+                print(field, '%.2f' % mean[i], '%.2f' % std[i])
 
             # put everything together and cache
             inputs = {}
-            for f in folds:
-                inputs[f] = []
-                for i, label in enumerate(labels[f]):
-                    example = {k: v[cards[f][i]] for k, v in card_encodings.items()}
-                    example['label'] = label
-                    if 'new' not in f:
-                        example['retention_features'] = features[f][i]
-                    inputs[f].append(RetentionInput(**example))
-                cached_inputs_file = f'{data_dir}/cached_{f}'
+            for foold, df in df_by_fold.items():
+                inputs[foold] = []
+                for i, row in enumerate(df.itertuples(index=False)):
+                    example = {k: v[i] for k, v in encodings_by_fold[foold].items()}
+                    example['label'] = row.response
+                    if foold in ndarray_by_fold:
+                        example['retention_features'] = ndarray_by_fold[foold][i]
+                    inputs[foold].append(RetentionInput(**example))
+                cached_inputs_file = f'{data_dir}/cached_{foold}'
                 print(f"Saving features into cached file {cached_inputs_file}")
-                torch.save(inputs[f], cached_inputs_file)
-            session.close()
+                torch.save(inputs[foold], cached_inputs_file)
+
         self.inputs = inputs[fold]
-        self.mean = torch.load(f'{data_dir}/cached_mean')
-        self.std = torch.load(f'{data_dir}/cached_std')
 
     def __len__(self):
         return len(self.inputs)

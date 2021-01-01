@@ -3,13 +3,10 @@ import os
 import pytz
 import altair as alt
 import pandas as pd
-import multiprocessing
 from dateutil.parser import parse as parse_date
-from concurrent.futures import ProcessPoolExecutor
-from karl.retention_hf.data import _get_user_features
-from karl.db.session import SessionLocal, engine
+
+from karl.retention_hf.data import get_retention_features_df
 from karl.config import settings
-from karl.models import User
 
 alt.data_transformers.disable_max_rows()
 alt.renderers.enable('mimetype')
@@ -18,34 +15,6 @@ alt.renderers.enable('mimetype')
 def save_chart_and_pdf(chart, path):
     chart.save(f'{path}.json')
     os.system(f'vl2vg {path}.json | vg2pdf > {path}.pdf')
-
-
-def get_retention_features_df():
-    session = SessionLocal()
-    # gather features
-    futures = []
-    executor = ProcessPoolExecutor(
-        mp_context=multiprocessing.get_context(settings.MP_CONTEXT),
-        initializer=engine.dispose,
-    )
-    for user in session.query(User):
-        if not user.id.isdigit() or len(user.records) == 0:
-            continue
-        futures.append(executor.submit(_get_user_features, user.id))
-
-    features, labels = [], []
-    for future in futures:
-        f1, f2 = future.result()
-        features.extend(f1)
-        labels.extend(f2)
-
-    df = []
-    for feature, label in zip(features, labels):
-        row = feature.__dict__
-        row['response'] = label
-        df.append(row)
-    df = pd.DataFrame(df)
-    return df
 
 
 def figure_composition(df, path):
@@ -258,14 +227,7 @@ def get_user_charts(
 
 # %%
 if __name__ == '__main__':
-    figure_df_path = f'{settings.CODE_DIR}/figures.h5'
-    if not os.path.exists(figure_df_path):
-        df = get_retention_features_df()
-        df['n_minutes_spent'] = df.groupby('user_id')['elapsed_milliseconds'].cumsum() // 60000
-        df.to_hdf(f'{settings.CODE_DIR}/figures.h5', key='df', mode='w')
-    else:
-        df = pd.read_hdf(figure_df_path, 'df')
-
+    df = get_retention_features_df()
     path = f'{settings.CODE_DIR}/figures'
     figure_composition(df, path)
     figure_recall_rate(df, path=path)

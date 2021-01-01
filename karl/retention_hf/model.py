@@ -17,9 +17,7 @@ from transformers import (
 from transformers.data.metrics import simple_accuracy
 
 from karl.config import settings
-from karl.retention_hf.data import RetentionInput, RetentionFeaturesSchema
-from karl.retention_hf.data import RetentionDataset, retention_data_collator
-from karl.retention_hf.data import feature_fields
+from .data import RetentionInput, RetentionDataset, retention_data_collator, feature_fields
 
 
 class DistilBertRetentionModelConfig(PretrainedConfig):

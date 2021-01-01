@@ -23,12 +23,13 @@ from karl.models import User, UserStats, Parameters
 from karl.scheduler import KARLScheduler
 from karl.db.session import SessionLocal, engine
 from karl.config import settings
+from karl.retention_hf import get_retention_features_df
 from karl import figures
 
 
 app = FastAPI()
 scheduler = KARLScheduler()
-figures_df = pd.read_hdf(f'{settings.CODE_DIR}/figures.h5', 'df')
+figures_df = get_retention_features_df()
 
 # create logger with 'scheduler'
 logger = logging.getLogger('scheduler')
