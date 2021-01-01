@@ -56,6 +56,13 @@ class RetentionFeaturesSchema(BaseModel):
     utc_date: date
 
 
+feature_fields = [
+    field_name for field_name, field_info in RetentionFeaturesSchema.__fields__.items()
+    if field_info.type_ in [int, float, bool]
+    and field_name != 'is_new_fact'
+]
+
+
 def vectors_to_features(
     v_usercard: Union[UserCardFeatureVector, CurrUserCardFeatureVector],
     v_user: Union[UserFeatureVector, CurrUserFeatureVector],
@@ -184,11 +191,6 @@ class RetentionDataset(torch.utils.data.Dataset):
             labels = {f: [] for f in folds}
             card_ids = {f: [] for f in folds}
 
-            feature_fields = [
-                field_name for field_name, field_info in RetentionFeaturesSchema.__fields__.items()
-                if field_info.type_ in [int, float, bool]
-            ]
-
             for future in futures:
                 user_features, user_labels = future.result()
                 user_features_new, user_features_old = [], []
@@ -232,6 +234,9 @@ class RetentionDataset(torch.utils.data.Dataset):
             features['test_old_card'] = (features['test_old_card'] - mean_old) / std_old
             print('features["train_new_card"].shape', features['train_new_card'].shape)
             print('features["train_old_card"].shape', features['train_old_card'].shape)
+
+            for i, field in enumerate(feature_fields):
+                print(field, '%.2f' % mean_old[i], '%.2f' % std_old[i])
 
             self.mean = mean_old
             self.std = std_old

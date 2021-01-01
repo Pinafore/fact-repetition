@@ -19,6 +19,7 @@ from transformers.data.metrics import simple_accuracy
 from karl.config import settings
 from karl.retention_hf.data import RetentionInput, RetentionFeaturesSchema
 from karl.retention_hf.data import RetentionDataset, retention_data_collator
+from karl.retention_hf.data import feature_fields
 
 
 class DistilBertRetentionModelConfig(PretrainedConfig):
@@ -129,10 +130,6 @@ def compute_metrics(p: EvalPrediction) -> Dict:
 
 
 def train(fold='new_card'):
-    feature_fields = [
-        field_name for field_name, field_info in RetentionFeaturesSchema.__fields__.items()
-        if field_info.type_ in [int, float, bool]
-    ]
     retention_feature_size = 0 if fold == 'new_card' else len(feature_fields)
     config = DistilBertRetentionModelConfig(retention_feature_size=retention_feature_size, num_labels=2)
     model = DistilBertRetentionModel(config=config)
@@ -198,9 +195,9 @@ def test_majority_baseline(fold='new_card'):
 
 
 if __name__ == '__main__':
-    # train(fold='new_card')
+    train(fold='new_card')
     # train(fold='old_card')
-    # eval(fold='new_card')
+    eval(fold='new_card')
     # eval(fold='old_card')
-    test_majority_baseline(fold='new_card')
-    test_majority_baseline(fold='old_card')
+    # test_majority_baseline(fold='new_card')
+    # test_majority_baseline(fold='old_card')

@@ -7,10 +7,11 @@ import numpy as np
 from typing import List
 from fastapi import FastAPI
 
+import torch.nn.functional as F
 from transformers import DistilBertTokenizerFast, default_data_collator
 
 from karl.retention_hf.model import DistilBertRetentionModel
-from karl.retention_hf.data import RetentionFeaturesSchema, RetentionInput, retention_data_collator
+from karl.retention_hf.data import RetentionFeaturesSchema, RetentionInput, retention_data_collator, feature_fields
 from karl.config import settings
 
 
@@ -24,10 +25,6 @@ class RetentionModel:
         self.tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
         self.mean = torch.load(f'{settings.DATA_DIR}/cached_mean')
         self.std = torch.load(f'{settings.DATA_DIR}/cached_std')
-        self.feature_fields = [
-            field_name for field_name, field_info in RetentionFeaturesSchema.__fields__.items()
-            if field_info.type_ in [int, float, bool]
-        ]
 
     def predict(
         self,
@@ -42,7 +39,7 @@ class RetentionModel:
                 new_examples.append(RetentionInput(**example))
                 new_indices.append(i)
             else:
-                retention_features = [x.__dict__[field] for field in self.feature_fields]
+                retention_features = [x.__dict__[field] for field in feature_fields]
                 retention_features = np.array(retention_features)
                 retention_features = (retention_features - self.mean) / self.std
                 example = {k: v[i] for k, v in card_encodings.items()}
@@ -53,17 +50,16 @@ class RetentionModel:
         output = [None for _ in feature_vectors]
         if len(new_examples) > 0:
             new_inputs = default_data_collator(new_examples)
-            new_output = self.model_new_card.forward(**new_inputs)[0].detach().cpu().numpy()
-            new_output = np.nan_to_num(new_output)
-            for i, x in zip(new_indices, new_output.tolist()):
+            new_output = F.softmax(self.model_new_card.forward(**new_inputs)[0], dim=-1)
+            new_output = new_output.detach().cpu().numpy().tolist()
+            for i, x in zip(new_indices, new_output):
                 output[i] = x
         if len(old_examples) > 0:
             old_inputs = retention_data_collator(old_examples)
-            old_output = self.model_old_card.forward(**old_inputs)[0].detach().cpu().numpy().tolist()
-            old_output = np.nan_to_num(old_output)
-            for i, x in zip(old_indices, old_output.tolist()):
+            old_output = F.softmax(self.model_old_card.forward(**old_inputs)[0], dim=-1)
+            old_output = old_output.detach().cpu().numpy().tolist()
+            for i, x in zip(old_indices, old_output):
                 output[i] = x
-        # TODO check for NaN
         return output
 
     def predict_one(
