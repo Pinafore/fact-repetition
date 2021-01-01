@@ -54,8 +54,7 @@ class RetentionModel:
         if len(new_examples) > 0:
             new_inputs = default_data_collator(new_examples)
             new_output = self.model_new_card.forward(**new_inputs)[0].detach().cpu().numpy()
-            where_are_NaNs = np.isnan(new_output)
-            new_output[where_are_NaNs] = 0.5
+            new_output = np.nan_to_num(new_output)
             for i, x in zip(new_indices, new_output.tolist()):
                 output[i] = x
         if len(old_examples) > 0:

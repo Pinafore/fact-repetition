@@ -16,7 +16,7 @@ from karl.models import User, Card, Record, Parameters, UserStats,\
     UserCardFeatureVector, UserFeatureVector, CardFeatureVector,\
     CurrUserCardFeatureVector, CurrUserFeatureVector, CurrCardFeatureVector,\
     Leitner, SM2
-from karl.retention_hf.data import vectors_to_features
+from karl.retention_hf import vectors_to_features
 from karl.db.session import SessionLocal, engine
 from karl.config import settings
 
