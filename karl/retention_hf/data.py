@@ -208,8 +208,8 @@ class RetentionDataset(torch.utils.data.Dataset):
             # gather features
             print('gather features')
             df_all = get_retention_features_df()
-            df_new_card = df_all[df_all.is_new_fact == True]
-            df_old_card = df_all[df_all.is_new_fact == False]
+            df_new_card = df_all[df_all.is_new_fact == True]  # noqa: E712
+            df_old_card = df_all[df_all.is_new_fact == False]  # noqa: E712
             df_by_fold = {
                 'train_new_card': df_new_card.groupby('user_id', as_index=False).apply(lambda x: x.iloc[:int(x.user_id.size * 0.75)]),
                 'test_new_card': df_new_card.groupby('user_id', as_index=False).apply(lambda x: x.iloc[int(x.user_id.size * 0.75):]),

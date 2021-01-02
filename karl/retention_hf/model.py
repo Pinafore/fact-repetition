@@ -16,7 +16,12 @@ from transformers import (
 )
 
 from karl.config import settings
-from .data import RetentionInput, RetentionDataset, retention_data_collator, feature_fields
+from .data import (  # noqa: F401
+    RetentionInput,
+    RetentionDataset,
+    retention_data_collator,
+    feature_fields,
+)
 
 
 class DistilBertRetentionModelConfig(PretrainedConfig):
@@ -135,7 +140,7 @@ def train(fold='new_card'):
     test_dataset = RetentionDataset(settings.DATA_DIR, f'test_{fold}', tokenizer)
     training_args = TrainingArguments(
         output_dir=f'{settings.CODE_DIR}/output/retention_hf_{fold}',
-        num_train_epochs=1,
+        num_train_epochs=5,
         per_device_train_batch_size=16,
         per_device_eval_batch_size=64,
         learning_rate=2e-05,
@@ -159,7 +164,7 @@ def eval(fold='new_card'):
 
     training_args = TrainingArguments(
         output_dir=f'{settings.CODE_DIR}/output/retention_hf_{fold}',
-        num_train_epochs=10,
+        num_train_epochs=5,
         per_device_train_batch_size=16,
         per_device_eval_batch_size=64,
         learning_rate=2e-05,
@@ -193,8 +198,8 @@ def test_majority_baseline(fold='new_card'):
 
 if __name__ == '__main__':
     train(fold='new_card')
-    # train(fold='old_card')
     eval(fold='new_card')
-    # eval(fold='old_card')
+    train(fold='old_card')
+    eval(fold='old_card')
     # test_majority_baseline(fold='new_card')
     # test_majority_baseline(fold='old_card')
