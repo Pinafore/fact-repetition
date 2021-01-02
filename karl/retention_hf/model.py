@@ -14,7 +14,6 @@ from transformers import (
     TrainingArguments,
     EvalPrediction,
 )
-from transformers.data.metrics import simple_accuracy
 
 from karl.config import settings
 from .data import RetentionInput, RetentionDataset, retention_data_collator, feature_fields
@@ -112,21 +111,19 @@ class DistilBertRetentionModel(DistilBertPreTrainedModel):
         x = nn.ReLU()(x)  # (bs, dim)
         x = self.dropout(x)  # (bs, dim)
         x = self.classifier(x)  # (bs, 1)
-        x = torch.sigmoid(x)
+        x = torch.sigmoid(x)[:, 0]
 
         outputs = (x,) + distilbert_output[1:]
 
         if labels is not None:
-            loss = self.criterion(x[:, 0], labels)
+            loss = self.criterion(x, labels)
             outputs = (loss,) + outputs
 
         return outputs  # (loss), logits, (hidden_states), (attentions)
 
 
 def compute_metrics(p: EvalPrediction) -> Dict:
-    # TODO fix
-    preds = np.argmax(p.predictions, axis=1)
-    return {"acc": simple_accuracy(preds, p.label_ids)}
+    return {"accuracy": np.mean(int(p.predictions > 0.5) == int(p.label_ids))}
 
 
 def train(fold='new_card'):
@@ -196,8 +193,8 @@ def test_majority_baseline(fold='new_card'):
 
 if __name__ == '__main__':
     # train(fold='new_card')
-    train(fold='old_card')
-    # eval(fold='new_card')
-    eval(fold='old_card')
+    # train(fold='old_card')
+    eval(fold='new_card')
+    # eval(fold='old_card')
     # test_majority_baseline(fold='new_card')
     # test_majority_baseline(fold='old_card')

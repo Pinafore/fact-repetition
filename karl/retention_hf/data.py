@@ -211,10 +211,10 @@ class RetentionDataset(torch.utils.data.Dataset):
             df_new_card = df_all[df_all.is_new_fact == True]
             df_old_card = df_all[df_all.is_new_fact == False]
             df_by_fold = {
-                'train_new_card': df_new_card.groupby('user_id').apply(lambda x: x.iloc[:int(x.user_id.size * 0.75)]),
-                'test_new_card': df_new_card.groupby('user_id').apply(lambda x: x.iloc[int(x.user_id.size * 0.75):]),
-                'train_old_card': df_old_card.groupby('user_id').apply(lambda x: x.iloc[:int(x.user_id.size * 0.75)]),
-                'test_old_card': df_old_card.groupby('user_id').apply(lambda x: x.iloc[int(x.user_id.size * 0.75):]),
+                'train_new_card': df_new_card.groupby('user_id', as_index=False).apply(lambda x: x.iloc[:int(x.user_id.size * 0.75)]),
+                'test_new_card': df_new_card.groupby('user_id', as_index=False).apply(lambda x: x.iloc[int(x.user_id.size * 0.75):]),
+                'train_old_card': df_old_card.groupby('user_id', as_index=False).apply(lambda x: x.iloc[:int(x.user_id.size * 0.75)]),
+                'test_old_card': df_old_card.groupby('user_id', as_index=False).apply(lambda x: x.iloc[int(x.user_id.size * 0.75):]),
             }
 
             # token encodings
