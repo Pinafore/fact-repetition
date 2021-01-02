@@ -6,6 +6,8 @@
 </head>
 
 <body>  
+  <div id="eval_forgetting_curve"></div>
+  <div id="eval_recall_rate"></div>
   <div id="composition"></div>
   <div id="recall_rate"></div>
   <div id="forgetting_curve"></div>
@@ -13,6 +15,8 @@
   <div id="user_463_forgetting_curve"></div>
 
   <script>
+  	vegaEmbed("#eval_forgetting_curve", "figures/eval_forgetting_curve.json");
+  	vegaEmbed("#eval_recall_rate", "figures/eval_recall_by_sm2_repetition.json");
   	vegaEmbed("#composition", "figures/composition.json");
   	vegaEmbed("#recall_rate", "figures/recall_by_sm2_repetition.json");
   	vegaEmbed("#forgetting_curve", "figures/forgetting_curve_by_sm2_repetition.json");

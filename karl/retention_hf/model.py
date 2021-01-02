@@ -123,7 +123,7 @@ class DistilBertRetentionModel(DistilBertPreTrainedModel):
 
 
 def compute_metrics(p: EvalPrediction) -> Dict:
-    return {"accuracy": np.mean(int(p.predictions > 0.5) == int(p.label_ids))}
+    return {"accuracy": np.mean((p.predictions > 0.5) == p.label_ids)}
 
 
 def train(fold='new_card'):
@@ -192,7 +192,7 @@ def test_majority_baseline(fold='new_card'):
 
 
 if __name__ == '__main__':
-    # train(fold='new_card')
+    train(fold='new_card')
     # train(fold='old_card')
     eval(fold='new_card')
     # eval(fold='old_card')

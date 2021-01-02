@@ -109,7 +109,10 @@ def figure_recall_rate(
     ).configure_legend(
         labelFontSize=15,
     )
-    save_chart_and_pdf(chart, f'{path}/recall_by_{groupby}')
+    if path is not None:
+        save_chart_and_pdf(chart, f'{path}/recall_by_{groupby}')
+    else:
+        return chart
 
 
 def figure_user_recall_by_repetition(
