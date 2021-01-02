@@ -197,9 +197,9 @@ def test_majority_baseline(fold='new_card'):
 
 
 if __name__ == '__main__':
-    train(fold='new_card')
-    eval(fold='new_card')
-    train(fold='old_card')
-    eval(fold='old_card')
-    # test_majority_baseline(fold='new_card')
-    # test_majority_baseline(fold='old_card')
+    # train(fold='new_card')
+    # eval(fold='new_card')
+    # train(fold='old_card')
+    # eval(fold='old_card')
+    test_majority_baseline(fold='new_card')
+    test_majority_baseline(fold='old_card')

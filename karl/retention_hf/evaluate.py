@@ -51,7 +51,10 @@ def plot(
     )
 
     charts = []
-    for val in sorted(source[groupby].unique()):
+    groupby_vals = sorted(source[groupby].unique())
+    if 'New' in groupby_vals:
+        groupby_vals = ['New'] + groupby_vals[:-1]  # move new to front
+    for val in groupby_vals:
         charts.append(
             alt.vconcat(*(
                 alt.layer(
