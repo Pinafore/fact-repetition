@@ -52,7 +52,7 @@ class RetentionModel:
         t1 = datetime.now(pytz.utc)
         print('============ gather inputs', (t1 - t0).total_seconds())
 
-        batch_size = 32
+        batch_size = 64
         output = [None for _ in feature_vectors]
         if len(new_examples) > 0:
             for i in range(0, len(new_examples), batch_size):
