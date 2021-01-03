@@ -171,7 +171,7 @@ def get_retention_features_df():
 
         df = pd.DataFrame(df)
         df['n_minutes_spent'] = df.groupby('user_id')['elapsed_milliseconds'].cumsum() // 60000
-        df.to_hdf(f'{settings.CODE_DIR}/figures.h5', key='df', mode='w')
+        df.to_hdf(df_path, key='df', mode='w')
         session.close()
 
     return df
