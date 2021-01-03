@@ -167,7 +167,7 @@ def main():
         batch_size=args.test_batch_size, shuffle=False, **kwargs)
 
     n_input = train_dataset.x.shape[1]
-    model = TemperatureScaledNet(n_input=n_input).to(device)
+    model = Net(n_input=n_input).to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     checkpoint_dir = "checkpoints/retention_model_20201028.pt"
@@ -191,57 +191,5 @@ def main():
             best_test_loss = test_loss
 
 
-class RetentionModel:
-
-    def __init__(
-        self,
-        use_cuda=True,
-        checkpoint_dir='checkpoints/retention_model.pt',
-    ):
-        self.dataset = RetentionDataset()
-        n_input = self.dataset.x.shape[1]
-        use_cuda = use_cuda and torch.cuda.is_available()
-        self.device = torch.device("cuda" if use_cuda else "cpu")
-        self.model = TemperatureScaledNet(n_input=n_input).to(self.device)
-        self.model.load_state_dict(torch.load(checkpoint_dir))
-        self.model.eval()
-
-
-def test_majority():
-    train_df, test_df = get_split_dfs()
-
-    def get_user_majority(group):
-        return group.iloc[0]['uid'], int(group['result_binary'].mean() > 0.5)
-
-    returns = apply_parallel(get_user_majority, train_df.groupby('uid'))
-    uids, labels = list(zip(*returns))
-    test_df['user_majority'] = test_df['uid'].map({x: y for x, y in zip(uids, labels)})
-    print('user majority acc train -> test',
-          (test_df['user_majority'] == test_df['result_binary']).mean())
-
-    returns = apply_parallel(get_user_majority, test_df.groupby('uid'))
-    uids, labels = list(zip(*returns))
-    test_df['user_majority'] = test_df['uid'].map({x: y for x, y in zip(uids, labels)})
-    print('user majority acc test -> test',
-          (test_df['user_majority'] == test_df['result_binary']).mean())
-
-    def get_question_majority(group):
-        return group.iloc[0]['qid'], int(group['result_binary'].mean() > 0.5)
-
-    returns = apply_parallel(get_question_majority, train_df.groupby('qid'))
-    qids, labels = list(zip(*returns))
-    test_df['question_majority'] = test_df['qid'].map({x: y for x, y in zip(qids, labels)})
-    print('question majority acc train -> test',
-          (test_df['question_majority'] == test_df['result_binary']).mean())
-
-    returns = apply_parallel(get_question_majority, test_df.groupby('qid'))
-    qids, labels = list(zip(*returns))
-    test_df['question_majority'] = test_df['qid'].map({x: y for x, y in zip(qids, labels)})
-    print('question majority acc test -> test',
-          (test_df['question_majority'] == test_df['result_binary']).mean())
-
-
 if __name__ == '__main__':
     main()
-    # test_wrapper()
-    # test_majority()

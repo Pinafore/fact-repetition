@@ -1,4 +1,4 @@
 allennlp train \
-    --include-package karl.retention \
-    -s checkpoints/karl_bert \
-    -f configs/karl_bert.jsonnet
+    --include-package karl.retention_allennlp \
+    -s checkpoints/retention_allennlp \
+    -f configs/retention_allennlp.jsonnet

@@ -94,6 +94,17 @@ class DistilBertRetentionModel(DistilBertPreTrainedModel):
         self.criterion = nn.BCELoss()
         self.init_weights()
 
+        hidden_size = config.dim + config.retention_feature_size
+
+        self.classifier = nn.Sequential(
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.GELU(),
+            nn.LayerNorm(hidden_dim),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, 1),
+        )
+
     def forward(
         self,
         input_ids=None,
