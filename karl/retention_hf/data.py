@@ -140,9 +140,9 @@ def _get_user_features(
     return features, labels
 
 
-def get_retention_features_df():
+def get_retention_features_df(overwrite: bool = False):
     df_path = f'{settings.CODE_DIR}/retention_features.h5'
-    if os.path.exists(df_path):
+    if not overwrite and os.path.exists(df_path):
         df = pd.read_hdf(df_path, 'df')
     else:
         session = SessionLocal()
@@ -196,11 +196,15 @@ class RetentionDataset(torch.utils.data.Dataset):
         data_dir: str,
         fold: str,
         tokenizer,
+        overwrite_cached_data: bool = False,
+        overwrite_retention_features_df: bool = False,
     ):
-        if os.path.exists(f'{data_dir}/cached_train_new_card') and \
-                os.path.exists(f'{data_dir}/cached_train_old_card') and \
-                os.path.exists(f'{data_dir}/cached_test_new_card') and \
-                os.path.exists(f'{data_dir}/cached_test_old_card'):
+        if (
+            os.path.exists(f'{data_dir}/cached_train_new_card')
+            and os.path.exists(f'{data_dir}/cached_train_old_card')
+            and os.path.exists(f'{data_dir}/cached_test_new_card')
+            and os.path.exists(f'{data_dir}/cached_test_old_card')
+        ) and not overwrite_cached_data:
             inputs = {
                 'train_new_card': torch.load(f'{data_dir}/cached_train_new_card'),
                 'train_old_card': torch.load(f'{data_dir}/cached_train_old_card'),
@@ -210,7 +214,8 @@ class RetentionDataset(torch.utils.data.Dataset):
         else:
             # gather features
             print('gather features')
-            df_all = get_retention_features_df()
+            df_all = get_retention_features_df(overwrite_retention_features_df)
+
             df_new_card = df_all[df_all.is_new_fact == True]  # noqa: E712
             df_old_card = df_all[df_all.is_new_fact == False]  # noqa: E712
             df_by_fold = {

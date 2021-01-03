@@ -215,6 +215,9 @@ def get_user_charts(
 if __name__ == '__main__':
     df = get_retention_features_df()
     path = f'{settings.CODE_DIR}/figures_stat'
+    from pathlib import Path
+    Path(path).mkdir(parents=True, exist_ok=True)
+
     figure_composition(df, path)
     figure_recall_rate(df, path=path)
     figure_forgetting_curve(df, path=path)
