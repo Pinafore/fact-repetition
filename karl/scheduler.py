@@ -170,6 +170,12 @@ class KARLScheduler:
                 previous_delta=None,
                 previous_study_date=None,
                 previous_study_response=None,
+                leitner_box=None,
+                leitner_scheduled_date=None,
+                sm2_efactor=None,
+                sm2_interval=None,
+                sm2_repetition=None,
+                sm2_scheduled_date=None,
             )
             session.add(v_user)
         session.close()
@@ -254,12 +260,16 @@ class KARLScheduler:
                     ))
 
         t1 = datetime.now(pytz.utc)
-        print('======== gather features 1', (t1 - t0).total_seconds())
+        print('======== gather features', (t1 - t0).total_seconds())
+
+        feature_vectors = [x.__dict__ for x in feature_vectors]
+        for x in feature_vectors:
+            x['utc_date'] = str(x['utc_date'])
 
         scores = json.loads(
             requests.get(
                 'http://127.0.0.1:8001/api/karl/predict',
-                data=json.dumps([x.__dict__ for x in feature_vectors])
+                data=json.dumps(feature_vectors)
             ).text
         )
 
@@ -450,6 +460,7 @@ class KARLScheduler:
         if record.deck_id is not None:
             self.update_user_stats(record, deck_id=record.deck_id, utc_date=utc_date, session=session)
 
+        session.commit()
         # update current features
         # NOTE do this last, especially after leitner and sm2
         self.update_feature_vectors(record, date, session)
@@ -474,6 +485,20 @@ class KARLScheduler:
             # from the scheduling request also has None in its `correct_on_first_try`.
             # this is fine, we leave it as None, since that saved feature vector is what was
             # visible to the scheduler before the response was sent by the user.
+        leitner = session.query(Leitner).get((v_usercard.user_id, v_usercard.card_id))
+        sm2 = session.query(SM2).get((v_usercard.user_id, v_usercard.card_id))
+        if leitner is not None:
+            v_usercard.leitner_box = leitner.box
+            v_usercard.leitner_scheduled_date = leitner.scheduled_date
+        else:
+            print('leitner is none')
+        if sm2 is not None:
+            v_usercard.sm2_efactor = sm2.efactor
+            v_usercard.sm2_interval = sm2.interval
+            v_usercard.sm2_repetition = sm2.repetition
+            v_usercard.sm2_scheduled_date = sm2.scheduled_date
+        else:
+            print('sm2 is none')
 
         delta_user = None
         if v_user.previous_study_date is not None:
@@ -604,6 +629,7 @@ class KARLScheduler:
                 interval=1,
                 repetition=0,
             )
+            session.add(sm2)
 
         q = get_quality_from_response(record.response)
         sm2.repetition += 1

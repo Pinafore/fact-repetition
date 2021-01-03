@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+import pytz
 import torch
 import logging
 import numpy as np
+from datetime import datetime
 from typing import List
 from fastapi import FastAPI
 
-from transformers import DistilBertTokenizerFast, default_data_collator
+from transformers import DistilBertTokenizerFast
 
 from karl.retention_hf.model import DistilBertRetentionModel
 from karl.retention_hf.data import RetentionFeaturesSchema, RetentionInput, retention_data_collator, feature_fields
@@ -17,15 +19,19 @@ from karl.config import settings
 class RetentionModel:
 
     def __init__(self):
-        self.model_new_card = DistilBertRetentionModel.from_pretrained(f'{settings.CODE_DIR}/output/retention_hf_new_card')
-        self.model_new_card.eval()
-        self.model_old_card = DistilBertRetentionModel.from_pretrained(f'{settings.CODE_DIR}/output/retention_hf_old_card')
-        self.model_old_card.eval()
+        model_new_card = DistilBertRetentionModel.from_pretrained(f'{settings.CODE_DIR}/output/retention_hf_new_card')
+        model_new_card.eval()
+        self.model_new_card = model_new_card.to('cuda')
+        model_old_card = DistilBertRetentionModel.from_pretrained(f'{settings.CODE_DIR}/output/retention_hf_old_card')
+        model_old_card.eval()
+        self.model_old_card = model_old_card.to('cuda')
         self.tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
         self.mean = torch.load(f'{settings.DATA_DIR}/cached_mean')
         self.std = torch.load(f'{settings.DATA_DIR}/cached_std')
 
     def predict(self, feature_vectors: List[RetentionFeaturesSchema]):
+        t0 = datetime.now(pytz.utc)
+
         card_encodings = self.tokenizer([x.card_text for x in feature_vectors], truncation=True, padding=True)
         new_indices, old_indices = [], []
         new_examples, old_examples = [], []
@@ -43,19 +49,35 @@ class RetentionModel:
                 old_examples.append(RetentionInput(**example))
                 old_indices.append(i)
 
+        t1 = datetime.now(pytz.utc)
+        print('============ gather inputs', (t1 - t0).total_seconds())
+
+        batch_size = 32
         output = [None for _ in feature_vectors]
         if len(new_examples) > 0:
-            new_inputs = default_data_collator(new_examples)
-            new_output = torch.sigmoid(self.model_new_card.forward(**new_inputs)[0])
-            new_output = new_output.detach().cpu().numpy().tolist()
-            for i, x in zip(new_indices, new_output):
-                output[i] = x
+            for i in range(0, len(new_examples), batch_size):
+                xs = retention_data_collator(new_examples[i: i + batch_size])
+                xs = {k: v.to('cuda') for k, v in xs.items()}
+                ys = torch.sigmoid(self.model_new_card.forward(**xs)[0])
+                ys = ys.detach().cpu().numpy().tolist()
+                for i, y in zip(new_indices[i: i + batch_size], ys):
+                    output[i] = y
+
+        t2 = datetime.now(pytz.utc)
+        print('============ predict new', (t2 - t1).total_seconds())
+
         if len(old_examples) > 0:
-            old_inputs = retention_data_collator(old_examples)
-            old_output = torch.sigmoid(self.model_old_card.forward(**old_inputs)[0])
-            old_output = old_output.detach().cpu().numpy().tolist()
-            for i, x in zip(old_indices, old_output):
-                output[i] = x
+            for i in range(0, len(old_examples), batch_size):
+                xs = retention_data_collator(old_examples[i: i + batch_size])
+                xs = {k: v.to('cuda') for k, v in xs.items()}
+                ys = torch.sigmoid(self.model_old_card.forward(**xs)[0])
+                ys = ys.detach().cpu().numpy().tolist()
+                for i, y in zip(old_indices[i: i + batch_size], ys):
+                    output[i] = y
+
+        t3 = datetime.now(pytz.utc)
+        print('============ predict old', (t3 - t2).total_seconds())
+
         return output
 
     def predict_one(
