@@ -170,6 +170,12 @@ class KARLScheduler:
                 previous_delta=None,
                 previous_study_date=None,
                 previous_study_response=None,
+                leitner_box=None,
+                leitner_scheduled_date=None,
+                sm2_efactor=None,
+                sm2_interval=None,
+                sm2_repetition=None,
+                sm2_scheduled_date=None,
             )
             session.add(v_user)
         session.close()
@@ -474,6 +480,20 @@ class KARLScheduler:
             # from the scheduling request also has None in its `correct_on_first_try`.
             # this is fine, we leave it as None, since that saved feature vector is what was
             # visible to the scheduler before the response was sent by the user.
+        leitner = session.query(Leitner).get((v_usercard.user_id, v_usercard.card_id))
+        sm2 = session.query(SM2).get((v_usercard.user_id, v_usercard.card_id))
+        if leitner is not None:
+            v_usercard.leitner_box = leitner.box
+            v_usercard.leitner_scheduled_date = leitner.scheduled_date
+        else:
+            print('leitner is none')
+        if sm2 is not None:
+            v_usercard.sm2_efactor = sm2.efactor
+            v_usercard.sm2_interval = sm2.interval
+            v_usercard.sm2_repetition = sm2.repetition
+            v_usercard.sm2_scheduled_date = sm2.scheduled_date
+        else:
+            print('sm2 is none')
 
         delta_user = None
         if v_user.previous_study_date is not None:
