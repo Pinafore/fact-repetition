@@ -79,6 +79,7 @@ class CurrUserFeatureVector(Base):
     previous_delta = Column(Integer)
     previous_study_date = Column(TIMESTAMP(timezone=True))
     previous_study_response = Column(Boolean)
+    parameters = Column(JSONB)
 
 
 class CurrCardFeatureVector(Base):
