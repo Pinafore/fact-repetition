@@ -11,12 +11,12 @@ from datetime import datetime, timedelta
 from concurrent.futures import ProcessPoolExecutor
 from sqlalchemy.orm import Session
 
-from karl.schemas import ScheduleRequestSchema, UpdateRequestSchema, ScheduleResponseSchema,\
-    RetentionFeaturesSchema, ParametersSchema
+from karl.schemas import ScheduleRequestSchema, UpdateRequestSchema, ScheduleResponseSchema, ParametersSchema
 from karl.models import User, Card, Record, Parameters, UserStats,\
     UserCardFeatureVector, UserFeatureVector, CardFeatureVector,\
     CurrUserCardFeatureVector, CurrUserFeatureVector, CurrCardFeatureVector,\
     Leitner, SM2
+from karl.retention_hf import vectors_to_features
 from karl.db.session import SessionLocal, engine
 from karl.config import settings
 
@@ -214,37 +214,11 @@ class KARLScheduler:
                 previous_delta=None,
                 previous_study_date=None,
                 previous_study_response=None,
+                correct_on_first_try=None,
             )
             session.add(v_usercard)
         session.close()
         return v_usercard
-
-    def vectors_to_features(
-        self,
-        v_usercard: CurrUserCardFeatureVector,
-        v_user: CurrUserFeatureVector,
-        v_card: CurrCardFeatureVector,
-        date: datetime,
-    ) -> RetentionFeaturesSchema:
-        user_previous_result = v_user.previous_study_response
-        if user_previous_result is None:
-            user_previous_result = False
-        delta_usercard = 0
-        if v_usercard.previous_study_date is not None:
-            delta_usercard = (date - v_usercard.previous_study_date).total_seconds()
-        return RetentionFeaturesSchema(
-            user_count_correct=v_usercard.n_study_positive,
-            user_count_wrong=v_usercard.n_study_negative,
-            user_count_total=v_usercard.n_study_total,
-            user_average_overall_accuracy=0 if v_user.n_study_total == 0 else v_user.n_study_positive / v_user.n_study_total,
-            user_average_question_accuracy=0 if v_usercard.n_study_total == 0 else v_usercard.n_study_positive / v_usercard.n_study_total,
-            user_previous_result=user_previous_result,
-            user_gap_from_previous=delta_usercard,
-            question_average_overall_accuracy=0 if v_card.n_study_total == 0 else v_card.n_study_positive / v_card.n_study_total,
-            question_count_total=v_card.n_study_total,
-            question_count_correct=v_card.n_study_positive,
-            question_count_wrong=v_card.n_study_negative,
-        )
 
     def score_recall_batch(
         self,
@@ -263,7 +237,7 @@ class KARLScheduler:
             for card in cards:
                 v_card = self.get_curr_card_vector(card.id)
                 v_usercard = self.get_curr_usercard_vector(user.id, card.id)
-                feature_vectors.append(self.vectors_to_features(v_usercard, v_user, v_card, date))
+                feature_vectors.append(vectors_to_features(v_usercard, v_user, v_card, date, card.text))
         else:
             executor = ProcessPoolExecutor(
                 mp_context=multiprocessing.get_context(settings.MP_CONTEXT),
@@ -273,8 +247,11 @@ class KARLScheduler:
             for card in cards:
                 v_card_futures.append(executor.submit(self.get_curr_card_vector, card.id))
                 v_usercard_futures.append(executor.submit(self.get_curr_usercard_vector, user.id, card.id))
-            for v_card_future, v_usercard_future in zip(v_card_futures, v_usercard_futures):
-                feature_vectors.append(self.vectors_to_features(v_usercard_future.result(), v_user, v_card_future.result(), date))
+            for card, v_card_future, v_usercard_future in zip(cards, v_card_futures, v_usercard_futures):
+                feature_vectors.append(
+                    vectors_to_features(
+                        v_usercard_future.result(), v_user, v_card_future.result(), date, card.text
+                    ))
 
         t1 = datetime.now(pytz.utc)
         print('======== gather features 1', (t1 - t0).total_seconds())
@@ -399,7 +376,11 @@ class KARLScheduler:
                 previous_study_response=v_usercard.previous_study_response,
                 leitner_box=None if leitner is None else leitner.box,
                 leitner_scheduled_date=None if leitner is None else leitner.scheduled_date,
+                sm2_efactor=None if sm2 is None else sm2.efactor,
+                sm2_interval=None if sm2 is None else sm2.interval,
+                sm2_repetition=None if sm2 is None else sm2.repetition,
                 sm2_scheduled_date=None if sm2 is None else sm2.scheduled_date,
+                correct_on_first_try=v_usercard.correct_on_first_try,
             ))
 
         delta_user = None
@@ -487,6 +468,12 @@ class KARLScheduler:
         v_usercard.previous_delta = delta_usercard
         v_usercard.previous_study_date = date
         v_usercard.previous_study_response = record.response
+        if v_usercard.correct_on_first_try is None:
+            v_usercard.correct_on_first_try = record.response
+            # NOTE the correponding `UserCardFeatureVector` saved in # `save_feature_vectors`
+            # from the scheduling request also has None in its `correct_on_first_try`.
+            # this is fine, we leave it as None, since that saved feature vector is what was
+            # visible to the scheduler before the response was sent by the user.
 
         delta_user = None
         if v_user.previous_study_date is not None:

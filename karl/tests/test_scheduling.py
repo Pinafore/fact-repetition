@@ -1,4 +1,3 @@
-# %%
 import json
 import pickle
 import random
@@ -77,5 +76,3 @@ for nth_day in range(n_days):
         )
 
         seconds_offset += 20
-
-# %%

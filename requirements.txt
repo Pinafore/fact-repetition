@@ -16,4 +16,3 @@ altair
 tables
 joblib
 torch
-allennlp
