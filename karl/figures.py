@@ -1,4 +1,6 @@
-# %%
+#!/usr/bin/env python
+# coding: utf-8
+
 import os
 import pytz
 import altair as alt
@@ -60,105 +62,63 @@ def figure_composition(df, path):
     save_chart_and_pdf(chart, f'{path}/composition')
 
 
-def figure_recall_rate(
-    df,
-    path,
-    groupby: str = 'sm2_repetition',
-    max_sm2_repetition: int = 3,
+def plot(
+    source,
+    x_axis,
+    groupby,
 ):
-    '''
-    Recall rate broken down by number of repetition (to handle negative
-    response, follow either Leitner box or SM2 repetition rules).
-    '''
-    source = df.copy().drop('utc_date', axis=1)
-    source['n_minutes_spent_binned'] = pd.qcut(source.n_minutes_spent, 20)
-    source['n_minutes_spent_binned'] = source['n_minutes_spent_binned'].transform(lambda x: round(x.left / 60, 2))  # hours
-    source = source[source.repetition_model.isin(['karl100', 'leitner', 'sm2'])]
-    source = source[source.sm2_repetition <= max_sm2_repetition]
-    source[groupby] = source.apply(lambda x: 'New' if x['is_new_fact'] else str(x[groupby]), axis=1)
-    # first bin is very noisy
-    source = source[source.n_minutes_spent_binned > 1]
-    source = source.groupby(['n_minutes_spent_binned', 'user_id', 'repetition_model', groupby])['response'].mean().to_frame('response').reset_index()
-    source = source.rename(columns={'n_minutes_spent_binned': 'n_hours_spent_binned'})
-
-    selection = alt.selection_multi(fields=['repetition_model'], bind='legend')
-    line = alt.Chart().mark_line().encode(
-        alt.X('n_hours_spent_binned:Q', title='Hours'),
-        alt.Y('mean(response):Q', title='Recall rate'),
-        color=alt.Color('repetition_model:N', title='Repetition model'),
-        opacity=alt.condition(selection, alt.value(0.8), alt.value(0.2))
-    )
-    band = alt.Chart().mark_errorband(extent='ci').encode(
-        alt.X('n_hours_spent_binned:Q', title='Hours'),
-        alt.Y('mean(response):Q', title='Recall rate'),
-        color=alt.Color('repetition_model:N', title='Repetition model'),
-        opacity=alt.condition(selection, alt.value(0.3), alt.value(0.2))
-    )
-    chart = alt.layer(
-        line, band, data=source
-    ).properties(
-        width=180,
-        height=180,
-    ).facet(
-        # force new to appear first
-        facet=alt.Facet(groupby, sort=['New']),
-    ).add_selection(
-        selection
-    ).properties(
-        title='Recall rate',
-    ).configure_legend(
-        labelFontSize=15,
-    )
-    if path is not None:
-        save_chart_and_pdf(chart, f'{path}/recall_by_{groupby}')
+    if 'type' in source:
+        line = alt.Chart().mark_line().encode(
+            alt.X(f'{x_axis}:Q', title='Hours'),
+            alt.Y('mean(value):Q', title='Recall rate', scale=alt.Scale(domain=[0, 1])),
+            color=(alt.Color('type', title=None)),
+        )
+        band = alt.Chart().mark_errorband(extent='ci').encode(
+            alt.X(f'{x_axis}:Q', title='Hours'),
+            alt.Y('value:Q', axis=None, scale=alt.Scale(domain=[0, 1])),
+            color=(alt.Color('type', title=None)),
+        )
     else:
-        return chart
-
-
-def figure_user_recall_by_repetition(
-    df: pd.DataFrame,
-    user_id: str = None,
-    path: str = None,
-    groupby: str = 'sm2_repetition',
-    max_sm2_repetition: int = 3,
-):
-    '''
-    Recall rate broken down by number of repetition (to handle negative
-    response, follow either Leitner box or SM2 repetition rules).
-    '''
-    source = df.copy().drop('utc_date', axis=1)
-    source = source[source.user_id == user_id]
-    source = source[source.sm2_repetition <= max_sm2_repetition]
-    source[groupby] = source.apply(lambda x: 'New' if x['is_new_fact'] else str(x[groupby]), axis=1)
-    # don't use qcut here??
-    source['n_minutes_spent_binned'] = pd.qcut(source.n_minutes_spent, 20)
-    source['n_minutes_spent_binned'] = source['n_minutes_spent_binned'].transform(lambda x: round(x.left / 60, 2))  # hours
-    source = source.rename(columns={'n_minutes_spent_binned': 'n_hours_spent_binned'})
-
-    line = alt.Chart().mark_line().encode(
-        alt.X('n_hours_spent_binned:Q', title='Hours'),
-        alt.Y('mean(response):Q', title='Recall rate'),
+        line = alt.Chart().mark_line().encode(
+            alt.X(f'{x_axis}:Q', title='Hours'),
+            alt.Y('mean(value):Q', title='Recall rate', scale=alt.Scale(domain=[0, 1])),
+        )
+        band = alt.Chart().mark_errorband(extent='ci').encode(
+            alt.X(f'{x_axis}:Q', title='Hours'),
+            alt.Y('value:Q', axis=None, scale=alt.Scale(domain=[0, 1])),
+        )
+    density = alt.Chart().transform_density(
+        x_axis,
+        groupby=[groupby, 'repetition_model'],
+        as_=[x_axis, 'density'],
+    ).mark_area(opacity=0.3, color='pink').encode(
+        alt.X(f'{x_axis}:Q'),
+        alt.Y('density:Q', axis=alt.Axis(title='Density', titleColor='pink')),
     )
-    band = alt.Chart().mark_errorband(extent='ci').encode(
-        alt.X('n_hours_spent_binned:Q', title='Hours'),
-        alt.Y('response:Q', title='Recall rate'),
-    )
-    chart = alt.layer(
-        line, band, data=source
-    ).properties(
-        width=180,
-        height=180,
-    ).facet(
-        alt.Facet(f'{groupby}:N', sort=['New']),
-    ).configure_legend(
-        labelFontSize=15,
-    ).properties(
-        title=f'Recall rate of User {user_id}',
-    )
-    if path is not None:
-        save_chart_and_pdf(chart, f'{path}/user_{user_id}_recall_by_{groupby}')
-    else:
-        return chart
+
+    charts = []
+    groupby_vals = sorted(source[groupby].unique())
+    if 'New' in groupby_vals:
+        groupby_vals = ['New'] + groupby_vals[:-1]  # move new to front
+    for val in groupby_vals:
+        charts.append(
+            alt.vconcat(*(
+                alt.layer(
+                    line, band, density,
+                    data=source,
+                    title=f'{repetition_model}, rep={val}',
+                ).transform_filter(
+                    (alt.datum[groupby] == val)
+                    & (alt.datum.repetition_model == repetition_model)
+                ).resolve_scale(
+                    y='independent', x='shared'
+                ).properties(
+                    width=200, height=200,
+                )
+                for repetition_model in source['repetition_model'].unique()
+            ), spacing=30)
+        )
+    return alt.hconcat(*charts)
 
 
 def figure_forgetting_curve(
@@ -166,7 +126,7 @@ def figure_forgetting_curve(
     path: str = None,
     user_id: str = None,
     groupby: str = 'sm2_repetition',
-    max_sm2_repetition: int = 3,
+    max_repetition: int = 3,
 ):
     '''
     Recall vs delta broken down by # repetition
@@ -174,38 +134,57 @@ def figure_forgetting_curve(
     source = df.copy().drop('utc_date', axis=1)
     if user_id is not None:
         source = source[source.user_id == user_id]
+    else:
+        source = source[source.repetition_model.isin(['karl100', 'leitner', 'sm2'])]
     source = source[source.usercard_delta != 0]
-    source = source[source.sm2_repetition <= max_sm2_repetition]
+    source = source[source[groupby] <= max_repetition]
 
     source['usercard_delta_binned'] = source.groupby(groupby)['usercard_delta'].transform(lambda x: pd.qcut(x, q=10))
-    source['usercard_delta_binned'] = source['usercard_delta_binned'].transform(lambda x: round(x.left / 3600, 2))  # hours
+    source['usercard_delta_binned'] = source['usercard_delta_binned'].transform(lambda x: round(x.left / 3600, 2))
 
-    line = alt.Chart().mark_line().encode(
-        alt.X('usercard_delta_binned:Q', title='Hours'),
-        alt.Y('mean(response):Q', title='Recall rate'),
-    )
-    band = alt.Chart().mark_errorband(extent='ci').encode(
-        alt.X('usercard_delta_binned:Q', title='Hours'),
-        alt.Y('response:Q', title='Recall rate'),
-    )
-    chart = alt.layer(
-        band, line, data=source,
-    ).properties(
-        width=180, height=180,
-    ).facet(
-        groupby,
-    ).properties(
-        title='Forgetting curve' + ('' if user_id is None else f' of User {user_id}'),
-    ).configure_legend(
-        labelFontSize=15,
-    )
+    chart = plot(source, 'usercard_delta_binned', groupby)
 
     if path is None:
         return chart
     if user_id is None:
-        save_chart_and_pdf(chart, f'{path}/forgetting_curve_by_{groupby}')
+        save_chart_and_pdf(chart, f'{path}/forgetting_curve')
     else:
-        save_chart_and_pdf(chart, f'{path}/user_{user_id}_forgetting_curve_by_{groupby}')
+        save_chart_and_pdf(chart, f'{path}/user_{user_id}_forgetting_curve')
+
+
+def figure_recall_rate(
+    df: pd.DataFrame,
+    path: str = None,
+    user_id: str = None,
+    groupby: str = 'sm2_repetition',
+    max_repetition: int = 3,
+):
+    '''
+    Recall rate broken down by number of repetition (to handle negative
+    response, follow either Leitner box or SM2 repetition rules).
+    '''
+    source = df.copy().drop('utc_date', axis=1)
+    if user_id is not None:
+        source = source[source.user_id == user_id]
+    else:
+        source = source[source.repetition_model.isin(['karl100', 'leitner', 'sm2'])]
+    source = source[source.repetition_model.isin(['karl100', 'leitner', 'sm2'])]
+    source = source[source[groupby] <= max_repetition]
+
+    source[groupby] = source.apply(lambda x: 'New' if x['is_new_fact'] else str(x[groupby]), axis=1)
+
+    source['n_minutes_spent_binned'] = pd.qcut(source.n_minutes_spent, 20)
+    source['n_minutes_spent_binned'] = source['n_minutes_spent_binned'].transform(lambda x: round(x.left / 60, 2))
+    source = source.rename(columns={'n_minutes_spent_binned': 'n_hours_spent_binned'})
+
+    chart = plot(source, 'n_hours_spent_binned', groupby)
+
+    if path is None:
+        return chart
+    if user_id is None:
+        save_chart_and_pdf(chart, f'{path}/recall_rate')
+    else:
+        save_chart_and_pdf(chart, f'{path}/user_{user_id}_recall_rate')
 
 
 def get_user_charts(
@@ -223,17 +202,16 @@ def get_user_charts(
     source = source[source.utc_date >= date_start]
     source = source[source.utc_date <= date_end]
     return {
-        'recall_by_repetition': figure_user_recall_by_repetition(source, user_id=user_id),
+        'recall_by_repetition': figure_recall_rate(source, user_id=user_id),
         'recall_vs_delta': figure_forgetting_curve(source, user_id=user_id),
     }
 
 
-# %%
 if __name__ == '__main__':
     df = get_retention_features_df()
     path = f'{settings.CODE_DIR}/figures'
     figure_composition(df, path)
     figure_recall_rate(df, path=path)
     figure_forgetting_curve(df, path=path)
-    figure_user_recall_by_repetition(df, user_id='463', path=path)
+    figure_recall_rate(df, user_id='463', path=path)
     figure_forgetting_curve(df, user_id='463', path=path)
