@@ -85,25 +85,17 @@ class DistilBertRetentionModel(DistilBertPreTrainedModel):
         super().__init__(config)
         self.retention_feature_size = config.retention_feature_size
         self.distilbert = DistilBertModel(config)
-        self.dropout = nn.Dropout(config.seq_classif_dropout)
-        if config.retention_feature_size == 0:
-            self.pre_classifier = nn.Linear(config.dim, config.dim)
-        else:
-            self.pre_classifier = nn.Linear(config.dim + config.retention_feature_size, config.dim)
-        self.classifier = nn.Linear(config.dim, 1)
-        self.criterion = nn.BCELoss()
-        self.init_weights()
-
-        hidden_size = config.dim + config.retention_feature_size
-
+        hidden_dim = config.dim + config.retention_feature_size
         self.classifier = nn.Sequential(
-            nn.Dropout(dropout),
+            nn.Dropout(config.seq_classif_dropout),
             nn.Linear(hidden_dim, hidden_dim),
             nn.GELU(),
             nn.LayerNorm(hidden_dim),
-            nn.Dropout(dropout),
+            nn.Dropout(config.seq_classif_dropout),
             nn.Linear(hidden_dim, 1),
         )
+        self.loss_fn = nn.BCELoss()
+        self.init_weights()
 
     def forward(
         self,
@@ -126,16 +118,14 @@ class DistilBertRetentionModel(DistilBertPreTrainedModel):
         x = hidden_state[:, 0]  # (bs, dim)
         if self.retention_feature_size > 0:
             x = torch.cat((x, retention_features), axis=1)
-        x = self.pre_classifier(x)  # (bs, dim)
-        x = nn.ReLU()(x)  # (bs, dim)
-        x = self.dropout(x)  # (bs, dim)
-        x = self.classifier(x)  # (bs, 1)
+
+        x = self.classifier(x)
         x = torch.sigmoid(x)[:, 0]
 
         outputs = (x,) + distilbert_output[1:]
 
         if labels is not None:
-            loss = self.criterion(x, labels)
+            loss = self.loss_fn(x, labels)
             outputs = (loss,) + outputs
 
         return outputs  # (loss), logits, (hidden_states), (attentions)
@@ -211,9 +201,9 @@ def test_majority_baseline(fold='new_card'):
 
 
 if __name__ == '__main__':
-    train(output_dir=f'{settings.CODE_DIR}/output', fold='new_card')
-    test(output_dir=f'{settings.CODE_DIR}/output', fold='new_card')
-    train(output_dir=f'{settings.CODE_DIR}/output', fold='old_card')
-    test(output_dir=f'{settings.CODE_DIR}/output', fold='old_card')
+    train(output_dir=f'{settings.CODE_DIR}/output_new', fold='new_card')
+    test(output_dir=f'{settings.CODE_DIR}/output_new', fold='new_card')
+    train(output_dir=f'{settings.CODE_DIR}/output_new', fold='old_card')
+    test(output_dir=f'{settings.CODE_DIR}/output_new', fold='old_card')
     # test_majority_baseline(fold='new_card')
     # test_majority_baseline(fold='old_card')

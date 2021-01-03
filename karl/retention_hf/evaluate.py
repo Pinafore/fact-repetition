@@ -101,5 +101,4 @@ def evaluate(output_dir=f'{settings.CODE_DIR}/output'):
 
 
 if __name__ == '__main__':
-    # evaluate(output_dir=f'{settings.CODE_DIR}/output')
-    evaluate(output_dir=f'{settings.CODE_DIR}/checkpoints/retention_hf')
+    evaluate(output_dir=f'{settings.CODE_DIR}/output')
