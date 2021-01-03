@@ -12,7 +12,7 @@ from sqlalchemy import orm
 from sqlalchemy import Column
 from sqlalchemy.dialects.postgresql import JSONB
 
-from karl.models import User, CurrUserFeatureVector
+from karl.models import User, Parameters, CurrUserFeatureVector
 from karl.schemas import ParametersSchema
 
 # revision identifiers, used by Alembic.
@@ -39,6 +39,8 @@ def data_upgrade():
 
     users = session.query(User)
     for user in tqdm(users, total=users.count()):
+        if user.parameters is None:
+            user.parameters = Parameters(id=user.id, **ParametersSchema().__dict__)
         params = ParametersSchema(**user.parameters.__dict__)
         for record in user.records:
             user_feature_vector = session.query(CurrUserFeatureVector).get(user.id)

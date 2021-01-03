@@ -260,12 +260,16 @@ class KARLScheduler:
                     ))
 
         t1 = datetime.now(pytz.utc)
-        print('======== gather features 1', (t1 - t0).total_seconds())
+        print('======== gather features', (t1 - t0).total_seconds())
+
+        feature_vectors = [x.__dict__ for x in feature_vectors]
+        for x in feature_vectors:
+            x['utc_date'] = str(x['utc_date'])
 
         scores = json.loads(
             requests.get(
                 'http://127.0.0.1:8001/api/karl/predict',
-                data=json.dumps([x.__dict__ for x in feature_vectors])
+                data=json.dumps(feature_vectors)
             ).text
         )
 
@@ -456,6 +460,7 @@ class KARLScheduler:
         if record.deck_id is not None:
             self.update_user_stats(record, deck_id=record.deck_id, utc_date=utc_date, session=session)
 
+        session.commit()
         # update current features
         # NOTE do this last, especially after leitner and sm2
         self.update_feature_vectors(record, date, session)
@@ -624,6 +629,7 @@ class KARLScheduler:
                 interval=1,
                 repetition=0,
             )
+            session.add(sm2)
 
         q = get_quality_from_response(record.response)
         sm2.repetition += 1
