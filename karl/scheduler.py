@@ -35,17 +35,17 @@ class KARLScheduler:
         :return: the user.
         """
         user = session.query(User).get(user_id)
-        if user is not None:
-            return user
+        if user is None:
+            user = User(id=user_id)
+            session.add(user)
+            session.commit()
 
-        # create new user and insert to db
-        new_user = User(id=user_id)
-        new_params = Parameters(id=user_id, **ParametersSchema().__dict__)
-        session.add(new_user)
-        session.add(new_params)
-        session.commit()
+        if user.parameters is None:
+            params = Parameters(id=user_id, **(ParametersSchema().__dict__))
+            session.add(params)
+            session.commit()
 
-        return new_user
+        return user
 
     def get_card(
         self,
@@ -159,8 +159,8 @@ class KARLScheduler:
         user_id: str,
     ) -> CurrUserFeatureVector:
         session = SessionLocal()
-
         v_user = session.query(CurrUserFeatureVector).get(user_id)
+        params = ParametersSchema(**self.get_user(user_id, session).parameters.__dict__)
         if v_user is None:
             v_user = CurrUserFeatureVector(
                 user_id=user_id,
@@ -170,12 +170,7 @@ class KARLScheduler:
                 previous_delta=None,
                 previous_study_date=None,
                 previous_study_response=None,
-                leitner_box=None,
-                leitner_scheduled_date=None,
-                sm2_efactor=None,
-                sm2_interval=None,
-                sm2_repetition=None,
-                sm2_scheduled_date=None,
+                parameters=json.dumps(params.__dict__),
             )
             session.add(v_user)
         session.close()
@@ -221,6 +216,12 @@ class KARLScheduler:
                 previous_study_date=None,
                 previous_study_response=None,
                 correct_on_first_try=None,
+                leitner_box=None,
+                leitner_scheduled_date=None,
+                sm2_efactor=None,
+                sm2_interval=None,
+                sm2_repetition=None,
+                sm2_scheduled_date=None,
             )
             session.add(v_usercard)
         session.close()
@@ -255,9 +256,8 @@ class KARLScheduler:
                 v_usercard_futures.append(executor.submit(self.get_curr_usercard_vector, user.id, card.id))
             for card, v_card_future, v_usercard_future in zip(cards, v_card_futures, v_usercard_futures):
                 feature_vectors.append(
-                    vectors_to_features(
-                        v_usercard_future.result(), v_user, v_card_future.result(), date, card.text
-                    ))
+                    vectors_to_features(v_usercard_future.result(), v_user, v_card_future.result(), date, card.text)
+                )
 
         t1 = datetime.now(pytz.utc)
         print('======== gather features', (t1 - t0).total_seconds())
@@ -396,7 +396,7 @@ class KARLScheduler:
         delta_user = None
         if v_user.previous_study_date is not None:
             delta_user = (date - v_user.previous_study_date).total_seconds()
-        params = ParametersSchema(**session.query(User).get(user_id).parameters.__dict__)
+        params = ParametersSchema(**self.get_user(user_id, session).parameters.__dict__)
         session.add(
             UserFeatureVector(
                 id=record_id,
@@ -409,7 +409,7 @@ class KARLScheduler:
                 previous_delta=v_user.previous_delta,
                 previous_study_date=v_user.previous_study_date,
                 previous_study_response=v_user.previous_study_response,
-                parameters=json.dumps(params.__dict__)
+                parameters=json.dumps(params.__dict__),
             ))
 
         delta_card = None
