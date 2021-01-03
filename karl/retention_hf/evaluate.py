@@ -138,7 +138,7 @@ def figure_recall_rate(
         return chart
 
 
-def evaluate():
+def evaluate(output_dir=f'{settings.CODE_DIR}/output'):
     '''
     This evaluation focuses on *old* cards.
     1. compare the empirical forgetting curve and the predicted one.
@@ -147,7 +147,7 @@ def evaluate():
     folds = ['train_new_card', 'train_old_card', 'test_new_card', 'test_old_card']
     predictions = {}
     for fold in folds:
-        prediction_path = f'{settings.CODE_DIR}/output/predictions_{fold}.json'
+        prediction_path = f'{output_dir}/predictions_{fold}.json'
         if os.path.exists(prediction_path):
             predictions[fold] = json.load(open(prediction_path))
         else:
@@ -156,7 +156,7 @@ def evaluate():
 
             foold = '_'.join(fold.split('_')[1:])
             training_args = TrainingArguments(
-                output_dir=f'{settings.CODE_DIR}/output/retention_hf_{foold}',
+                output_dir=f'{output_dir}/retention_hf_{foold}',
                 num_train_epochs=10,
                 per_device_train_batch_size=16,
                 per_device_eval_batch_size=64,
@@ -208,4 +208,4 @@ def evaluate():
 
 
 if __name__ == '__main__':
-    evaluate()
+    evaluate(output_dir=f'{settings.CODE_DIR}/output')

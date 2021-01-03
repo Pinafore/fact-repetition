@@ -9,7 +9,6 @@ import torch.nn as nn
 from allennlp.nn import util
 from allennlp.data import Vocabulary
 from allennlp.models import Model
-from allennlp.modules import TextFieldEmbedder
 from allennlp.training.metrics import CategoricalAccuracy
 from allennlp.modules.token_embedders import PretrainedTransformerEmbedder
 
@@ -24,14 +23,13 @@ class RetentionModel(Model):
     ):
         super().__init__(vocab)
         self.hidden_dim = hidden_dim
-        self.num_labels = 2
         self.classifier = nn.Sequential(
             nn.Dropout(dropout),
             nn.Linear(hidden_dim, hidden_dim),
             nn.GELU(),
             nn.LayerNorm(hidden_dim),
             nn.Dropout(dropout),
-            nn.Linear(hidden_dim, self.num_labels),
+            nn.Linear(hidden_dim, 1),
         )
         self.accuracy = CategoricalAccuracy()
         self.loss = torch.nn.CrossEntropyLoss()
@@ -49,12 +47,12 @@ class RetentionModel(Model):
         # (batch_size, n_classes)
         logits = self.classifier(hidden)
         # (batch_size, n_classes)
-        probs = nn.functional.softmax(logits, dim=-1)
+        probs = torch.sigmoid(logits)
 
         output_dict = {
             'logits': logits,
             'probs': probs,
-            'preds': torch.argmax(logits, 1)
+            'preds': probs > 0.5,
         }
 
         if label is not None:
@@ -76,8 +74,6 @@ class BERTRetentionModel(RetentionModel):
             vocab: Vocabulary,
             dropout: float,
             extra_hidden_dim: int,
-            qid_embedder: TextFieldEmbedder,
-            uid_embedder: TextFieldEmbedder,
             bert_pooling: str = 'cls',
             bert_finetune: bool = False,
             model_name_or_path: str = "bert-base-uncased",
@@ -87,20 +83,13 @@ class BERTRetentionModel(RetentionModel):
         if not bert_finetune:
             for param in bert.parameters():
                 param.requires_grad = False
-        hidden_dim = (
-            bert.get_output_dim()
-            + uid_embedder.get_output_dim()
-            + qid_embedder.get_output_dim()
-            + extra_hidden_dim
-        )
+        hidden_dim = bert.get_output_dim() + extra_hidden_dim
         super().__init__(
             vocab=vocab,
             dropout=dropout,
             hidden_dim=hidden_dim,
         )
         self.bert = bert
-        self.uid_embedder = uid_embedder
-        self.qid_embedder = qid_embedder
         self.model_name_or_path = model_name_or_path
         self.bert_pooling = bert_pooling
         self.return_embedding = return_embedding
@@ -124,14 +113,7 @@ class BERTRetentionModel(RetentionModel):
         else:
             raise ValueError("Invalid pooling option")
 
-        uid_emb = self.uid_embedder(uid)[:, 0, :]
-        qid_emb = self.qid_embedder(qid)[:, 0, :]
-
-        hidden = torch.cat((
-            bert_emb,
-            uid_emb,
-            qid_emb,
-            features), dim=-1)
+        hidden = torch.cat((bert_emb, features), dim=-1)
         output_dict = self.hidden_to_output(hidden, label)
 
         if self.return_embedding:

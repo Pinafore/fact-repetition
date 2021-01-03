@@ -131,7 +131,7 @@ def compute_metrics(p: EvalPrediction) -> Dict:
     return {"accuracy": np.mean((p.predictions > 0.5) == p.label_ids)}
 
 
-def train(fold='new_card'):
+def train(output_dir=f'{settings.CODE_DIR}/output', fold='new_card'):
     retention_feature_size = 0 if fold == 'new_card' else len(feature_fields)
     config = DistilBertRetentionModelConfig(retention_feature_size=retention_feature_size)
     model = DistilBertRetentionModel(config=config)
@@ -139,8 +139,8 @@ def train(fold='new_card'):
     train_dataset = RetentionDataset(settings.DATA_DIR, f'train_{fold}', tokenizer)
     test_dataset = RetentionDataset(settings.DATA_DIR, f'test_{fold}', tokenizer)
     training_args = TrainingArguments(
-        output_dir=f'{settings.CODE_DIR}/output/retention_hf_{fold}',
-        num_train_epochs=5,
+        output_dir=f'{output_dir}/retention_hf_{fold}',
+        num_train_epochs=10,
         per_device_train_batch_size=16,
         per_device_eval_batch_size=64,
         learning_rate=2e-05,
@@ -157,14 +157,14 @@ def train(fold='new_card'):
     trainer.save_model()
 
 
-def eval(fold='new_card'):
+def test(output_dir=f'{settings.CODE_DIR}/output', fold='new_card'):
     tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
     train_dataset = RetentionDataset(settings.DATA_DIR, f'train_{fold}', tokenizer)
     test_dataset = RetentionDataset(settings.DATA_DIR, f'test_{fold}', tokenizer)
 
     training_args = TrainingArguments(
-        output_dir=f'{settings.CODE_DIR}/output/retention_hf_{fold}',
-        num_train_epochs=5,
+        output_dir=f'{output_dir}/retention_hf_{fold}',
+        num_train_epochs=10,
         per_device_train_batch_size=16,
         per_device_eval_batch_size=64,
         learning_rate=2e-05,
@@ -197,9 +197,9 @@ def test_majority_baseline(fold='new_card'):
 
 
 if __name__ == '__main__':
-    # train(fold='new_card')
-    # eval(fold='new_card')
-    # train(fold='old_card')
-    # eval(fold='old_card')
-    test_majority_baseline(fold='new_card')
-    test_majority_baseline(fold='old_card')
+    train(output_dir=f'{settings.CODE_DIR}/output', fold='new_card')
+    test(output_dir=f'{settings.CODE_DIR}/output', fold='new_card')
+    train(output_dir=f'{settings.CODE_DIR}/output', fold='old_card')
+    test(output_dir=f'{settings.CODE_DIR}/output', fold='old_card')
+    # test_majority_baseline(fold='new_card')
+    # test_majority_baseline(fold='old_card')
