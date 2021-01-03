@@ -142,6 +142,8 @@ def figure_forgetting_curve(
     source['usercard_delta_binned'] = source.groupby(groupby)['usercard_delta'].transform(lambda x: pd.qcut(x, q=10))
     source['usercard_delta_binned'] = source['usercard_delta_binned'].transform(lambda x: round(x.left / 3600, 2))
 
+    if 'response' in source:
+        source = source.rename(columns={'response': 'value'})
     chart = plot(source, 'usercard_delta_binned', groupby)
 
     if path is None:
@@ -177,6 +179,9 @@ def figure_recall_rate(
     source['n_minutes_spent_binned'] = source['n_minutes_spent_binned'].transform(lambda x: round(x.left / 60, 2))
     source = source.rename(columns={'n_minutes_spent_binned': 'n_hours_spent_binned'})
 
+    if 'response' in source:
+        source = source.rename(columns={'response': 'value'})
+
     chart = plot(source, 'n_hours_spent_binned', groupby)
 
     if path is None:
@@ -209,7 +214,7 @@ def get_user_charts(
 
 if __name__ == '__main__':
     df = get_retention_features_df()
-    path = f'{settings.CODE_DIR}/figures'
+    path = f'{settings.CODE_DIR}/figures_stat'
     figure_composition(df, path)
     figure_recall_rate(df, path=path)
     figure_forgetting_curve(df, path=path)

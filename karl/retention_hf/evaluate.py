@@ -23,7 +23,7 @@ from karl.retention_hf.data import (  # noqa: F401
 )
 
 from karl.config import settings
-from karl.figures import save_chart_and_pdf, figure_forgetting_curve, figure_recall_rate
+from karl.figures import figure_forgetting_curve, figure_recall_rate
 
 alt.data_transformers.disable_max_rows()
 alt.renderers.enable('mimetype')
@@ -93,7 +93,7 @@ def evaluate(output_dir=f'{settings.CODE_DIR}/output'):
 
     df_concat = pd.concat(list(df_by_fold.values()))
     # df_concat = df_concat.sample(frac=0.1)
-    path = f'{settings.CODE_DIR}/figures'
+    path = f'{settings.CODE_DIR}/figures_eval'
     figure_forgetting_curve(df_concat, path)
     figure_recall_rate(df_concat, path)
     figure_recall_rate(df_concat, user_id='463', path=path)
@@ -101,4 +101,5 @@ def evaluate(output_dir=f'{settings.CODE_DIR}/output'):
 
 
 if __name__ == '__main__':
-    evaluate(output_dir=f'{settings.CODE_DIR}/output')
+    # evaluate(output_dir=f'{settings.CODE_DIR}/output')
+    evaluate(output_dir=f'{settings.CODE_DIR}/checkpoints/retention_hf')
