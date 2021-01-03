@@ -77,7 +77,7 @@ def set_params(
     is_new_params = False
     if curr_params is None:
         is_new_params = True
-        curr_params = Parameters(id=user_id, **ParametersSchema().__dict__)
+        curr_params = Parameters(id=user_id, **(ParametersSchema().__dict__))
 
     curr_params.repetition_model = params.repetition_model
     curr_params.card_embedding = params.qrep
@@ -158,12 +158,15 @@ def set_repetition_model(
             repetition_model=f'karl{recall_target}',
             recall_target=float(recall_target) / 100,
         )
+    else:
+        print('******** unknown repetition_model ********')
+        params = ParametersSchema()
 
     curr_params = session.query(Parameters).get(user_id)
     is_new_params = False
     if curr_params is None:
         is_new_params = True
-        curr_params = Parameters(id=user_id, **params)
+        curr_params = Parameters(id=user_id, **(params.__dict__))
 
     curr_params.repetition_model = params.repetition_model
     curr_params.card_embedding = params.card_embedding
