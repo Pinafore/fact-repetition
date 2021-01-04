@@ -201,9 +201,9 @@ def test_majority_baseline(fold='new_card'):
 
 
 if __name__ == '__main__':
-    train(output_dir=f'{settings.CODE_DIR}/output_new', fold='new_card')
-    test(output_dir=f'{settings.CODE_DIR}/output_new', fold='new_card')
-    train(output_dir=f'{settings.CODE_DIR}/output_new', fold='old_card')
-    test(output_dir=f'{settings.CODE_DIR}/output_new', fold='old_card')
+    train(output_dir=f'{settings.CODE_DIR}/output', fold='new_card')
+    test(output_dir=f'{settings.CODE_DIR}/output', fold='new_card')
+    train(output_dir=f'{settings.CODE_DIR}/output', fold='old_card')
+    test(output_dir=f'{settings.CODE_DIR}/output', fold='old_card')
     # test_majority_baseline(fold='new_card')
     # test_majority_baseline(fold='old_card')
