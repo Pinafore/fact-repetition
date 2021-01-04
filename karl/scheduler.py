@@ -148,12 +148,13 @@ class KARLScheduler:
         self.save_feature_vectors(record.id, user.id, card_selected.id, date)
 
         rationale = self.get_rationale(
-            debug_id=record_id,
+            record_id=record_id,
             user=user,
             cards=cards,
             date=date,
             scores=scores,
             order=order,
+            session=session,
         )
 
         # return
@@ -660,24 +661,15 @@ class KARLScheduler:
 
     def get_rationale(
         self,
-        debug_id: str,
+        record_id: str,
         user: User,
         cards: List[Card],
         date: datetime,
         scores: List[Dict[str, float]],
         order: List[int],
-        top_n_facts: int = 3
+        session: Session,
+        top_n_cards: int = 3,
     ) -> str:
-        """
-        Create rationale HTML table for the top facts.
-        :param user:
-        :param facts:
-        :param date: current study date passed to `schedule`.
-        :param scores: the computed scores.
-        :param order: the ordering of cards.
-        :param top_n_facts: number of cards to explain.
-        :return: an HTML table.
-        """
         rr = """
              <style>
              table {
@@ -691,11 +683,68 @@ class KARLScheduler:
              </style>
              """
 
-        rr += '<h2>Debug ID: {}</h2>'.format(debug_id)
+        rr += '<p>Debug ID: {}</p>'.format(record_id)
+        rr += '<p>Model: {}</p>'.format(user.parameters.repetition_model)
+        row_template = '<tr><td><b>{}</b></td> <td>{}</td></tr>'
         row_template_3 = '<tr><td><b>{}</b></td> <td>{:.4f} x {:.2f}</td></tr>'
-        for i in order[:top_n_facts]:
-            for k, v in scores[i].items():
-                rr += row_template_3.format(k, v, user.parameters.__dict__.get(k, 0))
-            rr += '<tr><td><b>{}</b></td> <td>{:.4f}</td></tr>'.format('sum', scores[i]['sum'])
+        for i in order[:top_n_cards]:
+            card = cards[i]
+            v_usercard = self.get_curr_usercard_vector(user.id, card.id)
+            rr += '<table style="float: left;">'
+            rr += row_template.format('Card ID', card.id)
+            rr += row_template.format('Answer', card.answer)
+            rr += row_template.format('Category', card.category)
+            rr += row_template.format('Category', card.category)
+
+            params = user.parameters.__dict__
+            if 'karl' in params['repetition_model']:
+                rr += row_template.format('Recall target', params['recall_target'])
+            for key, val in scores[i].items():
+                if key in params:
+                    rr += row_template_3.format('Score: ' + key, val, params[key])
+            rr += '<tr><td><b>{}</b></td> <td>{:.4f}</td></tr>'.format('Score: total', scores[i]['sum'])
+
+            if v_usercard.leitner_scheduled_date is not None:
+                delta_to_leitner_scheduled_date = (v_usercard.leitner_scheduled_date - date).total_seconds() // 3600
+            else:
+                delta_to_leitner_scheduled_date = None
+
+            if v_usercard.sm2_scheduled_date is not None:
+                delta_to_sm2_scheduled_date = (v_usercard.sm2_scheduled_date - date).total_seconds() // 3600
+            else:
+                delta_to_sm2_scheduled_date = None
+
+            if v_usercard.previous_study_date is not None:
+                usercard_delta = (date - v_usercard.previous_study_date).total_seconds() // 3600
+            else:
+                usercard_delta = None
+
+            if v_usercard.leitner_scheduled_date is not None:
+                leitner_scheduled_date = v_usercard.leitner_scheduled_date.strftime("%Y/%m/%d %H:%M:%S")
+            else:
+                leitner_scheduled_date = None
+
+            if v_usercard.sm2_scheduled_date is not None:
+                sm2_scheduled_date = v_usercard.sm2_scheduled_date.strftime("%Y/%m/%d %H:%M:%S")
+            else:
+                sm2_scheduled_date = None
+
+            rr += row_template.format('#Correct', v_usercard.n_study_positive)
+            rr += row_template.format('#Wrong', v_usercard.n_study_negative)
+            rr += row_template.format('Previous delta', v_usercard.previous_delta)
+            rr += row_template.format('Previous date', v_usercard.previous_study_date)
+            rr += row_template.format('Previous result', v_usercard.previous_study_response)
+            rr += row_template.format('Current date', date.strftime("%Y/%m/%d %H:%M:%S"))
+            rr += row_template.format('Hours since prev', usercard_delta)
+            rr += row_template.format('Correct on first try', v_usercard.correct_on_first_try)
+            rr += row_template.format('Leitner box', v_usercard.leitner_box)
+            rr += row_template.format('Leitner schedule', leitner_scheduled_date)
+            rr += row_template.format('Hours to Leitner', delta_to_leitner_scheduled_date)
+            rr += row_template.format('SM2 e-factor', v_usercard.sm2_efactor)
+            rr += row_template.format('SM2 interval', v_usercard.sm2_interval)
+            rr += row_template.format('SM2 repetition', v_usercard.sm2_repetition)
+            rr += row_template.format('SM2 schedule', sm2_scheduled_date)
+            rr += row_template.format('Hours to SM2', delta_to_sm2_scheduled_date)
+
             rr += '</table>'
         return rr
