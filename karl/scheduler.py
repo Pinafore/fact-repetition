@@ -83,7 +83,7 @@ class KARLScheduler:
         scores = [
             {
                 'recall': recall_scores[i],
-                'category': self.score_category(user, card),
+                # 'category': self.score_category(user, card),
                 'cool_down': self.score_cool_down(user, card, date, session),
                 'leitner': self.score_leitner(user, card, date, session),
                 'sm2': self.score_sm2(user, card, date, session),
@@ -147,11 +147,21 @@ class KARLScheduler:
         # store feature vectors @ debug_id
         self.save_feature_vectors(record.id, user.id, card_selected.id, date)
 
+        rationale = self.get_rationale(
+            debug_id=record_id,
+            user=user,
+            cards=cards,
+            date=date,
+            scores=scores,
+            order=order,
+        )
+
         # return
         return ScheduleResponseSchema(
             order=order,
             debug_id=record_id,
             scores=scores,
+            rationale=rationale,
         )
 
     def get_curr_user_vector(
@@ -647,3 +657,45 @@ class KARLScheduler:
                 sm2.interval *= sm2.efactor
 
         sm2.scheduled_date = date + timedelta(days=sm2.interval)
+
+    def get_rationale(
+        self,
+        debug_id: str,
+        user: User,
+        cards: List[Card],
+        date: datetime,
+        scores: List[Dict[str, float]],
+        order: List[int],
+        top_n_facts: int = 3
+    ) -> str:
+        """
+        Create rationale HTML table for the top facts.
+        :param user:
+        :param facts:
+        :param date: current study date passed to `schedule`.
+        :param scores: the computed scores.
+        :param order: the ordering of cards.
+        :param top_n_facts: number of cards to explain.
+        :return: an HTML table.
+        """
+        rr = """
+             <style>
+             table {
+               border-collapse: collapse;
+             }
+             td, th {
+               padding: 0.5rem;
+               text-align: left;
+             }
+             tr:nth-child(even) {background-color: #f2f2f2;}
+             </style>
+             """
+
+        rr += '<h2>Debug ID: {}</h2>'.format(debug_id)
+        row_template_3 = '<tr><td><b>{}</b></td> <td>{:.4f} x {:.2f}</td></tr>'
+        for i in order[:top_n_facts]:
+            for k, v in scores[i].items():
+                rr += row_template_3.format(k, v, user.parameters.__dict__.get(k, 0))
+            rr += '<tr><td><b>{}</b></td> <td>{:.4f}</td></tr>'.format('sum', scores[i]['sum'])
+            rr += '</table>'
+        return rr

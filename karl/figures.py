@@ -91,9 +91,9 @@ def plot(
         x_axis,
         groupby=[groupby, 'repetition_model'],
         as_=[x_axis, 'density'],
-    ).mark_area(opacity=0.3, color='green').encode(
+    ).mark_area(opacity=0.2, color='gray').encode(
         alt.X(f'{x_axis}:Q'),
-        alt.Y('density:Q', axis=alt.Axis(title='Density', titleColor='green')),
+        alt.Y('density:Q', axis=alt.Axis(title='Density', titleColor='gray')),
     )
 
     charts = []
