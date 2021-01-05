@@ -26,7 +26,6 @@ from .model_bert import BertRetentionModelConfig, BertRetentionModel
 
 transformers.logging.set_verbosity_info()
 
-
 model_cls = {
     'distilbert': DistilBertRetentionModel,
     'bert': BertRetentionModel,
@@ -39,6 +38,10 @@ tokenizer_cls = {
     'distilbert': DistilBertTokenizerFast,
     'bert': BertTokenizerFast,
 }
+full_name = {
+    'distilbert': 'distilbert-base-uncased',
+    'bert': 'bert-base-uncased',
+}
 
 
 def compute_metrics(p: EvalPrediction) -> Dict:
@@ -50,7 +53,7 @@ def train(model_name, output_dir=f'{settings.CODE_DIR}/output', fold='new_card',
     retention_feature_size = 0 if fold == 'new_card' else len(feature_fields)
     config = config_cls[model_name](retention_feature_size=retention_feature_size)
     model = model_cls[model_name](config=config)
-    tokenizer = tokenizer_cls[model_name].from_pretrained(f'{model_name}-base-uncased')
+    tokenizer = tokenizer_cls[model_name].from_pretrained(full_name[model_name])
     train_dataset = RetentionDataset(settings.DATA_DIR, f'train_{fold}', tokenizer)
     test_dataset = RetentionDataset(settings.DATA_DIR, f'test_{fold}', tokenizer)
     training_args = TrainingArguments(
@@ -73,7 +76,7 @@ def train(model_name, output_dir=f'{settings.CODE_DIR}/output', fold='new_card',
 
 
 def test(model_name, output_dir=f'{settings.CODE_DIR}/output', fold='new_card'):
-    tokenizer = tokenizer_cls[model_name].from_pretrained('distilbert-base-uncased')
+    tokenizer = tokenizer_cls[model_name].from_pretrained(full_name[model_name])
     train_dataset = RetentionDataset(settings.DATA_DIR, f'train_{fold}', tokenizer)
     test_dataset = RetentionDataset(settings.DATA_DIR, f'test_{fold}', tokenizer)
 
@@ -113,5 +116,7 @@ def test_majority_baseline(fold='new_card'):
 
 if __name__ == '__main__':
     import sys
-    train(model_name=sys.argv[1], fold=sys.argv[2])
-    test(model_name=sys.argv[1], fold=sys.argv[2])
+    train(model_name=sys.argv[1], fold='new_card')
+    test(model_name=sys.argv[1], fold='new_card')
+    train(model_name=sys.argv[1], fold='old_card')
+    test(model_name=sys.argv[1], fold='old_card')

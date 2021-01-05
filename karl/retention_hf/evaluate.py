@@ -7,16 +7,7 @@ import altair as alt
 import pandas as pd
 from pathlib import Path
 
-from transformers import (
-    DistilBertTokenizerFast,
-    BertTokenizerFast,
-    TrainingArguments,
-    Trainer,
-)
-
-from karl.retention_hf.main import compute_metrics
-from karl.retention_hf.model_distilbert import DistilBertRetentionModel, DistilBertRetentionModelConfig
-from karl.retention_hf.model_bert import BertRetentionModel, BertRetentionModelConfig
+from transformers import TrainingArguments, Trainer
 
 from karl.retention_hf.data import (  # noqa: F401
     RetentionInput,
@@ -27,23 +18,10 @@ from karl.retention_hf.data import (  # noqa: F401
 
 from karl.config import settings
 from karl.figures import figure_forgetting_curve, figure_recall_rate
+from karl.retention_hf.main import compute_metrics, model_cls, tokenizer_cls, full_name
 
 alt.data_transformers.disable_max_rows()
 alt.renderers.enable('mimetype')
-
-
-model_cls = {
-    'distilbert': DistilBertRetentionModel,
-    'bert': BertRetentionModel,
-}
-config_cls = {
-    'distilbert': DistilBertRetentionModelConfig,
-    'bert': BertRetentionModelConfig,
-}
-tokenizer_cls = {
-    'distilbert': DistilBertTokenizerFast,
-    'bert': BertTokenizerFast,
-}
 
 
 def evaluate(model_names=['distilbert', 'bert'], output_dir=f'{settings.CODE_DIR}/output'):
@@ -68,7 +46,7 @@ def evaluate(model_names=['distilbert', 'bert'], output_dir=f'{settings.CODE_DIR
             if os.path.exists(prediction_dir):
                 prediction_by_model[model_name][fold] = json.load(open(prediction_dir))
             else:
-                tokenizer = tokenizer_cls[model_name].from_pretrained(f'{model_name}-base-uncased')
+                tokenizer = tokenizer_cls[model_name].from_pretrained(full_name[model_name])
                 test_dataset = RetentionDataset(settings.DATA_DIR, fold, tokenizer)
 
                 training_args = TrainingArguments(
@@ -114,8 +92,8 @@ def evaluate(model_names=['distilbert', 'bert'], output_dir=f'{settings.CODE_DIR
         df_by_fold[fold] = df_by_fold[fold].rename(columns={'response': 'test_response'})
         value_vars = ['test_response']
         for model_name in model_names:
-            df_by_fold[fold][f'prediction_{model_name}'] = prediction_by_model[model_name][fold]
-            value_vars.append(f'prediction_{model_name}')
+            df_by_fold[fold][model_name] = prediction_by_model[model_name][fold]
+            value_vars.append(model_name)
         id_vars = [x for x in df_by_fold[fold].columns if x not in value_vars]
         df_by_fold[fold] = df_by_fold[fold].melt(id_vars=id_vars, value_vars=value_vars, var_name='type', value_name='value')
 
