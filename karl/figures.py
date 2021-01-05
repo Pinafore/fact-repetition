@@ -115,7 +115,7 @@ def plot(
                 ).properties(
                     width=200, height=200,
                 )
-                for repetition_model in source['repetition_model'].unique()
+                for repetition_model in sorted(source['repetition_model'].unique())
             ), spacing=30)
         )
     return alt.hconcat(*charts)

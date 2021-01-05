@@ -5,16 +5,19 @@ import os
 import json
 import altair as alt
 import pandas as pd
+from pathlib import Path
+
 from transformers import (
     DistilBertTokenizerFast,
+    BertTokenizerFast,
     TrainingArguments,
     Trainer,
 )
 
-from karl.retention_hf.model import (
-    DistilBertRetentionModel,
-    compute_metrics,
-)
+from karl.retention_hf.main import compute_metrics
+from karl.retention_hf.model_distilbert import DistilBertRetentionModel, DistilBertRetentionModelConfig
+from karl.retention_hf.model_bert import BertRetentionModel, BertRetentionModelConfig
+
 from karl.retention_hf.data import (  # noqa: F401
     RetentionInput,
     RetentionDataset,
@@ -29,47 +32,68 @@ alt.data_transformers.disable_max_rows()
 alt.renderers.enable('mimetype')
 
 
-def evaluate(output_dir=f'{settings.CODE_DIR}/output'):
+model_cls = {
+    'distilbert': DistilBertRetentionModel,
+    'bert': BertRetentionModel,
+}
+config_cls = {
+    'distilbert': DistilBertRetentionModelConfig,
+    'bert': BertRetentionModelConfig,
+}
+tokenizer_cls = {
+    'distilbert': DistilBertTokenizerFast,
+    'bert': BertTokenizerFast,
+}
+
+
+def evaluate(model_names=['distilbert', 'bert'], output_dir=f'{settings.CODE_DIR}/output'):
     '''
     This evaluation focuses on *old* cards.
     1. compare the empirical forgetting curve and the predicted one.
     1. compare the empirical recall rate and the predicted one.
     '''
-    folds = ['train_new_card', 'train_old_card', 'test_new_card', 'test_old_card']
-    predictions = {}
-    for fold in folds:
-        prediction_path = f'{output_dir}/predictions_{fold}.json'
-        if os.path.exists(prediction_path):
-            predictions[fold] = json.load(open(prediction_path))
-        else:
-            tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
-            test_dataset = RetentionDataset(settings.DATA_DIR, fold, tokenizer)
+    figures_dir = f'{settings.CODE_DIR}/figures_eval_all'
 
+    prediction_by_model = {}
+    for model_name in model_names:
+        prediction_root_dir = f'{output_dir}/retention_hf_{model_name}_predictions'
+        Path(prediction_root_dir).mkdir(parents=True, exist_ok=True)
+        Path(figures_dir).mkdir(parents=True, exist_ok=True)
+
+        prediction_by_model[model_name] = {}
+        for fold in ['train_new_card', 'train_old_card', 'test_new_card', 'test_old_card']:
             foold = '_'.join(fold.split('_')[1:])
-            training_args = TrainingArguments(
-                output_dir=f'{output_dir}/retention_hf_{foold}',
-                num_train_epochs=10,
-                per_device_train_batch_size=16,
-                per_device_eval_batch_size=64,
-                learning_rate=2e-05,
-            )
-            model = DistilBertRetentionModel.from_pretrained(training_args.output_dir)
-            model.eval()
+            model_output_dir = f'{output_dir}/retention_hf_{model_name}_{foold}'
+            prediction_dir = f'{prediction_root_dir}/predictions_{fold}.json'
+            if os.path.exists(prediction_dir):
+                prediction_by_model[model_name][fold] = json.load(open(prediction_dir))
+            else:
+                tokenizer = tokenizer_cls[model_name].from_pretrained(f'{model_name}-base-uncased')
+                test_dataset = RetentionDataset(settings.DATA_DIR, fold, tokenizer)
 
-            trainer = Trainer(
-                model=model,
-                args=training_args,
-                train_dataset=test_dataset,
-                eval_dataset=test_dataset,
-                data_collator=retention_data_collator,
-                compute_metrics=compute_metrics,
-            )
-            p = trainer.predict(test_dataset)
-            print(fold, 'accuracy', compute_metrics(p))
-            with open(prediction_path, 'w') as f:
-                json.dump(p.predictions.tolist(), f)
+                training_args = TrainingArguments(
+                    output_dir=model_output_dir,
+                    num_train_epochs=10,
+                    per_device_train_batch_size=16,
+                    per_device_eval_batch_size=64,
+                    learning_rate=2e-05,
+                )
+                model = model_cls[model_name].from_pretrained(training_args.output_dir)
+                model.eval()
 
-            predictions[fold] = p.predictions.tolist()
+                trainer = Trainer(
+                    model=model,
+                    args=training_args,
+                    train_dataset=test_dataset,
+                    eval_dataset=test_dataset,
+                    data_collator=retention_data_collator,
+                    compute_metrics=compute_metrics,
+                )
+                p = trainer.predict(test_dataset)
+                print(fold, 'accuracy', compute_metrics(p))
+                with open(prediction_dir, 'w') as f:
+                    json.dump(p.predictions.tolist(), f)
+                prediction_by_model[model_name][fold] = p.predictions.tolist()
 
     df_all = get_retention_features_df()
     df_new_card = df_all[df_all.is_new_fact == True]  # noqa: E712
@@ -80,25 +104,28 @@ def evaluate(output_dir=f'{settings.CODE_DIR}/output'):
         'train_old_card': df_old_card.groupby('user_id', as_index=False).apply(lambda x: x.iloc[:int(x.user_id.size * 0.75)]).reset_index(),  # .drop(['level_0', 'level_1'], axis=1),
         'test_old_card': df_old_card.groupby('user_id', as_index=False).apply(lambda x: x.iloc[int(x.user_id.size * 0.75):]).reset_index(),  # .drop(['level_0', 'level_1'], axis=1),
     }
-    for fold in folds:
-        df_by_fold[fold]['prediction'] = predictions[fold]
-        if 'train' in fold:
-            df_by_fold[fold] = df_by_fold[fold].rename(columns={'response': 'train_response'})
-            cols = [x for x in df_by_fold[fold].columns if x not in ['prediction', 'train_response', 'test_response']]
-            df_by_fold[fold] = df_by_fold[fold].melt(id_vars=cols, value_vars=['prediction', 'train_response'], var_name='type', value_name='value')
-        else:
-            df_by_fold[fold] = df_by_fold[fold].rename(columns={'response': 'test_response'})
-            cols = [x for x in df_by_fold[fold].columns if x not in ['prediction', 'train_response', 'test_response']]
-            df_by_fold[fold] = df_by_fold[fold].melt(id_vars=cols, value_vars=['prediction', 'test_response'], var_name='type', value_name='value')
+    for fold in ['train_new_card', 'train_old_card']:
+        df_by_fold[fold] = df_by_fold[fold].rename(columns={'response': 'train_response'})
+        value_vars = ['train_response']
+        id_vars = [x for x in df_by_fold[fold].columns if x not in value_vars]
+        df_by_fold[fold] = df_by_fold[fold].melt(id_vars=id_vars, value_vars=value_vars, var_name='type', value_name='value')
+
+    for fold in ['test_new_card', 'test_old_card']:
+        df_by_fold[fold] = df_by_fold[fold].rename(columns={'response': 'test_response'})
+        value_vars = ['test_response']
+        for model_name in model_names:
+            df_by_fold[fold][f'prediction_{model_name}'] = prediction_by_model[model_name][fold]
+            value_vars.append(f'prediction_{model_name}')
+        id_vars = [x for x in df_by_fold[fold].columns if x not in value_vars]
+        df_by_fold[fold] = df_by_fold[fold].melt(id_vars=id_vars, value_vars=value_vars, var_name='type', value_name='value')
 
     df_concat = pd.concat(list(df_by_fold.values()))
     # df_concat = df_concat.sample(frac=0.1)
-    path = f'{settings.CODE_DIR}/figures_eval'
-    figure_forgetting_curve(df_concat, path)
-    figure_recall_rate(df_concat, path)
-    figure_recall_rate(df_concat, user_id='463', path=path)
-    figure_forgetting_curve(df_concat, user_id='463', path=path)
+    figure_forgetting_curve(df_concat, figures_dir)
+    figure_recall_rate(df_concat, figures_dir)
+    figure_recall_rate(df_concat, user_id='463', path=figures_dir)
+    figure_forgetting_curve(df_concat, user_id='463', path=figures_dir)
 
 
 if __name__ == '__main__':
-    evaluate(output_dir=f'{settings.CODE_DIR}/output')
+    evaluate()
