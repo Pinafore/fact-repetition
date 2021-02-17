@@ -126,7 +126,7 @@ def figure_forgetting_curve(
     path: str = None,
     user_id: str = None,
     groupby: str = 'sm2_repetition',
-    max_repetition: int = 3,
+    max_repetition: int = 2,
 ):
     '''
     Recall vs delta broken down by # repetition

@@ -99,7 +99,7 @@ def evaluate(model_names=['distilbert', 'bert'], output_dir=f'{settings.CODE_DIR
 
     df_concat = pd.concat(list(df_by_fold.values()))
     # df_concat = df_concat.sample(frac=0.1)
-    figure_forgetting_curve(df_concat, figures_dir)
+    figure_forgetting_curve(df_concat, figures_dir, max_repetition=2)
     figure_recall_rate(df_concat, figures_dir)
     figure_recall_rate(df_concat, user_id='463', path=figures_dir)
     figure_forgetting_curve(df_concat, user_id='463', path=figures_dir)
