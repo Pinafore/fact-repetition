@@ -657,6 +657,7 @@ class KARLScheduler:
             else:
                 sm2.interval *= sm2.efactor
 
+        sm2.interval = max(1000, sm2.interval)  # TODO prevent date overflow
         sm2.scheduled_date = date + timedelta(days=sm2.interval)
 
     def get_rationale(

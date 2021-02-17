@@ -24,7 +24,7 @@ def figure_composition(df, path):
     Break down of [new, old] x [positive, negative] vs amount of time.
     '''
     source = df.copy().drop('utc_date', axis=1)
-    source['n_minutes_spent_binned'] = source['n_minutes_spent'].transform(lambda x: pd.qcut(x, 10))
+    source['n_minutes_spent_binned'] = source['n_minutes_spent'].transform(lambda x: pd.qcut(x, 10, duplicates='drop'))
     source['n_minutes_spent_binned'] = source['n_minutes_spent_binned'].transform(lambda x: round(x.left / 60, 2))
     source['response_and_newness'] = (
         df.is_new_fact.transform(lambda x: 'New, ' if x else 'Old, ')
@@ -139,7 +139,7 @@ def figure_forgetting_curve(
     source = source[source.usercard_delta != 0]
     source = source[source[groupby] <= max_repetition]
 
-    source['usercard_delta_binned'] = source.groupby(groupby)['usercard_delta'].transform(lambda x: pd.qcut(x, q=10))
+    source['usercard_delta_binned'] = source.groupby(groupby)['usercard_delta'].transform(lambda x: pd.qcut(x, q=10, duplicates='drop'))
     source['usercard_delta_binned'] = source['usercard_delta_binned'].transform(lambda x: round(x.left / 3600, 2))
 
     if 'response' in source:
@@ -175,7 +175,7 @@ def figure_recall_rate(
 
     source[groupby] = source.apply(lambda x: 'New' if x['is_new_fact'] else str(x[groupby]), axis=1)
 
-    source['n_minutes_spent_binned'] = pd.qcut(source.n_minutes_spent, 20)
+    source['n_minutes_spent_binned'] = pd.qcut(source.n_minutes_spent, 20, duplicates='drop')
     source['n_minutes_spent_binned'] = source['n_minutes_spent_binned'].transform(lambda x: round(x.left / 60, 2))
     source = source.rename(columns={'n_minutes_spent_binned': 'n_hours_spent_binned'})
 

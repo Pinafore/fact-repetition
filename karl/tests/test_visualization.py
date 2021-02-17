@@ -12,7 +12,7 @@ def test_get_user_charts():
 
     r = requests.get(f'{URL}/get_user_charts?env={env}&user_id={user_id}&date_start={date_start}&date_end={date_end}')
     viz = json.loads(r.text)
-    # print(viz)
+    print(viz)
 
 
 test_get_user_charts()
