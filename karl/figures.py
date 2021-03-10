@@ -16,7 +16,7 @@ alt.renderers.enable('mimetype')
 
 def save_chart_and_pdf(chart, path):
     chart.save(f'{path}.json')
-    os.system(f'vl2vg {path}.json | vg2pdf > {path}.pdf')
+    # os.system(f'vl2vg {path}.json | vg2pdf > {path}.pdf')
 
 
 def figure_composition(df, path):
@@ -126,7 +126,8 @@ def figure_forgetting_curve(
     path: str = None,
     user_id: str = None,
     groupby: str = 'sm2_repetition',
-    max_repetition: int = 2,
+    max_repetition: int = 3,
+    repetition_models: list = ['karl100', 'leitner', 'sm2'],
 ):
     '''
     Recall vs delta broken down by # repetition
@@ -135,7 +136,7 @@ def figure_forgetting_curve(
     if user_id is not None:
         source = source[source.user_id == user_id]
     else:
-        source = source[source.repetition_model.isin(['karl100', 'leitner', 'sm2'])]
+        source = source[source.repetition_model.isin(repetition_models)]
     source = source[source.usercard_delta != 0]
     source = source[source[groupby] <= max_repetition]
 
@@ -160,6 +161,7 @@ def figure_recall_rate(
     user_id: str = None,
     groupby: str = 'sm2_repetition',
     max_repetition: int = 3,
+    repetition_models: list = ['karl100', 'leitner', 'sm2'],
 ):
     '''
     Recall rate broken down by number of repetition (to handle negative
@@ -169,8 +171,7 @@ def figure_recall_rate(
     if user_id is not None:
         source = source[source.user_id == user_id]
     else:
-        source = source[source.repetition_model.isin(['karl100', 'leitner', 'sm2'])]
-    source = source[source.repetition_model.isin(['karl100', 'leitner', 'sm2'])]
+        source = source[source.repetition_model.isin(repetition_models)]
     source = source[source[groupby] <= max_repetition]
 
     source[groupby] = source.apply(lambda x: 'New' if x['is_new_fact'] else str(x[groupby]), axis=1)
@@ -190,6 +191,33 @@ def figure_recall_rate(
         save_chart_and_pdf(chart, f'{path}/recall_rate')
     else:
         save_chart_and_pdf(chart, f'{path}/user_{user_id}_recall_rate')
+
+
+def figure_karl100_vs_karl85(
+    df: pd.DataFrame,
+    path: str = None,
+    user_id: str = None,
+    groupby: str = 'sm2_repetition',
+    max_repetition: int = 3,
+):
+    source = df.copy().drop('utc_date', axis=1)
+    source = source[source.repetition_model.isin(['karl100', 'karl85'])]
+    source = source[source[groupby] <= max_repetition]
+
+    source[groupby] = source.apply(lambda x: 'New' if x['is_new_fact'] else str(x[groupby]), axis=1)
+
+    source['n_minutes_spent_binned'] = pd.qcut(source.n_minutes_spent, 20, duplicates='drop')
+    source['n_minutes_spent_binned'] = source['n_minutes_spent_binned'].transform(lambda x: round(x.left / 60, 2))
+    source = source.rename(columns={'n_minutes_spent_binned': 'n_hours_spent_binned'})
+
+    if 'response' in source:
+        source = source.rename(columns={'response': 'value'})
+
+    chart = plot(source, 'n_hours_spent_binned', groupby)
+
+    if path is None:
+        return chart
+    save_chart_and_pdf(chart, f'{path}/karl100_vs_karl85')
 
 
 def get_user_charts(
@@ -218,8 +246,10 @@ if __name__ == '__main__':
     from pathlib import Path
     Path(path).mkdir(parents=True, exist_ok=True)
 
-    figure_composition(df, path)
-    figure_recall_rate(df, path=path)
-    figure_forgetting_curve(df, path=path)
-    figure_recall_rate(df, user_id='463', path=path)
-    figure_forgetting_curve(df, user_id='463', path=path)
+    # figure_composition(df, path)
+    # figure_recall_rate(df, path=path)
+    # figure_forgetting_curve(df, path=path)
+    # figure_recall_rate(df, user_id='463', path=path)
+    # figure_forgetting_curve(df, user_id='463', path=path)
+
+    figure_karl100_vs_karl85(df, path)
