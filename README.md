@@ -20,3 +20,5 @@ Make sure to use `git-lfs` to pull the model checkpoints too alongside the code.
 ## Run the scheduler
 1. `uvicorn karl.web:app --log-level debug`
 
+## Others
+1. For figures you might need `vega-lite`. Install with conda: `conda install -c conda-forge vega-lite-cli`.

@@ -85,9 +85,9 @@ def user_stats(user_id: str):
     print('stats finishes at'.ljust(20), datetime.now().strftime('%H:%M:%S %f'))
 
 def leaderboard(user_id: str):
-    print('board starts at'.ljust(20), datetime.now().strftime('%H:%M:%S %f'))
+    print('leaderboard starts at'.ljust(20), datetime.now().strftime('%H:%M:%S %f'))
     requests.get(f'{URL}/leaderboard?rank_type=total_seen&limit=10&min_studied=10&env=43&user_id={user_id}')
-    print('board finishes at'.ljust(20), datetime.now().strftime('%H:%M:%S %f'))
+    print('leaderboard finishes at'.ljust(20), datetime.now().strftime('%H:%M:%S %f'))
 
 def wait_and_print(wait: int, what: str):
     requests.get(f'{URL}/wait_and_print?wait={wait}&what={what}')
