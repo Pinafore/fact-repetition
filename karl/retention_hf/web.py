@@ -19,10 +19,10 @@ from karl.config import settings
 class RetentionModel:
 
     def __init__(self):
-        model_new_card = DistilBertRetentionModel.from_pretrained(f'{settings.CODE_DIR}/output/retention_hf_new_card')
+        model_new_card = DistilBertRetentionModel.from_pretrained(f'{settings.CODE_DIR}/output/retention_hf_distilbert_new_card')
         model_new_card.eval()
         self.model_new_card = model_new_card.to('cuda')
-        model_old_card = DistilBertRetentionModel.from_pretrained(f'{settings.CODE_DIR}/output/retention_hf_old_card')
+        model_old_card = DistilBertRetentionModel.from_pretrained(f'{settings.CODE_DIR}/output/retention_hf_distilbert_old_card')
         model_old_card.eval()
         self.model_old_card = model_old_card.to('cuda')
         self.tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')

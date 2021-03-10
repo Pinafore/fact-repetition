@@ -198,6 +198,7 @@ class RetentionDataset(torch.utils.data.Dataset):
         tokenizer,
         overwrite_cached_data: bool = False,
         overwrite_retention_features_df: bool = False,
+        interpolate_delta_for_test: bool = False,
     ):
         if (
             os.path.exists(f'{data_dir}/cached_train_new_card')

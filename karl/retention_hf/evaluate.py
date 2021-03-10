@@ -30,7 +30,8 @@ def evaluate(model_names=['distilbert', 'bert'], output_dir=f'{settings.CODE_DIR
     1. compare the empirical forgetting curve and the predicted one.
     1. compare the empirical recall rate and the predicted one.
     '''
-    figures_dir = f'{settings.CODE_DIR}/figures_eval_all'
+    # figures_dir = f'{settings.CODE_DIR}/figures_eval_all'
+    figures_dir = '/fs/www-users/shifeng/figures_eval_all'
 
     prediction_by_model = {}
     for model_name in model_names:
@@ -77,10 +78,10 @@ def evaluate(model_names=['distilbert', 'bert'], output_dir=f'{settings.CODE_DIR
     df_new_card = df_all[df_all.is_new_fact == True]  # noqa: E712
     df_old_card = df_all[df_all.is_new_fact == False]  # noqa: E712
     df_by_fold = {
-        'train_new_card': df_new_card.groupby('user_id', as_index=False).apply(lambda x: x.iloc[:int(x.user_id.size * 0.75)]).reset_index(),  # .drop(['level_0', 'level_1'], axis=1),
-        'test_new_card': df_new_card.groupby('user_id', as_index=False).apply(lambda x: x.iloc[int(x.user_id.size * 0.75):]).reset_index(),  # .drop(['level_0', 'level_1'], axis=1),
-        'train_old_card': df_old_card.groupby('user_id', as_index=False).apply(lambda x: x.iloc[:int(x.user_id.size * 0.75)]).reset_index(),  # .drop(['level_0', 'level_1'], axis=1),
-        'test_old_card': df_old_card.groupby('user_id', as_index=False).apply(lambda x: x.iloc[int(x.user_id.size * 0.75):]).reset_index(),  # .drop(['level_0', 'level_1'], axis=1),
+        'train_new_card': df_new_card.groupby('user_id', as_index=False).apply(lambda x: x.iloc[:int(x.user_id.size * 0.75)]).reset_index(),
+        'test_new_card': df_new_card.groupby('user_id', as_index=False).apply(lambda x: x.iloc[int(x.user_id.size * 0.75):]).reset_index(),
+        'train_old_card': df_old_card.groupby('user_id', as_index=False).apply(lambda x: x.iloc[:int(x.user_id.size * 0.75)]).reset_index(),
+        'test_old_card': df_old_card.groupby('user_id', as_index=False).apply(lambda x: x.iloc[int(x.user_id.size * 0.75):]).reset_index(),
     }
     for fold in ['train_new_card', 'train_old_card']:
         df_by_fold[fold] = df_by_fold[fold].rename(columns={'response': 'train_response'})
@@ -98,7 +99,6 @@ def evaluate(model_names=['distilbert', 'bert'], output_dir=f'{settings.CODE_DIR
         df_by_fold[fold] = df_by_fold[fold].melt(id_vars=id_vars, value_vars=value_vars, var_name='type', value_name='value')
 
     df_concat = pd.concat(list(df_by_fold.values()))
-    # df_concat = df_concat.sample(frac=0.1)
     figure_forgetting_curve(df_concat, figures_dir, max_repetition=2)
     figure_recall_rate(df_concat, figures_dir)
     figure_recall_rate(df_concat, user_id='463', path=figures_dir)
