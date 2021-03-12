@@ -20,7 +20,7 @@ n_facts_per_query = 300
 user_id = 'dummy'
 start_date = parse_date('2028-06-01 08:00:00.000001 -0400')
 
-# requests.get(f'{URL}/reset_user?env=prod&user_id={user_id}')
+requests.get(f'{URL}/reset_user?env=prod&user_id={user_id}')
 requests.put(f'{URL}/set_params?env=prod&user_id={user_id}', data=json.dumps(ParametersSchema().__dict__))
 
 profile = {}  # key -> [values]
