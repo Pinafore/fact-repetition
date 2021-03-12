@@ -444,8 +444,6 @@ def schedule(
     schedule_requests: List[ScheduleRequestSchema],
     session: Session = Depends(get_session),
 ) -> ScheduleResponseSchema:
-    # print('schedule starts at', time.strftime('%X'), f'tid={threading.get_ident()}', f'pid={getpid()}')
-
     if schedule_requests[0].date is not None:
         date = parse_date(schedule_requests[0].date)
     else:
@@ -460,15 +458,15 @@ def update(
     # env: str,
     update_requests: List[UpdateRequestSchema],
     session: Session = Depends(get_session),
-) -> None:
+) -> dict:
     update_request = update_requests[0]  # only accept one request. for backward compatability
     if update_request.date is not None:
         date = parse_date(update_request.date)
     else:
         date = datetime.now(pytz.utc)
-    scheduler.update(session, update_request, date)
+    profile = scheduler.update(session, update_request, date)
     session.commit()
-    return
+    return {'profile': profile}
 
 
 @app.get('/api/karl/get_user_charts')

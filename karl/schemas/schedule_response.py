@@ -8,3 +8,4 @@ class ScheduleResponseSchema(BaseModel):
     scores: List[Dict[str, float]]
     details: Optional[List]
     rationale: Optional[str]
+    profile: Optional[dict]

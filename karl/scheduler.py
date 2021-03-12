@@ -79,7 +79,7 @@ class KARLScheduler:
         date: datetime,
         session: Session,
     ) -> List[Dict[str, float]]:
-        recall_scores = self.score_recall_batch(user, cards, date)
+        recall_scores, profile = self.score_recall_batch(user, cards, date)
         scores = [
             {
                 'recall': recall_scores[i],
@@ -90,7 +90,7 @@ class KARLScheduler:
             }
             for i, card in enumerate(cards)
         ]
-        return scores
+        return scores, profile
 
     def schedule(
         self,
@@ -105,7 +105,7 @@ class KARLScheduler:
         cards = [self.get_card(request, session) for request in schedule_requests]
 
         # score cards
-        scores = self.score_user_cards(user, cards, date, session)
+        scores, profile = self.score_user_cards(user, cards, date, session)
 
         # computer total score
         for i, _ in enumerate(scores):
@@ -163,6 +163,7 @@ class KARLScheduler:
             debug_id=record_id,
             scores=scores,
             rationale=rationale,
+            profile=profile,
         )
 
     def get_curr_user_vector(
@@ -271,7 +272,6 @@ class KARLScheduler:
                 )
 
         t1 = datetime.now(pytz.utc)
-        print('======== gather features', (t1 - t0).total_seconds())
 
         feature_vectors = [x.__dict__ for x in feature_vectors]
         for x in feature_vectors:
@@ -285,8 +285,12 @@ class KARLScheduler:
         )
 
         t2 = datetime.now(pytz.utc)
-        print('======== scores', (t2 - t1).total_seconds())
-        return scores
+
+        profile = {
+            'schedule gather features': (t1 - t0).total_seconds(),
+            'schedule model prediction': (t2 - t1).total_seconds(),
+        }
+        return scores, profile
 
     def score_category(self, user: User, card: Card) -> float:
         """
@@ -447,11 +451,13 @@ class KARLScheduler:
         request: UpdateRequestSchema,
         date: datetime
     ) -> dict:
+        t0 = datetime.now(pytz.utc)
+
         # read debug_id from request, find corresponding record
         record = session.query(Record).get(request.debug_id)
 
         if record is None:
-            return
+            return {}
 
         # add front_end_id to record, response, elapsed_times to record
         record.date = date
@@ -459,22 +465,38 @@ class KARLScheduler:
         record.response = request.label
         record.elapsed_milliseconds_text = request.elapsed_milliseconds_text
         record.elapsed_milliseconds_answer = request.elapsed_milliseconds_answer
+        t1 = datetime.now(pytz.utc)
 
         # update leitner
         self.update_leitner(record, date, session)
+        t2 = datetime.now(pytz.utc)
+
         # update sm2
         self.update_sm2(record, date, session)
+        t3 = datetime.now(pytz.utc)
 
         # update user stats
         utc_date = date.astimezone(pytz.utc).date()
         self.update_user_stats(record, deck_id='all', utc_date=utc_date, session=session)
+        t4 = datetime.now(pytz.utc)
         if record.deck_id is not None:
             self.update_user_stats(record, deck_id=record.deck_id, utc_date=utc_date, session=session)
+        t5 = datetime.now(pytz.utc)
 
         session.commit()
         # update current features
         # NOTE do this last, especially after leitner and sm2
         self.update_feature_vectors(record, date, session)
+        t6 = datetime.now(pytz.utc)
+
+        return {
+            'update record': (t1 - t0).total_seconds(),
+            'update leitner': (t2 - t1).total_seconds(),
+            'update sm2': (t3 - t2).total_seconds(),
+            'update user_stats all': (t4 - t3).total_seconds(),
+            'update user_stats deck': (t5 - t4).total_seconds(),
+            'update feature vectors': (t6 - t5).total_seconds(),
+        }
 
     def update_feature_vectors(self, record: Record, date: datetime, session: Session):
         v_user = self.get_curr_user_vector(record.user_id)

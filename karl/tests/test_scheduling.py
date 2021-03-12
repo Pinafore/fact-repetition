@@ -23,6 +23,8 @@ start_date = parse_date('2028-06-01 08:00:00.000001 -0400')
 # requests.get(f'{URL}/reset_user?env=prod&user_id={user_id}')
 requests.put(f'{URL}/set_params?env=prod&user_id={user_id}', data=json.dumps(ParametersSchema().__dict__))
 
+profile = {}  # key -> [values]
+
 for nth_day in range(n_days):
     print(f'day {nth_day}')
     seconds_offset = 0  # offset from the the first fact of today, in seconds
@@ -47,6 +49,11 @@ for nth_day in range(n_days):
                 data=json.dumps([r.__dict__ for r in schedule_requests])
             ).text
         )
+
+        for key, value in schedule_response.get('profile', {}).items():
+            if key not in profile:
+                profile[key] = []
+            profile[key].append(value)
 
         index = schedule_response['order'][0]
         fact_id = schedule_requests[index].fact_id
@@ -75,4 +82,14 @@ for nth_day in range(n_days):
             ).text
         )
 
+        for key, value in update_response.get('profile', {}).items():
+            if key not in profile:
+                profile[key] = []
+            profile[key].append(value)
+
         seconds_offset += 20
+
+print()
+print()
+for key, values in profile.items():
+    print(key, np.mean(values))

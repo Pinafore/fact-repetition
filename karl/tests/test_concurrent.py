@@ -92,13 +92,9 @@ def leaderboard(user_id: str):
 def wait_and_print(wait: int, what: str):
     requests.get(f'{URL}/wait_and_print?wait={wait}&what={what}')
 
-async def test0():
-    await asyncio.gather(
-        asyncio.to_thread(wait_and_print, 5, 'first'),
-        asyncio.to_thread(wait_and_print, 5, 'second'),
-    )
 
 async def test1():
+    '''Mixing user stats queries and leaderboard queries'''
     user_id = 'dummy'
 
     await asyncio.gather(
@@ -108,6 +104,7 @@ async def test1():
     )
 
 async def test2():
+    '''Mixing user stats, leaderboard, and schedule queries'''
     user_id = 'dummy'
     date = parse_date('2028-06-01 08:00:00.000001 -0400')
 
@@ -127,6 +124,5 @@ async def test2():
     )
 
 if __name__ == '__main__':
-    # asyncio.run(test0())
     # asyncio.run(test1())
     asyncio.run(test2())
