@@ -29,7 +29,7 @@ for f in files:
 DATA_DIR = 'output/'
 S3_DIR = 'https://pinafore-us-west-2.s3-us-west-2.amazonaws.com/karl/'
 files = [
-
+    'diagnostic_questions.pkl',
     'retention_hf_distilbert_old_card.zip',
     'retention_hf_distilbert_new_card.zip',
 ]
