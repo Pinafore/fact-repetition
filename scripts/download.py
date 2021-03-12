@@ -28,8 +28,14 @@ for f in files:
 
 DATA_DIR = 'output/'
 S3_DIR = 'https://pinafore-us-west-2.s3-us-west-2.amazonaws.com/karl/'
-print('downloading {} from s3'.format(f))
-f = 'retention_hf_distilbert_new_card.zip'
-wget.download(S3_DIR + f, DATA_DIR + f)
-f = 'retention_hf_distilbert_old_card.zip'
-wget.download(S3_DIR + f, DATA_DIR + f)
+files = [
+
+    'retention_hf_distilbert_old_card.zip',
+    'retention_hf_distilbert_new_card.zip',
+]
+
+for f in files:
+    if not os.path.exists(DATA_DIR + f):
+        print('downloading {} from s3'.format(f))
+        wget.download(S3_DIR + f, DATA_DIR + f)
+        print()
