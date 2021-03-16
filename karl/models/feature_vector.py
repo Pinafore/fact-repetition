@@ -6,9 +6,9 @@ from karl.models import User, Card, Record
 
 
 class UserCardFeatureVector(Base):
-    id = Column(String, ForeignKey(Record.id), primary_key=True, index=True)
-    user_id = Column(String, ForeignKey(User.id), index=True)
-    card_id = Column(String, ForeignKey(Card.id), index=True)
+    id = Column(String, ForeignKey(Record.id, ondelete="CASCADE"), primary_key=True, index=True)
+    user_id = Column(String, ForeignKey(User.id, ondelete="CASCADE"), index=True)
+    card_id = Column(String, ForeignKey(Card.id, ondelete="CASCADE"), index=True)
     date = Column(TIMESTAMP(timezone=True), index=True)
     n_study_positive = Column(Integer)
     n_study_negative = Column(Integer)
@@ -27,8 +27,8 @@ class UserCardFeatureVector(Base):
 
 
 class UserFeatureVector(Base):
-    id = Column(String, ForeignKey(Record.id), primary_key=True, index=True)
-    user_id = Column(String, ForeignKey(User.id), index=True)
+    id = Column(String, ForeignKey(Record.id, ondelete="CASCADE"), primary_key=True, index=True)
+    user_id = Column(String, ForeignKey(User.id, ondelete="CASCADE"), index=True)
     date = Column(TIMESTAMP(timezone=True), index=True)
     n_study_positive = Column(Integer)
     n_study_negative = Column(Integer)
@@ -41,8 +41,8 @@ class UserFeatureVector(Base):
 
 
 class CardFeatureVector(Base):
-    id = Column(String, ForeignKey(Record.id), primary_key=True, index=True)
-    card_id = Column(String, ForeignKey(Card.id), index=True)
+    id = Column(String, ForeignKey(Record.id, ondelete="CASCADE"), primary_key=True, index=True)
+    card_id = Column(String, ForeignKey(Card.id, ondelete="CASCADE"), index=True)
     date = Column(TIMESTAMP(timezone=True), index=True)
     n_study_positive = Column(Integer)
     n_study_negative = Column(Integer)
@@ -54,8 +54,8 @@ class CardFeatureVector(Base):
 
 
 class CurrUserCardFeatureVector(Base):
-    user_id = Column(String, ForeignKey(User.id), primary_key=True, index=True)
-    card_id = Column(String, ForeignKey(Card.id), primary_key=True, index=True)
+    user_id = Column(String, ForeignKey(User.id, ondelete="CASCADE"), primary_key=True, index=True)
+    card_id = Column(String, ForeignKey(Card.id, ondelete="CASCADE"), primary_key=True, index=True)
     n_study_positive = Column(Integer)
     n_study_negative = Column(Integer)
     n_study_total = Column(Integer)
@@ -72,7 +72,7 @@ class CurrUserCardFeatureVector(Base):
 
 
 class CurrUserFeatureVector(Base):
-    user_id = Column(String, ForeignKey(User.id), primary_key=True, index=True)
+    user_id = Column(String, ForeignKey(User.id, ondelete="CASCADE"), primary_key=True, index=True)
     n_study_positive = Column(Integer)
     n_study_negative = Column(Integer)
     n_study_total = Column(Integer)
@@ -83,7 +83,7 @@ class CurrUserFeatureVector(Base):
 
 
 class CurrCardFeatureVector(Base):
-    card_id = Column(String, ForeignKey(Card.id), primary_key=True, index=True)
+    card_id = Column(String, ForeignKey(Card.id, ondelete="CASCADE"), primary_key=True, index=True)
     n_study_positive = Column(Integer)
     n_study_negative = Column(Integer)
     n_study_total = Column(Integer)
