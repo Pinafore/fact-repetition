@@ -65,7 +65,18 @@ class KARLScheduler:
             deck_name=request.deck_name,
             deck_id=request.deck_id,
         )
+
+        v_card = CurrCardFeatureVector(
+            card_id=card.id,
+            n_study_positive=0,
+            n_study_negative=0,
+            n_study_total=0,
+            previous_delta=None,
+            previous_study_date=None,
+            previous_study_response=None,
+        )
         session.add(card)
+        session.add(v_card)
         session.commit()
 
         # TODO create embedding
