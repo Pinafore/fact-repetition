@@ -76,6 +76,7 @@ class KARLScheduler:
             previous_study_response=None,
         )
         session.add(card)
+        session.commit()
         session.add(v_card)
         session.commit()
 
