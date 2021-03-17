@@ -3,20 +3,21 @@ import os
 import wget
 import pathlib
 
-DATA_DIR = 'data/protobowl/'
-S3_DIR = 'https://pinafore-us-west-2.s3-us-west-2.amazonaws.com/karl/protobowl/'
+DATA_DIR = 'data/'
+S3_DIR = 'https://pinafore-us-west-2.s3-us-west-2.amazonaws.com/karl/'
 
 pathlib.Path(DATA_DIR).mkdir(parents=True, exist_ok=True)
 
 files = [
-    'protobowl-042818.log.train.h5',
-    'protobowl-042818.log.test.h5',
-    'x_train.npy',
-    'y_train.npy',
-    'x_test.npy',
-    'y_test.npy',
-    # 'protobowl-042818.log.h5',
-    'protobowl-042818.log.questions.pkl',
+    'protobowl/protobowl-042818.log.train.h5',
+    'protobowl/protobowl-042818.log.test.h5',
+    'protobowl/x_train.npy',
+    'protobowl/y_train.npy',
+    'protobowl/x_test.npy',
+    'protobowl/y_test.npy',
+    # 'protobowl/protobowl-042818.log.h5',
+    'protobowl/protobowl-042818.log.questions.pkl',
+    'diagnostic_questions.pkl',
 ]
 
 for f in files:
@@ -29,7 +30,6 @@ for f in files:
 DATA_DIR = 'output/'
 S3_DIR = 'https://pinafore-us-west-2.s3-us-west-2.amazonaws.com/karl/'
 files = [
-    'diagnostic_questions.pkl',
     'retention_hf_distilbert_old_card.zip',
     'retention_hf_distilbert_new_card.zip',
 ]
