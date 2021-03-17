@@ -19,7 +19,9 @@ from karl.schemas import UserStatsSchema, RankingSchema, LeaderboardSchema, \
     OldParametersSchema, ParametersSchema, \
     ScheduleResponseSchema, ScheduleRequestSchema, UpdateRequestSchema, \
     Visualization
-from karl.models import User, UserStats, Parameters
+from karl.models import User, UserStats, Parameters, Record, \
+    UserCardFeatureVector, UserFeatureVector, CardFeatureVector, \
+    CurrUserFeatureVector, CurrUserCardFeatureVector
 from karl.scheduler import KARLScheduler
 from karl.db.session import SessionLocal, engine
 from karl.config import settings
@@ -64,6 +66,22 @@ def get_session() -> Generator:
         yield session
     finally:
         session.close()
+
+
+@app.get('/api/karl/reset_user')
+def reset_user(
+    # env: str,
+    user_id: str,
+    session: Session = Depends(get_session),
+) -> None:
+    # remove all user records
+    for record in session.query(Record).filter(Record.user_id == user_id):
+        session.query(UserCardFeatureVector).filter(UserCardFeatureVector.id == record.id).delete()
+        session.query(UserFeatureVector).filter(UserFeatureVector.id == record.id).delete()
+        session.query(CardFeatureVector).filter(CardFeatureVector.id == record.id).delete()
+    session.query(CurrUserCardFeatureVector).filter(CurrUserCardFeatureVector.user_id == user_id).delete()
+    session.query(CurrUserFeatureVector).filter(CurrUserFeatureVector.user_id == user_id).delete()
+    session.query(Record).filter(Record.user_id == user_id).delete()
 
 
 @app.put('/api/karl/set_params', response_model=ParametersSchema)
