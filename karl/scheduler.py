@@ -23,11 +23,7 @@ from karl.config import settings
 
 class KARLScheduler:
 
-    def get_user(
-        self,
-        user_id: str,
-        session: Session,
-    ) -> User:
+    def get_user(self, user_id: str, session: Session) -> User:
         """
         Get user from DB. Create new if user does not exist.
 
@@ -47,11 +43,7 @@ class KARLScheduler:
 
         return user
 
-    def get_card(
-        self,
-        request: ScheduleRequestSchema,
-        session: Session,
-    ) -> Card:
+    def get_card(self, request: ScheduleRequestSchema, session: Session) -> Card:
         card = session.query(Card).get(request.fact_id)  # TODO will change to card_id at some point
 
         if card is not None:
@@ -76,21 +68,12 @@ class KARLScheduler:
             previous_study_response=None,
         )
         session.add(card)
-        session.commit()
         session.add(v_card)
         session.commit()
 
-        # TODO create embedding
-
         return card
 
-    def score_user_cards(
-        self,
-        user: User,
-        cards: List[Card],
-        date: datetime,
-        session: Session,
-    ) -> List[Dict[str, float]]:
+    def score_user_cards(self, user: User, cards: List[Card], date: datetime, session: Session) -> List[Dict[str, float]]:
         recall_scores, profile = self.score_recall_batch(user, cards, date)
         scores = [
             {
@@ -106,58 +89,60 @@ class KARLScheduler:
 
     def schedule(
         self,
-        session,
         schedule_requests: List[ScheduleRequestSchema],
         date: datetime,
         rationale=False,
         details=False,
     ) -> ScheduleResponseSchema:
-        # get user and cards
-        user = self.get_user(schedule_requests[0].user_id, session)
-        cards = [self.get_card(request, session) for request in schedule_requests]
+        with SessionLocal().begin() as session:
+            # get user and cards
+            user = self.get_user(schedule_requests[0].user_id, session)
+            cards = [self.get_card(request, session) for request in schedule_requests]
 
-        # score cards
-        scores, profile = self.score_user_cards(user, cards, date, session)
+            # score cards
+            scores, profile = self.score_user_cards(user, cards, date, session)
 
-        # computer total score
-        for i, _ in enumerate(scores):
-            scores[i]['sum'] = sum([
-                user.parameters.__dict__.get(key, 0) * value
-                for key, value in scores[i].items()
-            ])
+            # computer total score
+            for i, _ in enumerate(scores):
+                scores[i]['sum'] = sum([
+                    user.parameters.__dict__.get(key, 0) * value
+                    for key, value in scores[i].items()
+                ])
 
-        # sort cards
-        order = np.argsort([s['sum'] for s in scores]).tolist()
-        card_selected = cards[order[0]]
+            # sort cards
+            order = np.argsort([s['sum'] for s in scores]).tolist()
+            card_selected = cards[order[0]]
 
-        # determine if is new card
-        if session.query(Record).\
-                filter(Record.user_id == user.id).\
-                filter(Record.card_id == card_selected.id).count() > 0:
-            is_new_fact = False
-        else:
-            is_new_fact = True
+            # determine if is new card
+            if session.query(Record).\
+                    filter(Record.user_id == user.id).\
+                    filter(Record.card_id == card_selected.id).count() > 0:
+                is_new_fact = False
+            else:
+                is_new_fact = True
 
-        # generate record.id (debug_id)
-        record_id = json.dumps({
-            'user_id': user.id,
-            'card_id': card_selected.id,
-            'date': str(date.replace(tzinfo=pytz.UTC)),
-        })
+            # generate record.id (debug_id)
+            record_id = json.dumps({
+                'user_id': user.id,
+                'card_id': card_selected.id,
+                'date': str(date.replace(tzinfo=pytz.UTC)),
+            })
 
-        # store record with front_end_id empty @ debug_id
-        record = Record(
-            id=record_id,
-            user_id=user.id,
-            card_id=card_selected.id,
-            deck_id=card_selected.deck_id,
-            is_new_fact=is_new_fact,
-            date=date,
-        )
-        session.add(record)
+            # store record with front_end_id empty @ debug_id
+            record = Record(
+                id=record_id,
+                user_id=user.id,
+                card_id=card_selected.id,
+                deck_id=card_selected.deck_id,
+                is_new_fact=is_new_fact,
+                date=date,
+            )
+            session.add(record)
+            session.commit()
+            session.close()
 
-        # store feature vectors @ debug_id
-        self.save_feature_vectors(record.id, user.id, card_selected.id, date)
+            # store feature vectors @ debug_id
+            self.save_feature_vectors(record.id, user.id, card_selected.id, date)
 
         rationale = self.get_rationale(
             record_id=record_id,
@@ -166,7 +151,6 @@ class KARLScheduler:
             date=date,
             scores=scores,
             order=order,
-            session=session,
         )
 
         # return
@@ -178,10 +162,7 @@ class KARLScheduler:
             profile=profile,
         )
 
-    def get_curr_user_vector(
-        self,
-        user_id: str,
-    ) -> CurrUserFeatureVector:
+    def get_curr_user_vector(self, user_id: str) -> CurrUserFeatureVector:
         session = SessionLocal()
         v_user = session.query(CurrUserFeatureVector).get(user_id)
         params = ParametersSchema(**self.get_user(user_id, session).parameters.__dict__)
@@ -197,15 +178,12 @@ class KARLScheduler:
                 parameters=json.dumps(params.__dict__),
             )
             session.add(v_user)
+        session.commit()
         session.close()
         return v_user
 
-    def get_curr_card_vector(
-        self,
-        card_id: str,
-    ) -> CurrCardFeatureVector:
+    def get_curr_card_vector(self, card_id: str) -> CurrCardFeatureVector:
         session = SessionLocal()
-
         v_card = session.query(CurrCardFeatureVector).get(card_id)
         if v_card is None:
             v_card = CurrCardFeatureVector(
@@ -218,16 +196,12 @@ class KARLScheduler:
                 previous_study_response=None,
             )
             session.add(v_card)
+        session.commit()
         session.close()
         return v_card
 
-    def get_curr_usercard_vector(
-        self,
-        user_id: str,
-        card_id: str,
-    ) -> CurrUserCardFeatureVector:
+    def get_curr_usercard_vector(self, user_id: str, card_id: str) -> CurrUserCardFeatureVector:
         session = SessionLocal()
-
         v_usercard = session.query(CurrUserCardFeatureVector).get((user_id, card_id))
         if v_usercard is None:
             v_usercard = CurrUserCardFeatureVector(
@@ -248,6 +222,7 @@ class KARLScheduler:
                 sm2_scheduled_date=None,
             )
             session.add(v_usercard)
+        session.commit()
         session.close()
         return v_usercard
 
@@ -334,6 +309,7 @@ class KARLScheduler:
         :return: portion of cool down period remained. 0 if passed.
         """
         v_usercard = session.query(CurrUserCardFeatureVector).get((user.id, card.id))
+
         if v_usercard is None or v_usercard.previous_study_date is None:
             return 0
         else:
@@ -358,6 +334,7 @@ class KARLScheduler:
         :return: distance in number of hours.
         """
         leitner = session.query(Leitner).get((user.id, card.id))
+
         if leitner is None or leitner.scheduled_date is None:
             return 0
         else:
@@ -374,6 +351,7 @@ class KARLScheduler:
         :return: distance in number of hours.
         """
         sm2 = session.query(SM2).get((user.id, card.id))
+
         if sm2 is None or sm2.scheduled_date is None:
             return 0
         else:
@@ -392,6 +370,10 @@ class KARLScheduler:
         v_usercard = self.get_curr_usercard_vector(user_id, card_id)
 
         session = SessionLocal()
+
+        v_user = session.query(CurrUserFeatureVector).get(user_id)
+        v_card = session.query(CurrCardFeatureVector).get(card_id)
+        v_usercard = session.query(CurrUserCardFeatureVector).get((user_id, card_id))
 
         delta_usercard = None
         if v_usercard.previous_study_date is not None:
@@ -455,51 +437,49 @@ class KARLScheduler:
                 previous_study_date=v_card.previous_study_date,
                 previous_study_response=v_card.previous_study_response,
             ))
+        session.commit()
         session.close()
 
-    def update(
-        self,
-        session,
-        request: UpdateRequestSchema,
-        date: datetime
-    ) -> dict:
-        t0 = datetime.now(pytz.utc)
+    def update(self, request: UpdateRequestSchema, date: datetime) -> dict:
+        with SessionLocal().begin() as session:
+            t0 = datetime.now(pytz.utc)
 
-        # read debug_id from request, find corresponding record
-        record = session.query(Record).get(request.debug_id)
+            # read debug_id from request, find corresponding record
+            record = session.query(Record).get(request.debug_id)
 
-        if record is None:
-            return {}
+            if record is None:
+                return {}
 
-        # add front_end_id to record, response, elapsed_times to record
-        record.date = date
-        record.front_end_id = request.history_id
-        record.response = request.label
-        record.elapsed_milliseconds_text = request.elapsed_milliseconds_text
-        record.elapsed_milliseconds_answer = request.elapsed_milliseconds_answer
-        t1 = datetime.now(pytz.utc)
+            # add front_end_id to record, response, elapsed_times to record
+            record.date = date
+            record.front_end_id = request.history_id
+            record.response = request.label
+            record.elapsed_milliseconds_text = request.elapsed_milliseconds_text
+            record.elapsed_milliseconds_answer = request.elapsed_milliseconds_answer
+            t1 = datetime.now(pytz.utc)
+            session.commit()
 
-        # update leitner
-        self.update_leitner(record, date, session)
-        t2 = datetime.now(pytz.utc)
+            # update leitner
+            self.update_leitner(record, date, session)
+            t2 = datetime.now(pytz.utc)
 
-        # update sm2
-        self.update_sm2(record, date, session)
-        t3 = datetime.now(pytz.utc)
+            # update sm2
+            self.update_sm2(record, date)
+            t3 = datetime.now(pytz.utc)
 
-        # update user stats
-        utc_date = date.astimezone(pytz.utc).date()
-        self.update_user_stats(record, deck_id='all', utc_date=utc_date, session=session)
-        t4 = datetime.now(pytz.utc)
-        if record.deck_id is not None:
-            self.update_user_stats(record, deck_id=record.deck_id, utc_date=utc_date, session=session)
-        t5 = datetime.now(pytz.utc)
+            # update user stats
+            utc_date = date.astimezone(pytz.utc).date()
+            self.update_user_stats(record, deck_id='all', utc_date=utc_date, session=session)
+            t4 = datetime.now(pytz.utc)
+            if record.deck_id is not None:
+                self.update_user_stats(record, deck_id=record.deck_id, utc_date=utc_date, session=session)
+            t5 = datetime.now(pytz.utc)
 
-        session.commit()
-        # update current features
-        # NOTE do this last, especially after leitner and sm2
-        self.update_feature_vectors(record, date, session)
-        t6 = datetime.now(pytz.utc)
+            # update current features
+            # NOTE do this last, especially after leitner and sm2
+            self.update_feature_vectors(record, date)
+            t6 = datetime.now(pytz.utc)
+            session.commit()
 
         return {
             'update record': (t1 - t0).total_seconds(),
@@ -514,6 +494,10 @@ class KARLScheduler:
         v_user = self.get_curr_user_vector(record.user_id)
         v_card = self.get_curr_card_vector(record.card_id)
         v_usercard = self.get_curr_usercard_vector(record.user_id, record.card_id)
+
+        v_user = session.query(CurrUserFeatureVector).get(record.user_id)
+        v_card = session.query(CurrCardFeatureVector).get(record.card_id)
+        v_usercard = session.query(CurrUserCardFeatureVector).get((record.user_id, record.card_id))
 
         delta_usercard = None
         if v_usercard.previous_study_date is not None:
@@ -536,14 +520,16 @@ class KARLScheduler:
             v_usercard.leitner_box = leitner.box
             v_usercard.leitner_scheduled_date = leitner.scheduled_date
         else:
-            print('leitner is none')
+            pass
+            # print('leitner is none')
         if sm2 is not None:
             v_usercard.sm2_efactor = sm2.efactor
             v_usercard.sm2_interval = sm2.interval
             v_usercard.sm2_repetition = sm2.repetition
             v_usercard.sm2_scheduled_date = sm2.scheduled_date
         else:
-            print('sm2 is none')
+            pass
+            # print('sm2 is none')
 
         delta_user = None
         if v_user.previous_study_date is not None:
@@ -691,8 +677,11 @@ class KARLScheduler:
             else:
                 sm2.interval *= sm2.efactor
 
-        sm2.interval = max(1000, sm2.interval)  # TODO prevent date overflow
-        sm2.scheduled_date = date + timedelta(days=sm2.interval)
+        sm2.interval = max(500, sm2.interval)  # TODO prevent date overflow
+        try:
+            sm2.scheduled_date = date + timedelta(days=sm2.interval)
+        except OverflowError:
+            pass
 
     def get_rationale(
         self,
@@ -702,7 +691,6 @@ class KARLScheduler:
         date: datetime,
         scores: List[Dict[str, float]],
         order: List[int],
-        session: Session,
         top_n_cards: int = 3,
     ) -> str:
         rr = """

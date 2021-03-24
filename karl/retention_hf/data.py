@@ -56,6 +56,7 @@ class RetentionFeaturesSchema(BaseModel):
     repetition_model: str
     elapsed_milliseconds: int
     correct_on_first_try: Optional[bool]
+    utc_datetime: datetime
     utc_date: date
 
 
@@ -115,6 +116,7 @@ def vectors_to_features(
         repetition_model=json.loads(v_user.parameters)['repetition_model'],
         correct_on_first_try=v_usercard.correct_on_first_try or False,
         elapsed_milliseconds=elapsed_milliseconds,
+        utc_datetime=date.astimezone(pytz.utc),
         utc_date=date.astimezone(pytz.utc).date(),
     )
 
@@ -125,7 +127,7 @@ def _get_user_features(
 ):
     user = session.query(User).get(user_id)
     features, labels = [], []
-    for ith_record, record in enumerate(user.records):
+    for record in user.records:
         if record.response is None:
             continue
         v_user = session.query(UserFeatureVector).get(record.id)
