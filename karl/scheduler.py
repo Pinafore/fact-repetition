@@ -233,6 +233,12 @@ class KARLScheduler:
         session.close()
         return v_usercard
 
+    def collect_features(self, user_id, card_id, card_text, v_user, date):
+        '''helper for multiprocessing'''
+        v_card = self.get_curr_card_vector(card_id)
+        v_usercard = self.get_curr_usercard_vector(user_id, card_id)
+        return vectors_to_features(v_usercard, v_user, v_card, date, card_text)
+
     def score_recall_batch(
         self,
         user: User,
@@ -250,7 +256,7 @@ class KARLScheduler:
             for card in cards:
                 v_card = self.get_curr_card_vector(card.id)
                 v_usercard = self.get_curr_usercard_vector(user.id, card.id)
-                feature_vectors.append(vectors_to_features(v_usercard, v_user, v_card, date, card.text))
+                feature_vectors.append(vectors_to_features(v_usercard, v_user, v_card, date, card.text).__dict__)
         else:
             # https://docs.sqlalchemy.org/en/14/core/pooling.html#using-connection-pools-with-multiprocessing-or-os-fork
             # https://pythonspeed.com/articles/python-multiprocessing/
@@ -258,18 +264,14 @@ class KARLScheduler:
                 mp_context=multiprocessing.get_context(settings.MP_CONTEXT),
                 initializer=engine.dispose,
             )
-            v_card_futures, v_usercard_futures = [], []
-            for card in cards:
-                v_card_futures.append(executor.submit(self.get_curr_card_vector, card.id))
-                v_usercard_futures.append(executor.submit(self.get_curr_usercard_vector, user.id, card.id))
-            for card, v_card_future, v_usercard_future in zip(cards, v_card_futures, v_usercard_futures):
-                feature_vectors.append(
-                    vectors_to_features(v_usercard_future.result(), v_user, v_card_future.result(), date, card.text)
-                )
 
+            futures = []
+            for card in cards:
+                futures.append(executor.submit(self.collect_features, user.id, card.id, card.text, v_user, date))
+            feature_vectors = [x.result().__dict__ for x in futures]
+        
         t1 = datetime.now(pytz.utc)
 
-        feature_vectors = [x.__dict__ for x in feature_vectors]
         for x in feature_vectors:
             x['utc_date'] = str(x['utc_date'])
             x['utc_datetime'] = str(x['utc_datetime'])
@@ -495,12 +497,12 @@ class KARLScheduler:
         session.close()
 
         return {
-            'update record': (t1 - t0).total_seconds(),
-            'update leitner': (t2 - t1).total_seconds(),
-            'update sm2': (t3 - t2).total_seconds(),
-            'update user_stats all': (t4 - t3).total_seconds(),
-            'update user_stats deck': (t5 - t4).total_seconds(),
-            'update feature vectors': (t6 - t5).total_seconds(),
+            # 'update record': (t1 - t0).total_seconds(),
+            # 'update leitner': (t2 - t1).total_seconds(),
+            # 'update sm2': (t3 - t2).total_seconds(),
+            # 'update user_stats all': (t4 - t3).total_seconds(),
+            # 'update user_stats deck': (t5 - t4).total_seconds(),
+            # 'update feature vectors': (t6 - t5).total_seconds(),
         }
 
     def update_feature_vectors(self, record: Record, date: datetime, session: Session):
