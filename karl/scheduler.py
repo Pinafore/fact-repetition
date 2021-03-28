@@ -11,7 +11,9 @@ from datetime import datetime, timedelta
 from concurrent.futures import ProcessPoolExecutor
 from sqlalchemy.orm import Session
 
-from karl.schemas import ScheduleRequestSchema, UpdateRequestSchema, ScheduleResponseSchema, ParametersSchema
+from karl.schemas import ScheduleRequestSchema, UpdateRequestSchema, ScheduleResponseSchema
+from karl.schemas import ParametersSchema
+from karl.schemas import VUser, VCard, VUserCard
 from karl.models import User, Card, Record, Parameters, UserStats,\
     UserCardFeatureVector, UserFeatureVector, CardFeatureVector,\
     CurrUserCardFeatureVector, CurrUserFeatureVector, CurrCardFeatureVector,\
@@ -57,6 +59,8 @@ class KARLScheduler:
             deck_name=request.deck_name,
             deck_id=request.deck_id,
         )
+        session.add(card)
+        session.commit()
 
         v_card = CurrCardFeatureVector(
             card_id=card.id,
@@ -67,7 +71,6 @@ class KARLScheduler:
             previous_study_date=None,
             previous_study_response=None,
         )
-        session.add(card)
         session.add(v_card)
         session.commit()
 
@@ -94,55 +97,54 @@ class KARLScheduler:
         rationale=False,
         details=False,
     ) -> ScheduleResponseSchema:
-        with SessionLocal().begin() as session:
-            # get user and cards
-            user = self.get_user(schedule_requests[0].user_id, session)
-            cards = [self.get_card(request, session) for request in schedule_requests]
+        session = SessionLocal()
+        # get user and cards
+        user = self.get_user(schedule_requests[0].user_id, session)
+        cards = [self.get_card(request, session) for request in schedule_requests]
 
-            # score cards
-            scores, profile = self.score_user_cards(user, cards, date, session)
+        # score cards
+        scores, profile = self.score_user_cards(user, cards, date, session)
 
-            # computer total score
-            for i, _ in enumerate(scores):
-                scores[i]['sum'] = sum([
-                    user.parameters.__dict__.get(key, 0) * value
-                    for key, value in scores[i].items()
-                ])
+        # computer total score
+        for i, _ in enumerate(scores):
+            scores[i]['sum'] = sum([
+                user.parameters.__dict__.get(key, 0) * value
+                for key, value in scores[i].items()
+            ])
 
-            # sort cards
-            order = np.argsort([s['sum'] for s in scores]).tolist()
-            card_selected = cards[order[0]]
+        # sort cards
+        order = np.argsort([s['sum'] for s in scores]).tolist()
+        card_selected = cards[order[0]]
 
-            # determine if is new card
-            if session.query(Record).\
-                    filter(Record.user_id == user.id).\
-                    filter(Record.card_id == card_selected.id).count() > 0:
-                is_new_fact = False
-            else:
-                is_new_fact = True
+        # determine if is new card
+        if session.query(Record).\
+                filter(Record.user_id == user.id).\
+                filter(Record.card_id == card_selected.id).count() > 0:
+            is_new_fact = False
+        else:
+            is_new_fact = True
 
-            # generate record.id (debug_id)
-            record_id = json.dumps({
-                'user_id': user.id,
-                'card_id': card_selected.id,
-                'date': str(date.replace(tzinfo=pytz.UTC)),
-            })
+        # generate record.id (debug_id)
+        record_id = json.dumps({
+            'user_id': user.id,
+            'card_id': card_selected.id,
+            'date': str(date.replace(tzinfo=pytz.UTC)),
+        })
 
-            # store record with front_end_id empty @ debug_id
-            record = Record(
-                id=record_id,
-                user_id=user.id,
-                card_id=card_selected.id,
-                deck_id=card_selected.deck_id,
-                is_new_fact=is_new_fact,
-                date=date,
-            )
-            session.add(record)
-            session.commit()
-            session.close()
+        # store record with front_end_id empty @ debug_id
+        record = Record(
+            id=record_id,
+            user_id=user.id,
+            card_id=card_selected.id,
+            deck_id=card_selected.deck_id,
+            is_new_fact=is_new_fact,
+            date=date,
+        )
+        session.add(record)
+        session.commit()
 
-            # store feature vectors @ debug_id
-            self.save_feature_vectors(record.id, user.id, card_selected.id, date)
+        # store feature vectors @ debug_id
+        self.save_feature_vectors(record.id, user.id, card_selected.id, date)
 
         rationale = self.get_rationale(
             record_id=record_id,
@@ -152,6 +154,8 @@ class KARLScheduler:
             scores=scores,
             order=order,
         )
+
+        session.close()
 
         # return
         return ScheduleResponseSchema(
@@ -178,6 +182,7 @@ class KARLScheduler:
                 parameters=json.dumps(params.__dict__),
             )
             session.add(v_user)
+        v_user = VUser(**v_user.__dict__)
         session.commit()
         session.close()
         return v_user
@@ -196,6 +201,7 @@ class KARLScheduler:
                 previous_study_response=None,
             )
             session.add(v_card)
+        v_card = VCard(**v_card.__dict__)
         session.commit()
         session.close()
         return v_card
@@ -222,6 +228,7 @@ class KARLScheduler:
                 sm2_scheduled_date=None,
             )
             session.add(v_usercard)
+        v_usercard = VUserCard(**v_usercard.__dict__)
         session.commit()
         session.close()
         return v_usercard
@@ -245,6 +252,8 @@ class KARLScheduler:
                 v_usercard = self.get_curr_usercard_vector(user.id, card.id)
                 feature_vectors.append(vectors_to_features(v_usercard, v_user, v_card, date, card.text))
         else:
+            # https://docs.sqlalchemy.org/en/14/core/pooling.html#using-connection-pools-with-multiprocessing-or-os-fork
+            # https://pythonspeed.com/articles/python-multiprocessing/
             executor = ProcessPoolExecutor(
                 mp_context=multiprocessing.get_context(settings.MP_CONTEXT),
                 initializer=engine.dispose,
@@ -263,6 +272,7 @@ class KARLScheduler:
         feature_vectors = [x.__dict__ for x in feature_vectors]
         for x in feature_vectors:
             x['utc_date'] = str(x['utc_date'])
+            x['utc_datetime'] = str(x['utc_datetime'])
 
         scores = json.loads(
             requests.get(
@@ -401,6 +411,7 @@ class KARLScheduler:
                 sm2_scheduled_date=None if sm2 is None else sm2.scheduled_date,
                 correct_on_first_try=v_usercard.correct_on_first_try,
             ))
+        session.commit()
 
         delta_user = None
         if v_user.previous_study_date is not None:
@@ -420,6 +431,7 @@ class KARLScheduler:
                 previous_study_response=v_user.previous_study_response,
                 parameters=json.dumps(params.__dict__),
             ))
+        session.commit()
 
         delta_card = None
         if v_card.previous_study_date is not None:
@@ -441,45 +453,46 @@ class KARLScheduler:
         session.close()
 
     def update(self, request: UpdateRequestSchema, date: datetime) -> dict:
-        with SessionLocal().begin() as session:
-            t0 = datetime.now(pytz.utc)
+        session = SessionLocal()
+        t0 = datetime.now(pytz.utc)
 
-            # read debug_id from request, find corresponding record
-            record = session.query(Record).get(request.debug_id)
+        # read debug_id from request, find corresponding record
+        record = session.query(Record).get(request.debug_id)
 
-            if record is None:
-                return {}
+        if record is None:
+            return {}
 
-            # add front_end_id to record, response, elapsed_times to record
-            record.date = date
-            record.front_end_id = request.history_id
-            record.response = request.label
-            record.elapsed_milliseconds_text = request.elapsed_milliseconds_text
-            record.elapsed_milliseconds_answer = request.elapsed_milliseconds_answer
-            t1 = datetime.now(pytz.utc)
-            session.commit()
+        # add front_end_id to record, response, elapsed_times to record
+        record.date = date
+        record.front_end_id = request.history_id
+        record.response = request.label
+        record.elapsed_milliseconds_text = request.elapsed_milliseconds_text
+        record.elapsed_milliseconds_answer = request.elapsed_milliseconds_answer
+        t1 = datetime.now(pytz.utc)
+        session.commit()
 
-            # update leitner
-            self.update_leitner(record, date, session)
-            t2 = datetime.now(pytz.utc)
+        # update leitner
+        self.update_leitner(record, date, session)
+        t2 = datetime.now(pytz.utc)
 
-            # update sm2
-            self.update_sm2(record, date)
-            t3 = datetime.now(pytz.utc)
+        # update sm2
+        self.update_sm2(record, date, session)
+        t3 = datetime.now(pytz.utc)
 
-            # update user stats
-            utc_date = date.astimezone(pytz.utc).date()
-            self.update_user_stats(record, deck_id='all', utc_date=utc_date, session=session)
-            t4 = datetime.now(pytz.utc)
-            if record.deck_id is not None:
-                self.update_user_stats(record, deck_id=record.deck_id, utc_date=utc_date, session=session)
-            t5 = datetime.now(pytz.utc)
+        # update user stats
+        utc_date = date.astimezone(pytz.utc).date()
+        self.update_user_stats(record, deck_id='all', utc_date=utc_date, session=session)
+        t4 = datetime.now(pytz.utc)
+        if record.deck_id is not None:
+            self.update_user_stats(record, deck_id=record.deck_id, utc_date=utc_date, session=session)
+        t5 = datetime.now(pytz.utc)
 
-            # update current features
-            # NOTE do this last, especially after leitner and sm2
-            self.update_feature_vectors(record, date)
-            t6 = datetime.now(pytz.utc)
-            session.commit()
+        # update current features
+        # NOTE do this last, especially after leitner and sm2
+        self.update_feature_vectors(record, date, session)
+        t6 = datetime.now(pytz.utc)
+        session.commit()
+        session.close()
 
         return {
             'update record': (t1 - t0).total_seconds(),
@@ -491,10 +504,6 @@ class KARLScheduler:
         }
 
     def update_feature_vectors(self, record: Record, date: datetime, session: Session):
-        v_user = self.get_curr_user_vector(record.user_id)
-        v_card = self.get_curr_card_vector(record.card_id)
-        v_usercard = self.get_curr_usercard_vector(record.user_id, record.card_id)
-
         v_user = session.query(CurrUserFeatureVector).get(record.user_id)
         v_card = session.query(CurrCardFeatureVector).get(record.card_id)
         v_usercard = session.query(CurrUserCardFeatureVector).get((record.user_id, record.card_id))

@@ -25,13 +25,14 @@ def figure_fret_user(
     chart = alt.Chart(source).mark_circle(size=60).encode(
         x='converted_card_id:Q',
         y='utc_datetime:T',
+        # y='index:Q',
         color='response',
     ).properties(
         width=800,
         height=2000,
         title=source.user_id[0] + ' ' + source.repetition_model[0]
-    )    
-    save_chart_and_pdf(chart, f'/fs/www-users/shifeng/files/fret')
+    )
+    save_chart_and_pdf(chart, '/fs/www-users/shifeng/files/fret')
 
 
 # %%
@@ -39,8 +40,8 @@ date_start = '2020-12-20'
 date_start = parse_date(date_start).astimezone(pytz.utc).date()
 
 df = get_retention_features_df()
-# df = df[df.utc_date >= date_start]
-# print(df.groupby('user_id').size().sort_values(ascending=False)[:20])
+df = df[df.utc_date >= date_start]
+print(df.groupby('user_id').size().sort_values(ascending=False)[:20])
 # %%
 figure_fret_user(source=df, user_id='617')
 # %%

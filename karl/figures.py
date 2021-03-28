@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
+import os
 import pytz
 import altair as alt
 import pandas as pd
@@ -12,9 +13,10 @@ alt.data_transformers.disable_max_rows()
 alt.renderers.enable('mimetype')
 
 
-def save_chart_and_pdf(chart, path):
+def save_chart_and_pdf(chart, path, to_pdf=False):
     chart.save(f'{path}.json')
-    # os.system(f'vl2vg {path}.json | vg2pdf > {path}.pdf')
+    if to_pdf:
+        os.system(f'vl2vg {path}.json | vg2pdf > {path}.pdf')
 
 
 def figure_composition(df, path):
@@ -60,11 +62,7 @@ def figure_composition(df, path):
     save_chart_and_pdf(chart, f'{path}/composition')
 
 
-def plot(
-    source,
-    x_axis,
-    groupby,
-):
+def plot(source, x_axis, groupby):
     if 'type' in source:
         line = alt.Chart().mark_line().encode(
             alt.X(f'{x_axis}:Q', title='Hours'),

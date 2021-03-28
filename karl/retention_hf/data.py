@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 from datetime import date, datetime
 from pydantic import BaseModel
-from typing import Optional, List, Dict, Union
+from typing import Optional, List, Dict
 from dataclasses import dataclass
 from concurrent.futures import ProcessPoolExecutor
 from sqlalchemy.orm import Session
@@ -20,8 +20,8 @@ from transformers import DistilBertTokenizerFast
 
 from karl.db.session import SessionLocal, engine
 from karl.config import settings
-from karl.models import User, UserFeatureVector, CardFeatureVector, UserCardFeatureVector, \
-    CurrUserFeatureVector, CurrCardFeatureVector, CurrUserCardFeatureVector
+from karl.models import User, UserCardFeatureVector, UserFeatureVector, CardFeatureVector
+from karl.schemas import VUserCard, VUser, VCard
 
 
 class RetentionFeaturesSchema(BaseModel):
@@ -68,9 +68,9 @@ feature_fields = [
 
 
 def vectors_to_features(
-    v_usercard: Union[UserCardFeatureVector, CurrUserCardFeatureVector],
-    v_user: Union[UserFeatureVector, CurrUserFeatureVector],
-    v_card: Union[CardFeatureVector, CurrCardFeatureVector],
+    v_usercard: VUserCard,
+    v_user: VUser,
+    v_card: VCard,
     date: datetime,
     card_text: str,
     elapsed_milliseconds: int = 0,
@@ -135,6 +135,9 @@ def _get_user_features(
         v_usercard = session.query(UserCardFeatureVector).get(record.id)
         if v_user is None or v_card is None or v_usercard is None:
             continue
+        v_user = VUser(**v_user.__dict__)
+        v_card = VCard(**v_card.__dict__)
+        v_usercard = VUser(**v_usercard.__dict__)
         elapsed_milliseconds = record.elapsed_milliseconds_text + record.elapsed_milliseconds_answer
         features.append(vectors_to_features(v_usercard, v_user, v_card, record.date, record.card.text, elapsed_milliseconds))
         labels.append(record.response)
