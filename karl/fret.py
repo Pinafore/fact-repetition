@@ -1,9 +1,15 @@
 # %%
+
 import pytz
 import altair as alt
+from dateutil.parser import parse as parse_date
+
+from karl.db.session import SessionLocal
+from karl.models import Record
 from karl.retention_hf.data import get_retention_features_df
 from karl.figures import save_chart_and_pdf
-from dateutil.parser import parse as parse_date
+from karl.schemas import VUserCard, VUser, VCard
+from karl.models import UserFeatureVector, CardFeatureVector, UserCardFeatureVector
 
 alt.data_transformers.disable_max_rows()
 alt.renderers.enable('mimetype')
@@ -45,24 +51,14 @@ print(df.groupby('user_id').size().sort_values(ascending=False)[:20])
 # %%
 figure_fret_user(source=df, user_id='617')
 # %%
-# user_id
-# 463    9173
-# 38     7441
-# 496    5990
-# 123    4765
-# 85     4733
-# 413    3527
-# 45     2209
-# 46     2167
-# 564    2123
-# 288    2018
-# 105    1742
-# 68     1523
-# 229    1368
-# 136    1318
-# 343    1308
-# 328    1297
-# 294    1146
-# 93     1129
-# 138    1058
-# 270    1033
+user_id = '617'
+session = SessionLocal()
+records = session.query(Record).\
+    filter(Record.user_id == user_id).\
+    filter(Record.date >= date_start)
+# %%
+record = records[0]
+v_card = VCard(**session.query(CardFeatureVector).get(record.id))
+v_user = VUser(**session.query(UserFeatureVector).get(record.id))
+v_usercard = VUserCard(**session.query(UserCardFeatureVector).get(record.id))
+return vectors_to_features(v_usercard, v_user, v_card, date, card_text)
