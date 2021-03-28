@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 from datetime import date, datetime
 from pydantic import BaseModel
-from typing import Optional, List, Dict, Union
+from typing import Optional, List, Dict
 from dataclasses import dataclass
 from concurrent.futures import ProcessPoolExecutor
 from sqlalchemy.orm import Session
@@ -20,8 +20,8 @@ from transformers import DistilBertTokenizerFast
 
 from karl.db.session import SessionLocal, engine
 from karl.config import settings
-from karl.models import User, UserFeatureVector, CardFeatureVector, UserCardFeatureVector, \
-    CurrUserFeatureVector, CurrCardFeatureVector, CurrUserCardFeatureVector
+from karl.models import User, UserCardFeatureVector, UserFeatureVector, CardFeatureVector
+from karl.schemas import VUserCard, VUser, VCard
 
 
 class RetentionFeaturesSchema(BaseModel):
@@ -56,6 +56,7 @@ class RetentionFeaturesSchema(BaseModel):
     repetition_model: str
     elapsed_milliseconds: int
     correct_on_first_try: Optional[bool]
+    utc_datetime: datetime
     utc_date: date
 
 
@@ -67,9 +68,9 @@ feature_fields = [
 
 
 def vectors_to_features(
-    v_usercard: Union[UserCardFeatureVector, CurrUserCardFeatureVector],
-    v_user: Union[UserFeatureVector, CurrUserFeatureVector],
-    v_card: Union[CardFeatureVector, CurrCardFeatureVector],
+    v_usercard: VUserCard,
+    v_user: VUser,
+    v_card: VCard,
     date: datetime,
     card_text: str,
     elapsed_milliseconds: int = 0,
@@ -115,6 +116,7 @@ def vectors_to_features(
         repetition_model=json.loads(v_user.parameters)['repetition_model'],
         correct_on_first_try=v_usercard.correct_on_first_try or False,
         elapsed_milliseconds=elapsed_milliseconds,
+        utc_datetime=date.astimezone(pytz.utc),
         utc_date=date.astimezone(pytz.utc).date(),
     )
 
@@ -125,7 +127,7 @@ def _get_user_features(
 ):
     user = session.query(User).get(user_id)
     features, labels = [], []
-    for ith_record, record in enumerate(user.records):
+    for record in user.records:
         if record.response is None:
             continue
         v_user = session.query(UserFeatureVector).get(record.id)
@@ -133,6 +135,9 @@ def _get_user_features(
         v_usercard = session.query(UserCardFeatureVector).get(record.id)
         if v_user is None or v_card is None or v_usercard is None:
             continue
+        v_user = VUser(**v_user.__dict__)
+        v_card = VCard(**v_card.__dict__)
+        v_usercard = VUser(**v_usercard.__dict__)
         elapsed_milliseconds = record.elapsed_milliseconds_text + record.elapsed_milliseconds_answer
         features.append(vectors_to_features(v_usercard, v_user, v_card, record.date, record.card.text, elapsed_milliseconds))
         labels.append(record.response)

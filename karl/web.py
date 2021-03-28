@@ -6,13 +6,11 @@ import pytz
 import logging
 import atexit
 import multiprocessing
-import pandas as pd
-from typing import Generator, List
+from typing import List
 from datetime import datetime
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI
 from dateutil.parser import parse as parse_date
 from concurrent.futures import ProcessPoolExecutor
-from sqlalchemy.orm import Session
 # from cachetools import cached, TTLCache
 
 from karl.schemas import UserStatsSchema, RankingSchema, LeaderboardSchema, \
@@ -60,21 +58,13 @@ def conditional_decorator(dec, condition, **kwargs):
     return decorator
 
 
-def get_session() -> Generator:
-    try:
-        session = SessionLocal()
-        yield session
-    finally:
-        session.close()
-
-
 @app.get('/api/karl/reset_user')
 def reset_user(
     # env: str,
     user_id: str,
-    session: Session = Depends(get_session),
 ) -> None:
     # remove all user records
+    session = SessionLocal()
     for record in session.query(Record).filter(Record.user_id == user_id):
         session.query(UserCardFeatureVector).filter(UserCardFeatureVector.id == record.id).delete()
         session.query(UserFeatureVector).filter(UserFeatureVector.id == record.id).delete()
@@ -82,6 +72,8 @@ def reset_user(
     session.query(CurrUserCardFeatureVector).filter(CurrUserCardFeatureVector.user_id == user_id).delete()
     session.query(CurrUserFeatureVector).filter(CurrUserFeatureVector.user_id == user_id).delete()
     session.query(Record).filter(Record.user_id == user_id).delete()
+    session.commit()
+    session.close()
 
 
 @app.put('/api/karl/set_params', response_model=ParametersSchema)
@@ -89,8 +81,8 @@ def set_params(
     # env: str,
     user_id: str,
     params: OldParametersSchema,
-    session: Session = Depends(get_session),
 ) -> ParametersSchema:
+    session = SessionLocal()
     curr_params = session.query(Parameters).get(user_id)
     is_new_params = False
     if curr_params is None:
@@ -113,9 +105,11 @@ def set_params(
 
     if is_new_params:
         session.add(User(id=user_id))
+        session.commit()
         session.add(curr_params)
-
+        session.commit()
     session.commit()
+    session.close()
     return ParametersSchema(**curr_params.__dict__)
 
 
@@ -123,11 +117,14 @@ def set_params(
 def get_params(
     # env: str,
     user_id: str,
-    session: Session = Depends(get_session),
 ) -> ParametersSchema:
+    session = SessionLocal()
     curr_params = session.query(Parameters).get(user_id)
     if curr_params is None:
         curr_params = Parameters(id=user_id)
+        session.add(curr_params)
+        session.commit()
+    session.close()
     return ParametersSchema(**curr_params.__dict__)
 
 
@@ -136,7 +133,6 @@ def set_repetition_model(
     # env: str,
     user_id: str,
     repetition_model: str,
-    session: Session = Depends(get_session),
 ):
     if repetition_model == 'sm2':
         params = ParametersSchema(
@@ -180,6 +176,7 @@ def set_repetition_model(
         print('******** unknown repetition_model ********')
         params = ParametersSchema()
 
+    session = SessionLocal()
     curr_params = session.query(Parameters).get(user_id)
     is_new_params = False
     if curr_params is None:
@@ -202,9 +199,11 @@ def set_repetition_model(
 
     if is_new_params:
         session.add(User(id=user_id))
+        session.commit()
         session.add(curr_params)
-
+        session.commit()
     session.commit()
+    session.close()
     return params
 
 
@@ -240,9 +239,6 @@ def _get_user_stats(
     from_user_stats: bool = False
 ) -> UserStatsSchema:
     session = SessionLocal()
-
-    # print('_user_stats', from_user_stats, f'tid={threading.get_ident()}', f'pid={getpid()}', session.hash_key)
-
     date_start = parse_date(date_start).date()
     date_end = parse_date(date_end).date()
 
@@ -375,8 +371,8 @@ def _get_user_stats(
         n_days_studied=n_days_studied,
     )
 
+    session.commit()
     session.close()
-
     return user_stat_schema
 
 
@@ -394,8 +390,6 @@ def get_leaderboard(
     date_end: str = '2038-06-01 08:00:00+00:00',
 ) -> LeaderboardSchema:
     session = SessionLocal()
-    # print('leaderboard starts at', time.strftime('%X'), f'tid={threading.get_ident()}', f'pid={getpid()}', session.hash_key)
-
     stats = {}
     if not settings.USE_MULTIPROCESSING:
         stats = {}
@@ -443,8 +437,8 @@ def get_leaderboard(
             rank=i + 1,
             value=v.__dict__[rank_type]
         ))
+    session.commit()
     session.close()
-
     return LeaderboardSchema(
         leaderboard=rankings[skip: skip + limit],
         total=len(rankings),
@@ -460,14 +454,12 @@ def get_leaderboard(
 def schedule(
     # env: str,
     schedule_requests: List[ScheduleRequestSchema],
-    session: Session = Depends(get_session),
 ) -> ScheduleResponseSchema:
     if schedule_requests[0].date is not None:
         date = parse_date(schedule_requests[0].date)
     else:
         date = datetime.now(pytz.utc)
-    schedule_response = scheduler.schedule(session, schedule_requests, date)
-    session.commit()
+    schedule_response = scheduler.schedule(schedule_requests, date)
     return schedule_response
 
 
@@ -475,15 +467,13 @@ def schedule(
 def update(
     # env: str,
     update_requests: List[UpdateRequestSchema],
-    session: Session = Depends(get_session),
 ) -> dict:
     update_request = update_requests[0]  # only accept one request. for backward compatability
     if update_request.date is not None:
         date = parse_date(update_request.date)
     else:
         date = datetime.now(pytz.utc)
-    profile = scheduler.update(session, update_request, date)
-    session.commit()
+    profile = scheduler.update(update_request, date)
     return {'profile': profile}
 
 
@@ -494,7 +484,6 @@ def get_user_charts(
     deck_id: str = None,
     date_start: str = '2008-06-01 08:00:00+00:00',
     date_end: str = '2038-06-01 08:00:00+00:00',
-    session: Session = Depends(get_session),
 ) -> List[Visualization]:
 
     charts = figures.get_user_charts(
