@@ -269,7 +269,7 @@ class KARLScheduler:
             for card in cards:
                 futures.append(executor.submit(self.collect_features, user.id, card.id, card.text, v_user, date))
             feature_vectors = [x.result().__dict__ for x in futures]
-        
+
         t1 = datetime.now(pytz.utc)
 
         for x in feature_vectors:
@@ -497,12 +497,12 @@ class KARLScheduler:
         session.close()
 
         return {
-            # 'update record': (t1 - t0).total_seconds(),
-            # 'update leitner': (t2 - t1).total_seconds(),
-            # 'update sm2': (t3 - t2).total_seconds(),
-            # 'update user_stats all': (t4 - t3).total_seconds(),
-            # 'update user_stats deck': (t5 - t4).total_seconds(),
-            # 'update feature vectors': (t6 - t5).total_seconds(),
+            'update record': (t1 - t0).total_seconds(),
+            'update leitner': (t2 - t1).total_seconds(),
+            'update sm2': (t3 - t2).total_seconds(),
+            'update user_stats all': (t4 - t3).total_seconds(),
+            'update user_stats deck': (t5 - t4).total_seconds(),
+            'update feature vectors': (t6 - t5).total_seconds(),
         }
 
     def update_feature_vectors(self, record: Record, date: datetime, session: Session):
