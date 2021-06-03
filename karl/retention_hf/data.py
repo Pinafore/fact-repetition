@@ -76,15 +76,15 @@ def vectors_to_features(
     elapsed_milliseconds: int = 0,
 ) -> RetentionFeaturesSchema:
     if v_usercard.previous_study_date is not None:
-        usercard_delta = (date - v_usercard.previous_study_date).total_seconds()
+        usercard_delta = (date - v_usercard.previous_study_date).total_seconds() // 3600
     else:
         usercard_delta = 0
     if v_usercard.leitner_scheduled_date is not None:
-        delta_to_leitner_scheduled_date = (v_usercard.leitner_scheduled_date - date).total_seconds()
+        delta_to_leitner_scheduled_date = (v_usercard.leitner_scheduled_date - date).total_seconds() // 3600
     else:
         delta_to_leitner_scheduled_date = 0
     if v_usercard.sm2_scheduled_date is not None:
-        delta_to_sm2_scheduled_date = (v_usercard.sm2_scheduled_date - date).total_seconds()
+        delta_to_sm2_scheduled_date = (v_usercard.sm2_scheduled_date - date).total_seconds() // 3600
     else:
         delta_to_sm2_scheduled_date = 0
     return RetentionFeaturesSchema(
@@ -126,7 +126,7 @@ def _get_user_features(
     session: Session = SessionLocal()
 ):
     user = session.query(User).get(user_id)
-    features, labels = [], []
+    record_ids, features, labels = [], [], []
     for record in user.records:
         if record.response is None:
             continue
@@ -137,12 +137,13 @@ def _get_user_features(
             continue
         v_user = VUser(**v_user.__dict__)
         v_card = VCard(**v_card.__dict__)
-        v_usercard = VUser(**v_usercard.__dict__)
+        v_usercard = VUserCard(**v_usercard.__dict__)
         elapsed_milliseconds = record.elapsed_milliseconds_text + record.elapsed_milliseconds_answer
         features.append(vectors_to_features(v_usercard, v_user, v_card, record.date, record.card.text, elapsed_milliseconds))
         labels.append(record.response)
+        record_ids.append(record.id)
     session.close()
-    return features, labels
+    return record_ids, features, labels
 
 
 def get_retention_features_df(overwrite: bool = False):
@@ -162,16 +163,18 @@ def get_retention_features_df(overwrite: bool = False):
                 continue
             futures.append(executor.submit(_get_user_features, user.id))
 
-        features, labels = [], []
+        record_ids, features, labels = [], [], []
         for future in futures:
-            f1, f2 = future.result()
+            f0, f1, f2 = future.result()
+            record_ids.extend(f0)
             features.extend(f1)
             labels.extend(f2)
 
         df = []
-        for feature, label in zip(features, labels):
+        for record_id, feature, label in zip(record_ids, features, labels):
             row = feature.__dict__
             row['response'] = label
+            row['record_id'] = record_id
             df.append(row)
 
         df = pd.DataFrame(df)
@@ -203,7 +206,6 @@ class RetentionDataset(torch.utils.data.Dataset):
         tokenizer,
         overwrite_cached_data: bool = False,
         overwrite_retention_features_df: bool = False,
-        interpolate_delta_for_test: bool = False,
     ):
         if (
             os.path.exists(f'{data_dir}/cached_train_new_card')
@@ -222,8 +224,11 @@ class RetentionDataset(torch.utils.data.Dataset):
             print('gather features')
             df_all = get_retention_features_df(overwrite_retention_features_df)
 
+            # separate new and old cards
             df_new_card = df_all[df_all.is_new_fact == True]  # noqa: E712
             df_old_card = df_all[df_all.is_new_fact == False]  # noqa: E712
+
+            # within each fold, take the first 75% as training data and the rest as test data
             df_by_fold = {
                 'train_new_card': df_new_card.groupby('user_id', as_index=False).apply(lambda x: x.iloc[:int(x.user_id.size * 0.75)]),
                 'test_new_card': df_new_card.groupby('user_id', as_index=False).apply(lambda x: x.iloc[int(x.user_id.size * 0.75):]),
@@ -231,14 +236,14 @@ class RetentionDataset(torch.utils.data.Dataset):
                 'test_old_card': df_old_card.groupby('user_id', as_index=False).apply(lambda x: x.iloc[int(x.user_id.size * 0.75):]),
             }
 
-            # token encodings
+            # create token encodings
             print('token encodings')
             encodings_by_fold = {
                 fold: tokenizer(df.card_text.tolist(), truncation=True, padding=True)
                 for fold, df in df_by_fold.items()
             }
 
-            # manually crafted features
+            # collect manually crafted features
             print('normalize')
             ndarray_by_fold = {
                 fold: df[feature_fields].to_numpy(dtype=np.float64)
@@ -256,13 +261,13 @@ class RetentionDataset(torch.utils.data.Dataset):
             for i, field in enumerate(feature_fields):
                 print(field, '%.2f' % mean[i], '%.2f' % std[i])
 
-            # put everything together and cache
+            # put everything together and save in cache
             inputs = {}
             for foold, df in df_by_fold.items():
                 inputs[foold] = []
                 for i, row in enumerate(df.itertuples(index=False)):
                     example = {k: v[i] for k, v in encodings_by_fold[foold].items()}
-                    example['label'] = row.response
+                    example['label'] = int(row.response)
                     if foold in ndarray_by_fold:
                         example['retention_features'] = ndarray_by_fold[foold][i]
                     inputs[foold].append(RetentionInput(**example))
@@ -313,10 +318,11 @@ def retention_data_collator(
 
 
 if __name__ == '__main__':
-    tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
-    train_dataset = RetentionDataset(
-        data_dir=settings.DATA_DIR,
-        fold='train_new_card',
-        tokenizer=tokenizer
-    )
-    print(len(train_dataset))
+    # tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
+    # train_dataset = RetentionDataset(
+    #     data_dir=settings.DATA_DIR,
+    #     fold='train_new_card',
+    #     tokenizer=tokenizer
+    # )
+    # print(len(train_dataset))
+    df = get_retention_features_df()

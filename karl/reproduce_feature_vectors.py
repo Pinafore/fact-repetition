@@ -10,7 +10,7 @@ from sqlalchemy import Column, ForeignKey, Integer, Float, Boolean, String, TIME
 from sqlalchemy import Table, MetaData
 from sqlalchemy.dialects.postgresql import JSONB
 
-from karl.models import Leitner, SM2, CurrCardFeatureVector, CurrUserFeatureVector, CurrUserCardFeatureVector,\
+from karl.models import CurrCardFeatureVector, CurrUserFeatureVector, CurrUserCardFeatureVector,\
     UserFeatureVector, CardFeatureVector, UserCardFeatureVector
 from karl.scheduler import KARLScheduler
 from karl.models import User, Card, Record
@@ -52,8 +52,6 @@ def data_upgrade():
 
         # simulate update request
         session = SessionLocal()
-        scheduler.update_leitner(record, record.date, session)
-        scheduler.update_sm2(record, record.date, session)
         scheduler.update_feature_vectors(record, record.date, session)
         session.commit()
         session.close()
@@ -64,9 +62,9 @@ def schema_upgrade():
 
     Table(
         'usercardfeaturevector', meta,
-        Column('id', String, ForeignKey(Record.id), primary_key=True, index=True),
-        Column('user_id', String, ForeignKey(User.id), index=True),
-        Column('card_id', String, ForeignKey(Card.id), index=True),
+        Column('id', String, ForeignKey(Record.id, ondelete='CASCADE'), primary_key=True, index=True),
+        Column('user_id', String, ForeignKey(User.id, ondelete='CASCADE'), index=True),
+        Column('card_id', String, ForeignKey(Card.id, ondelete='CASCADE'), index=True),
         Column('date', TIMESTAMP(timezone=True), index=True),
         Column('n_study_positive', Integer),
         Column('n_study_negative', Integer),
@@ -86,8 +84,8 @@ def schema_upgrade():
 
     Table(
         'userfeaturevector', meta,
-        Column('id', String, ForeignKey(Record.id), primary_key=True, index=True),
-        Column('user_id', String, ForeignKey(User.id), index=True),
+        Column('id', String, ForeignKey(Record.id, ondelete='CASCADE'), primary_key=True, index=True),
+        Column('user_id', String, ForeignKey(User.id, ondelete='CASCADE'), index=True),
         Column('date', TIMESTAMP(timezone=True), index=True),
         Column('n_study_positive', Integer),
         Column('n_study_negative', Integer),
@@ -101,8 +99,8 @@ def schema_upgrade():
 
     Table(
         'cardfeaturevector', meta,
-        Column('id', String, ForeignKey(Record.id), primary_key=True, index=True),
-        Column('card_id', String, ForeignKey(Card.id), index=True),
+        Column('id', String, ForeignKey(Record.id, ondelete='CASCADE'), primary_key=True, index=True),
+        Column('card_id', String, ForeignKey(Card.id, ondelete='CASCADE'), index=True),
         Column('date', TIMESTAMP(timezone=True), index=True),
         Column('n_study_positive', Integer),
         Column('n_study_negative', Integer),
@@ -115,8 +113,8 @@ def schema_upgrade():
 
     Table(
         'currusercardfeaturevector', meta,
-        Column('user_id', String, ForeignKey(User.id), primary_key=True, index=True),
-        Column('card_id', String, ForeignKey(Card.id), primary_key=True, index=True),
+        Column('user_id', String, ForeignKey(User.id, ondelete='CASCADE'), primary_key=True, index=True),
+        Column('card_id', String, ForeignKey(Card.id, ondelete='CASCADE'), primary_key=True, index=True),
         Column('n_study_positive', Integer),
         Column('n_study_negative', Integer),
         Column('n_study_total', Integer),
@@ -134,7 +132,7 @@ def schema_upgrade():
 
     Table(
         'curruserfeaturevector', meta,
-        Column('user_id', String, ForeignKey(User.id), primary_key=True, index=True),
+        Column('user_id', String, ForeignKey(User.id, ondelete='CASCADE'), primary_key=True, index=True),
         Column('n_study_positive', Integer),
         Column('n_study_negative', Integer),
         Column('n_study_total', Integer),
@@ -146,7 +144,7 @@ def schema_upgrade():
 
     Table(
         'currcardfeaturevector', meta,
-        Column('card_id', String, ForeignKey(Card.id), primary_key=True, index=True),
+        Column('card_id', String, ForeignKey(Card.id, ondelete='CASCADE'), primary_key=True, index=True),
         Column('n_study_positive', Integer),
         Column('n_study_negative', Integer),
         Column('n_study_total', Integer),
@@ -155,30 +153,10 @@ def schema_upgrade():
         Column('previous_study_response', Boolean),
     )
 
-    Table(
-        'leitner', meta,
-        Column('user_id', String, ForeignKey(User.id), primary_key=True, index=True),
-        Column('card_id', String, ForeignKey(Card.id), primary_key=True, index=True),
-        Column('box', Integer, nullable=False),
-        Column('scheduled_date', TIMESTAMP(timezone=True)),
-    )
-
-    Table(
-        'sm2', meta,
-        Column('user_id', String, ForeignKey(User.id), primary_key=True, index=True),
-        Column('card_id', String, ForeignKey(Card.id), primary_key=True, index=True),
-        Column('efactor', Float, nullable=False),
-        Column('interval', Float, nullable=False),
-        Column('repetition', Integer, nullable=False),
-        Column('scheduled_date', TIMESTAMP(timezone=True)),
-    )
-
     meta.create_all(engine)
 
 
 def upgrade():
-    Leitner.__table__.drop(engine)
-    SM2.__table__.drop(engine)
     UserCardFeatureVector.__table__.drop(engine)
     UserFeatureVector.__table__.drop(engine)
     CardFeatureVector.__table__.drop(engine)

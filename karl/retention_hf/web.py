@@ -9,9 +9,9 @@ from datetime import datetime
 from typing import List
 from fastapi import FastAPI
 
-from transformers import DistilBertTokenizerFast
+from transformers import DistilBertTokenizerFast, BertTokenizerFast
 
-from karl.retention_hf import DistilBertRetentionModel
+from karl.retention_hf import DistilBertRetentionModel, BertRetentionModel
 from karl.retention_hf.data import RetentionFeaturesSchema, RetentionInput, retention_data_collator, feature_fields
 from karl.config import settings
 
@@ -19,13 +19,23 @@ from karl.config import settings
 class RetentionModel:
 
     def __init__(self):
-        model_new_card = DistilBertRetentionModel.from_pretrained(f'{settings.CODE_DIR}/output/retention_hf_distilbert_new_card')
-        model_new_card.eval()
-        self.model_new_card = model_new_card.to('cuda')
-        model_old_card = DistilBertRetentionModel.from_pretrained(f'{settings.CODE_DIR}/output/retention_hf_distilbert_old_card')
-        model_old_card.eval()
-        self.model_old_card = model_old_card.to('cuda')
-        self.tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
+        if True:
+            model_new_card = DistilBertRetentionModel.from_pretrained(f'{settings.CODE_DIR}/output/retention_hf_distilbert_new_card')
+            model_old_card = DistilBertRetentionModel.from_pretrained(f'{settings.CODE_DIR}/output/retention_hf_distilbert_old_card')
+            self.model_new_card = model_new_card.to('cuda')
+            self.model_old_card = model_old_card.to('cuda')
+            self.model_new_card.eval()
+            self.model_old_card.eval()
+            self.tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
+        else:
+            model_new_card = BertRetentionModel.from_pretrained(f'{settings.CODE_DIR}/output/retention_hf_bert_new_card')
+            model_old_card = BertRetentionModel.from_pretrained(f'{settings.CODE_DIR}/output/retention_hf_bert_old_card')
+            self.model_new_card = model_new_card.to('cuda')
+            self.model_old_card = model_old_card.to('cuda')
+            self.model_new_card.eval()
+            self.model_old_card.eval()
+            self.tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased')
+
         self.mean = torch.load(f'{settings.DATA_DIR}/cached_mean')
         self.std = torch.load(f'{settings.DATA_DIR}/cached_std')
 

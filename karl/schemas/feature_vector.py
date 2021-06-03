@@ -18,6 +18,7 @@ class VUserCard(BaseModel):
     sm2_interval: Optional[float]
     sm2_repetition: Optional[int]
     sm2_scheduled_date: Optional[datetime]
+    date: Optional[datetime]
 
 
 class VUser(BaseModel):
@@ -29,6 +30,7 @@ class VUser(BaseModel):
     previous_study_date: Optional[datetime]
     previous_study_response: Optional[bool]
     parameters: str
+    date: Optional[datetime]
 
 
 class VCard(BaseModel):
@@ -39,3 +41,4 @@ class VCard(BaseModel):
     previous_delta: Optional[int]
     previous_study_date: Optional[datetime]
     previous_study_response: Optional[bool]
+    date: Optional[datetime]

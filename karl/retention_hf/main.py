@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+import random
 import numpy as np
 from collections import Counter
 from typing import Dict
 
+import torch
 import transformers
 from transformers import (
     DistilBertTokenizerFast,
@@ -13,6 +15,8 @@ from transformers import (
     TrainingArguments,
     EvalPrediction,
 )
+from sklearn.metrics import roc_auc_score, accuracy_score
+from sklearn.calibration import calibration_curve
 
 from karl.config import settings
 from .data import (  # noqa: F401
@@ -44,9 +48,25 @@ full_name = {
 }
 
 
+def set_seed(seed: int):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    # ^^ safe to call this function even if cuda is not available
+
+
 def compute_metrics(p: EvalPrediction) -> Dict:
-    print(p.predictions)
-    return {"accuracy": np.mean((p.predictions > 0.5) == p.label_ids)}
+    predicted_labels = p.predictions > 0.5
+    acc = accuracy_score(p.label_ids, predicted_labels)
+    auc = roc_auc_score(p.label_ids, p.predictions)
+    prob_true, prob_pred = calibration_curve(p.label_ids, p.predictions, n_bins=10)
+    ece = np.mean(np.absolute(prob_true - prob_pred))
+    return {
+        "acc": acc,
+        "auc": auc,
+        "ece": ece,
+    }
 
 
 def train(model_name, output_dir=f'{settings.CODE_DIR}/output', fold='new_card', resume=None):
@@ -62,6 +82,7 @@ def train(model_name, output_dir=f'{settings.CODE_DIR}/output', fold='new_card',
         per_device_train_batch_size=8,
         per_device_eval_batch_size=64,
         learning_rate=2e-05,
+        save_steps=2000,
     )
     trainer = Trainer(
         model=model,
@@ -116,7 +137,7 @@ def test_majority_baseline(fold='new_card'):
 
 if __name__ == '__main__':
     import sys
-    train(model_name=sys.argv[1], fold='new_card')
+    # train(model_name=sys.argv[1], fold='new_card')
     test(model_name=sys.argv[1], fold='new_card')
-    train(model_name=sys.argv[1], fold='old_card')
+    # train(model_name=sys.argv[1], fold='old_card')
     test(model_name=sys.argv[1], fold='old_card')

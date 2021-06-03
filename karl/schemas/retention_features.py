@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 
+# ***** DON'T USE THIS. Use the one from karl.retention_hf.data.
+
 
 class RetentionFeaturesSchema(BaseModel):
     user_count_correct: float
