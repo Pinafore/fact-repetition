@@ -14,7 +14,7 @@ from concurrent.futures import ProcessPoolExecutor
 # from cachetools import cached, TTLCache
 
 from karl.schemas import UserStatsSchema, RankingSchema, LeaderboardSchema, \
-    OldParametersSchema, ParametersSchema, \
+    ParametersSchema, \
     ScheduleResponseSchema, ScheduleRequestSchema, UpdateRequestSchema, \
     Visualization
 from karl.models import User, UserStats, Parameters, Record, \
@@ -80,7 +80,19 @@ def reset_user(
 def set_params(
     # env: str,
     user_id: str,
-    params: OldParametersSchema,
+    repetition_model: str,              # name of the repetition model
+    card_embedding: float,              # weight on cosine distance between embeddings
+    recall: float,                      # weight on recall probability
+    recall_target: float,               # target of recall probability
+    category: float,                    # change in category from prev
+    answer: float,                      # reptition of the same answer
+    leitner: float,                     # hours till leitner scheduled date
+    sm2: float,                         # hours till sm2 scheduled date
+    decay_qrep: float,                  # discount factor
+    cool_down: float,                   # weight for cool down
+    cool_down_time_correct: float,      # minutes to cool down
+    cool_down_time_wrong: float,        # minutes to cool down
+    max_recent_facts: int,              # num of recent facts to keep record of
 ) -> ParametersSchema:
     session = SessionLocal()
     curr_params = session.query(Parameters).get(user_id)
@@ -89,19 +101,32 @@ def set_params(
         is_new_params = True
         curr_params = Parameters(id=user_id, **(ParametersSchema().__dict__))
 
-    curr_params.repetition_model = params.repetition_model
-    curr_params.card_embedding = params.qrep
-    curr_params.recall = params.recall
-    curr_params.recall_target = params.recall_target
-    curr_params.category = params.category
-    curr_params.answer = params.answer
-    curr_params.leitner = params.leitner
-    curr_params.sm2 = params.sm2
-    curr_params.decay_qrep = params.decay_qrep
-    curr_params.cool_down = params.cool_down
-    curr_params.cool_down_time_correct = params.cool_down_time_correct
-    curr_params.cool_down_time_wrong = params.cool_down_time_wrong
-    curr_params.max_recent_facts = params.max_recent_facts
+    if repetition_model is not None:
+        curr_params.repetition_model = repetition_model
+    if card_embedding is not None:
+        curr_params.card_embedding = card_embedding
+    if recall is not None:
+        curr_params.recall = recall
+    if recall_target is not None:
+        curr_params.recall_target = recall_target
+    if category is not None:
+        curr_params.category = category
+    if answer is not None:
+        curr_params.answer = answer
+    if leitner is not None:
+        curr_params.leitner = leitner
+    if sm2 is not None:
+        curr_params.sm2 = sm2
+    if decay_qrep is not None:
+        curr_params.decay_qrep = decay_qrep
+    if cool_down is not None:
+        curr_params.cool_down = cool_down
+    if cool_down_time_correct is not None:
+        curr_params.cool_down_time_correct = cool_down_time_correct
+    if cool_down_time_wrong is not None:
+        curr_params.cool_down_time_wrong = cool_down_time_wrong
+    if max_recent_facts is not None:
+        curr_params.max_recent_facts = max_recent_facts
 
     if is_new_params:
         session.add(User(id=user_id))

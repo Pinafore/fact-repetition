@@ -6,9 +6,9 @@ from karl.models import User, Card, Record
 
 
 class UserCardFeatureVector(Base):
-    id = Column(String, ForeignKey(Record.id, ondelete="CASCADE"), primary_key=True, index=True)
-    user_id = Column(String, ForeignKey(User.id, ondelete="CASCADE"), index=True)
-    card_id = Column(String, ForeignKey(Card.id, ondelete="CASCADE"), index=True)
+    id = Column(String, ForeignKey(Record.id, ondelete='CASCADE'), primary_key=True, index=True)
+    user_id = Column(String, ForeignKey(User.id, ondelete='CASCADE'), index=True)
+    card_id = Column(String, ForeignKey(Card.id, ondelete='CASCADE'), index=True)
     date = Column(TIMESTAMP(timezone=True), index=True)
     n_study_positive = Column(Integer)
     n_study_negative = Column(Integer)
@@ -27,8 +27,8 @@ class UserCardFeatureVector(Base):
 
 
 class UserFeatureVector(Base):
-    id = Column(String, ForeignKey(Record.id, ondelete="CASCADE"), primary_key=True, index=True)
-    user_id = Column(String, ForeignKey(User.id, ondelete="CASCADE"), index=True)
+    id = Column(String, ForeignKey(Record.id, ondelete='CASCADE'), primary_key=True, index=True)
+    user_id = Column(String, ForeignKey(User.id, ondelete='CASCADE'), index=True)
     date = Column(TIMESTAMP(timezone=True), index=True)
     n_study_positive = Column(Integer)
     n_study_negative = Column(Integer)
@@ -41,8 +41,8 @@ class UserFeatureVector(Base):
 
 
 class CardFeatureVector(Base):
-    id = Column(String, ForeignKey(Record.id, ondelete="CASCADE"), primary_key=True, index=True)
-    card_id = Column(String, ForeignKey(Card.id, ondelete="CASCADE"), index=True)
+    id = Column(String, ForeignKey(Record.id, ondelete='CASCADE'), primary_key=True, index=True)
+    card_id = Column(String, ForeignKey(Card.id, ondelete='CASCADE'), index=True)
     date = Column(TIMESTAMP(timezone=True), index=True)
     n_study_positive = Column(Integer)
     n_study_negative = Column(Integer)
@@ -54,8 +54,8 @@ class CardFeatureVector(Base):
 
 
 class CurrUserCardFeatureVector(Base):
-    user_id = Column(String, ForeignKey(User.id, ondelete="CASCADE"), primary_key=True, index=True)
-    card_id = Column(String, ForeignKey(Card.id, ondelete="CASCADE"), primary_key=True, index=True)
+    user_id = Column(String, ForeignKey(User.id, ondelete='CASCADE'), primary_key=True, index=True)
+    card_id = Column(String, ForeignKey(Card.id, ondelete='CASCADE'), primary_key=True, index=True)
     n_study_positive = Column(Integer)
     n_study_negative = Column(Integer)
     n_study_total = Column(Integer)
@@ -72,7 +72,7 @@ class CurrUserCardFeatureVector(Base):
 
 
 class CurrUserFeatureVector(Base):
-    user_id = Column(String, ForeignKey(User.id, ondelete="CASCADE"), primary_key=True, index=True)
+    user_id = Column(String, ForeignKey(User.id, ondelete='CASCADE'), primary_key=True, index=True)
     n_study_positive = Column(Integer)
     n_study_negative = Column(Integer)
     n_study_total = Column(Integer)
@@ -83,7 +83,46 @@ class CurrUserFeatureVector(Base):
 
 
 class CurrCardFeatureVector(Base):
-    card_id = Column(String, ForeignKey(Card.id, ondelete="CASCADE"), primary_key=True, index=True)
+    card_id = Column(String, ForeignKey(Card.id, ondelete='CASCADE'), primary_key=True, index=True)
+    n_study_positive = Column(Integer)
+    n_study_negative = Column(Integer)
+    n_study_total = Column(Integer)
+    previous_delta = Column(Integer)
+    previous_study_date = Column(TIMESTAMP(timezone=True))
+    previous_study_response = Column(Boolean)
+
+
+class SimUserCardFeatureVector(Base):
+    user_id = Column(String, ForeignKey(User.id, ondelete='CASCADE'), primary_key=True, index=True)
+    card_id = Column(String, ForeignKey(Card.id, ondelete='CASCADE'), primary_key=True, index=True)
+    n_study_positive = Column(Integer)
+    n_study_negative = Column(Integer)
+    n_study_total = Column(Integer)
+    previous_delta = Column(Integer)
+    previous_study_date = Column(TIMESTAMP(timezone=True))
+    previous_study_response = Column(Boolean)
+    correct_on_first_try = Column(Boolean)
+    leitner_box = Column(Integer)
+    leitner_scheduled_date = Column(TIMESTAMP(timezone=True))
+    sm2_efactor = Column(Float)
+    sm2_interval = Column(Float)
+    sm2_repetition = Column(Integer)
+    sm2_scheduled_date = Column(TIMESTAMP(timezone=True))
+
+
+class SimUserFeatureVector(Base):
+    user_id = Column(String, ForeignKey(User.id, ondelete='CASCADE'), primary_key=True, index=True)
+    n_study_positive = Column(Integer)
+    n_study_negative = Column(Integer)
+    n_study_total = Column(Integer)
+    previous_delta = Column(Integer)
+    previous_study_date = Column(TIMESTAMP(timezone=True))
+    previous_study_response = Column(Boolean)
+    parameters = Column(JSONB)
+
+
+class SimCardFeatureVector(Base):
+    card_id = Column(String, ForeignKey(Card.id, ondelete='CASCADE'), primary_key=True, index=True)
     n_study_positive = Column(Integer)
     n_study_negative = Column(Integer)
     n_study_total = Column(Integer)

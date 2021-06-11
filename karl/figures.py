@@ -63,6 +63,9 @@ def figure_composition(df, path):
 
 
 def plot(source, x_axis, groupby):
+    '''
+    Forgetting curve.
+    '''
     if 'type' in source:
         line = alt.Chart().mark_line().encode(
             alt.X(f'{x_axis}:Q', title='Hours'),
@@ -248,4 +251,4 @@ if __name__ == '__main__':
     # figure_recall_rate(df, user_id='463', path=path)
     # figure_forgetting_curve(df, user_id='463', path=path)
 
-    figure_karl100_vs_karl85(df, path)
+    # figure_karl100_vs_karl85(df, path)

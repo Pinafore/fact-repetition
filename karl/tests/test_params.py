@@ -10,7 +10,7 @@ def test_set_params():
 
     params = {
         'repetition_model': 'test_model',
-        'qrep': 0.11,
+        'card_embedding': 0.11,
         'recall': 0.22,
         'recall_target': 0.33,
         'category': 0.44,
