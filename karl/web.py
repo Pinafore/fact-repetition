@@ -8,6 +8,7 @@ import atexit
 import multiprocessing
 from typing import List
 from datetime import datetime
+from pydantic import BaseModel
 from fastapi import FastAPI
 from dateutil.parser import parse as parse_date
 from concurrent.futures import ProcessPoolExecutor
@@ -60,7 +61,6 @@ def conditional_decorator(dec, condition, **kwargs):
 
 @app.get('/api/karl/reset_user')
 def reset_user(
-    # env: str,
     user_id: str,
 ) -> None:
     # remove all user records
@@ -72,90 +72,96 @@ def reset_user(
     session.query(CurrUserCardFeatureVector).filter(CurrUserCardFeatureVector.user_id == user_id).delete()
     session.query(CurrUserFeatureVector).filter(CurrUserFeatureVector.user_id == user_id).delete()
     session.query(Record).filter(Record.user_id == user_id).delete()
+    session.query(Parameters).filter(Parameters.id == user_id).delete()
     session.commit()
     session.close()
 
 
+class SetParametersSchema(BaseModel):
+    repetition_model: str = None
+    card_embedding: float = None
+    recall: float = None
+    recall_target: float = None
+    category: float = None
+    answer: float = None
+    leitner: float = None
+    sm2: float = None
+    decay_qrep: float = None
+    cool_down: float = None
+    cool_down_time_correct: float = None
+    cool_down_time_wrong: float = None
+    max_recent_facts: int = None
+
+
 @app.put('/api/karl/set_params', response_model=ParametersSchema)
 def set_params(
-    # env: str,
     user_id: str,
-    repetition_model: str,              # name of the repetition model
-    card_embedding: float,              # weight on cosine distance between embeddings
-    recall: float,                      # weight on recall probability
-    recall_target: float,               # target of recall probability
-    category: float,                    # change in category from prev
-    answer: float,                      # reptition of the same answer
-    leitner: float,                     # hours till leitner scheduled date
-    sm2: float,                         # hours till sm2 scheduled date
-    decay_qrep: float,                  # discount factor
-    cool_down: float,                   # weight for cool down
-    cool_down_time_correct: float,      # minutes to cool down
-    cool_down_time_wrong: float,        # minutes to cool down
-    max_recent_facts: int,              # num of recent facts to keep record of
+    params: SetParametersSchema,
 ) -> ParametersSchema:
+
     session = SessionLocal()
     curr_params = session.query(Parameters).get(user_id)
     is_new_params = False
     if curr_params is None:
         is_new_params = True
-        curr_params = Parameters(id=user_id, **(ParametersSchema().__dict__))
+        curr_params = Parameters(id=user_id, repetition_model='karl85')
 
-    if repetition_model is not None:
-        curr_params.repetition_model = repetition_model
-    if card_embedding is not None:
-        curr_params.card_embedding = card_embedding
-    if recall is not None:
-        curr_params.recall = recall
-    if recall_target is not None:
-        curr_params.recall_target = recall_target
-    if category is not None:
-        curr_params.category = category
-    if answer is not None:
-        curr_params.answer = answer
-    if leitner is not None:
-        curr_params.leitner = leitner
-    if sm2 is not None:
-        curr_params.sm2 = sm2
-    if decay_qrep is not None:
-        curr_params.decay_qrep = decay_qrep
-    if cool_down is not None:
-        curr_params.cool_down = cool_down
-    if cool_down_time_correct is not None:
-        curr_params.cool_down_time_correct = cool_down_time_correct
-    if cool_down_time_wrong is not None:
-        curr_params.cool_down_time_wrong = cool_down_time_wrong
-    if max_recent_facts is not None:
-        curr_params.max_recent_facts = max_recent_facts
+    if params.repetition_model is not None:
+        curr_params.repetition_model = params.repetition_model
+    if params.card_embedding is not None:
+        curr_params.card_embedding = params.card_embedding
+    if params.recall is not None:
+        curr_params.recall = params.recall
+    if params.recall_target is not None:
+        curr_params.recall_target = params.recall_target
+    if params.category is not None:
+        curr_params.category = params.category
+    if params.answer is not None:
+        curr_params.answer = params.answer
+    if params.leitner is not None:
+        curr_params.leitner = params.leitner
+    if params.sm2 is not None:
+        curr_params.sm2 = params.sm2
+    if params.decay_qrep is not None:
+        curr_params.decay_qrep = params.decay_qrep
+    if params.cool_down is not None:
+        curr_params.cool_down = params.cool_down
+    if params.cool_down_time_correct is not None:
+        curr_params.cool_down_time_correct = params.cool_down_time_correct
+    if params.cool_down_time_wrong is not None:
+        curr_params.cool_down_time_wrong = params.cool_down_time_wrong
+    if params.max_recent_facts is not None:
+        curr_params.max_recent_facts = params.max_recent_facts
 
     if is_new_params:
         session.add(User(id=user_id))
         session.commit()
         session.add(curr_params)
         session.commit()
+
     session.commit()
     session.close()
-    return ParametersSchema(**curr_params.__dict__)
+
+    return get_params(user_id)
 
 
 @app.get('/api/karl/get_params', response_model=ParametersSchema)
 def get_params(
-    # env: str,
     user_id: str,
 ) -> ParametersSchema:
     session = SessionLocal()
     curr_params = session.query(Parameters).get(user_id)
     if curr_params is None:
-        curr_params = Parameters(id=user_id)
+        curr_params = Parameters(id=user_id, repetition_model='karl85')
         session.add(curr_params)
         session.commit()
+    params = ParametersSchema(**curr_params.__dict__)
     session.close()
-    return ParametersSchema(**curr_params.__dict__)
+    return params
 
 
 @app.put('/api/karl/set_repetition_model', response_model=ParametersSchema)
 def set_repetition_model(
-    # env: str,
     user_id: str,
     repetition_model: str,
 ):
@@ -234,7 +240,6 @@ def set_repetition_model(
 
 @app.get('/api/karl/get_user_stats', response_model=UserStatsSchema)
 def get_user_stats(
-    # env: str,
     user_id: str,
     deck_id: str = None,
     min_studied: int = 0,
@@ -255,7 +260,6 @@ def get_user_stats(
 
 
 def _get_user_stats(
-    # env: str,
     user_id: str,
     deck_id: str = None,
     min_studied: int = 0,
@@ -404,7 +408,6 @@ def _get_user_stats(
 @app.get('/api/karl/leaderboard', response_model=LeaderboardSchema)
 # @cached(cache=TTLCache(maxsize=1024, ttl=600))
 def get_leaderboard(
-    # env: str,
     user_id: str = None,
     skip: int = 0,
     limit: int = 10,
@@ -477,7 +480,6 @@ def get_leaderboard(
 
 @app.post('/api/karl/schedule')
 def schedule(
-    # env: str,
     schedule_requests: List[ScheduleRequestSchema],
 ) -> ScheduleResponseSchema:
     if schedule_requests[0].date is not None:
@@ -490,7 +492,6 @@ def schedule(
 
 @app.post('/api/karl/update')
 def update(
-    # env: str,
     update_requests: List[UpdateRequestSchema],
 ) -> dict:
     update_request = update_requests[0]  # only accept one request. for backward compatability
@@ -504,7 +505,6 @@ def update(
 
 @app.get('/api/karl/get_user_charts')
 def get_user_charts(
-    # env: str = None,
     user_id: str = None,
     deck_id: str = None,
     date_start: str = '2008-06-01 08:00:00+00:00',
