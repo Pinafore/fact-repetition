@@ -14,7 +14,7 @@ from concurrent.futures import ProcessPoolExecutor
 # from cachetools import cached, TTLCache
 
 from karl.schemas import UserStatsSchema, RankingSchema, LeaderboardSchema, \
-    OldParametersSchema, ParametersSchema, \
+    ParametersSchema, \
     ScheduleResponseSchema, ScheduleRequestSchema, UpdateRequestSchema, \
     Visualization
 from karl.models import User, UserStats, Parameters, Record, \
@@ -80,7 +80,7 @@ def reset_user(
 def set_params(
     # env: str,
     user_id: str,
-    params: OldParametersSchema,
+    params: ParametersSchema,
 ) -> ParametersSchema:
     session = SessionLocal()
     curr_params = session.query(Parameters).get(user_id)
@@ -90,7 +90,7 @@ def set_params(
         curr_params = Parameters(id=user_id, **(ParametersSchema().__dict__))
 
     curr_params.repetition_model = params.repetition_model
-    curr_params.card_embedding = params.qrep
+    curr_params.card_embedding = params.card_embedding
     curr_params.recall = params.recall
     curr_params.recall_target = params.recall_target
     curr_params.category = params.category
