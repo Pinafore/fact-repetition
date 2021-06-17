@@ -78,6 +78,7 @@ def reset_user(
 
 
 class SetParametersSchema(BaseModel):
+    user_id: str
     repetition_model: str = None
     card_embedding: float = None
     recall: float = None
@@ -95,11 +96,11 @@ class SetParametersSchema(BaseModel):
 
 @app.put('/api/karl/set_params', response_model=ParametersSchema)
 def set_params(
-    user_id: str,
     params: SetParametersSchema,
 ) -> ParametersSchema:
 
     session = SessionLocal()
+    user_id = params.user_id
     curr_params = session.query(Parameters).get(user_id)
     is_new_params = False
     if curr_params is None:

@@ -5,3 +5,4 @@ from .data import RetentionFeaturesSchema
 from .data import RetentionInput
 from .model_distilbert import DistilBertRetentionModel
 from .model_bert import BertRetentionModel
+from .model_norep import NorepRetentionModel
