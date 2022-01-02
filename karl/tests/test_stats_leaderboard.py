@@ -136,18 +136,19 @@ def test_user_stats():
         r = requests.get(f'{URL}/get_user_stats?user_id={user_id}&env=prod&date_start={date_start}&date_end={date_end}&min_studied={min_studied}')
         user_stats_fast = json.loads(r.text)
 
-        date_end = parse_date(date_end).date() - timedelta(days=1)
-        date_end = date_end.strftime('%Y-%m-%dT%H:%M:%S%z')
+        # date_end = parse_date(date_end).date() - timedelta(days=1)
+        # date_end = date_end.strftime('%Y-%m-%dT%H:%M:%S%z')
 
-        URL = 'http://0.tcp.ngrok.io:10081/api/karl'
-        r = requests.get(f'{URL}/get_user_stats?user_id={user_id}&env=prod&date_start={date_start}&date_end={date_end}&min_studied={min_studied}')
-        user_stats_stable = json.loads(r.text)
+        # URL = 'http://0.tcp.ngrok.io:10081/api/karl'
+        # r = requests.get(f'{URL}/get_user_stats?user_id={user_id}&env=prod&date_start={date_start}&date_end={date_end}&min_studied={min_studied}')
+        # user_stats_stable = json.loads(r.text)
 
         for key in user_stats_slow.keys():
             a = user_stats_slow[key]
             b = user_stats_fast[key]
-            c = user_stats_stable[key]
-            print(a == b, b == c, key, a, b, c)
+            # c = user_stats_stable[key]
+            # print(a == b, b == c, key, a, b, c)
+            print(a == b, key, a, b)
 
     print()
 

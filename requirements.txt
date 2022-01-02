@@ -16,3 +16,4 @@ altair
 tables
 joblib
 torch
+transformers

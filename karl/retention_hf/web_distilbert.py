@@ -21,8 +21,8 @@ class RetentionModel:
     def __init__(self):
         model_new_card = DistilBertRetentionModel.from_pretrained(f'{settings.CODE_DIR}/output/retention_hf_distilbert_new_card')
         model_old_card = DistilBertRetentionModel.from_pretrained(f'{settings.CODE_DIR}/output/retention_hf_distilbert_old_card')
-        self.model_new_card = model_new_card.to('cuda')
-        self.model_old_card = model_old_card.to('cuda')
+        self.model_new_card = model_new_card.to('cuda' if torch.cuda.is_available() else 'cpu')
+        self.model_old_card = model_old_card.to('cuda' if torch.cuda.is_available() else 'cpu')
         self.model_new_card.eval()
         self.model_old_card.eval()
         self.tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
@@ -57,7 +57,8 @@ class RetentionModel:
         if len(new_examples) > 0:
             for i in range(0, len(new_examples), batch_size):
                 xs = retention_data_collator(new_examples[i: i + batch_size])
-                xs = {k: v.to('cuda') for k, v in xs.items()}
+                if torch.cuda.is_available():
+                    xs = {k: v.to('cuda') for k, v in xs.items()}
                 ys = torch.sigmoid(self.model_new_card.forward(**xs)[0])
                 ys = ys.detach().cpu().numpy().tolist()
                 for i, y in zip(new_indices[i: i + batch_size], ys):
@@ -69,7 +70,8 @@ class RetentionModel:
         if len(old_examples) > 0:
             for i in range(0, len(old_examples), batch_size):
                 xs = retention_data_collator(old_examples[i: i + batch_size])
-                xs = {k: v.to('cuda') for k, v in xs.items()}
+                if torch.cuda.is_available():
+                    xs = {k: v.to('cuda') for k, v in xs.items()}
                 ys = torch.sigmoid(self.model_old_card.forward(**xs)[0])
                 ys = ys.detach().cpu().numpy().tolist()
                 for i, y in zip(old_indices[i: i + batch_size], ys):

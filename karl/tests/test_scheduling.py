@@ -13,7 +13,7 @@ from karl.config import settings
 with open(f'{settings.DATA_DIR}/diagnostic_questions.pkl', 'rb') as f:
     diagnostic_facts = pickle.load(f)
 
-URL = 'http://127.0.0.1:8000/api/karl'
+URL = settings.HOST
 n_days = 1
 n_facts_per_day = 10
 n_facts_per_query = 300
