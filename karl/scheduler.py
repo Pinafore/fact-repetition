@@ -418,7 +418,7 @@ class KARLScheduler:
 
         scores = json.loads(
             requests.get(
-                'http://127.0.0.1:8001/api/karl/predict',
+                f'{settings.API_URL}/api/karl/predict',
                 data=json.dumps(feature_vectors)
             ).text
         )

@@ -30,7 +30,7 @@ from karl import figures
 
 app = FastAPI()
 scheduler = KARLScheduler()
-figures_df = get_retention_features_df()
+# figures_df = get_retention_features_df()
 
 # create logger with 'scheduler'
 logger = logging.getLogger('scheduler')

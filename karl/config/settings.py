@@ -1,6 +1,8 @@
-CODE_DIR = '/fs/clip-quiz/shifeng/karl'
+CODE_DIR = '/home/ubuntu/scheduler'
 DATA_DIR = f'{CODE_DIR}/data'
-SQLALCHEMY_DATABASE_URL = 'postgresql+psycopg2://shifeng@localhost:5433/karl-prod'
+# API_URL = 'http://127.0.0.1:8001'
+API_URL = 'https://c81a41e514f0ec.lhrtunnel.link'
+SQLALCHEMY_DATABASE_URL = 'postgresql+psycopg2://ubuntu@localhost:5432/karl-prod'
 STABLE_DATABASE_URL = 'postgresql+psycopg2://shifeng@localhost:5433/karl-prod'
 USE_MULTIPROCESSING = True
 USER_STATS_CACHE = True
