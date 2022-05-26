@@ -70,6 +70,8 @@ class CurrUserCardFeatureVector(Base):
     sm2_repetition = Column(Integer)
     sm2_scheduled_date = Column(TIMESTAMP(timezone=True))
 
+    # v_card = relationship()
+
 
 class CurrUserFeatureVector(Base):
     user_id = Column(String, ForeignKey(User.id, ondelete='CASCADE'), primary_key=True, index=True)

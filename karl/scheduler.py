@@ -162,6 +162,7 @@ class KARLScheduler:
             order=order,
         )
 
+        # session.commit()
         session.close()
 
         # return

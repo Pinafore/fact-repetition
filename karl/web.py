@@ -20,7 +20,8 @@ from karl.schemas import UserStatsSchema, RankingSchema, LeaderboardSchema, \
     Visualization
 from karl.models import User, UserStats, Parameters, Record, \
     UserCardFeatureVector, UserFeatureVector, CardFeatureVector, \
-    CurrUserFeatureVector, CurrUserCardFeatureVector
+    CurrUserFeatureVector, CurrUserCardFeatureVector, \
+    Leitner, SM2
 from karl.scheduler import KARLScheduler
 from karl.db.session import SessionLocal, engine
 from karl.config import settings
@@ -65,6 +66,7 @@ def reset_user(
 ) -> None:
     # remove all user records
     session = SessionLocal()
+    # TODO below should not be necessary if ondelete='CASCADE'
     for record in session.query(Record).filter(Record.user_id == user_id):
         session.query(UserCardFeatureVector).filter(UserCardFeatureVector.id == record.id).delete()
         session.query(UserFeatureVector).filter(UserFeatureVector.id == record.id).delete()
@@ -73,6 +75,10 @@ def reset_user(
     session.query(CurrUserFeatureVector).filter(CurrUserFeatureVector.user_id == user_id).delete()
     session.query(Record).filter(Record.user_id == user_id).delete()
     session.query(Parameters).filter(Parameters.id == user_id).delete()
+    session.query(Leitner).filter(Leitner.user_id == user_id).delete()
+    session.query(SM2).filter(SM2.user_id == user_id).delete()
+    session.query(UserStats).filter(UserStats.user_id == user_id).delete()
+    session.query(User).filter(User.id == user_id).delete()
     session.commit()
     session.close()
 
