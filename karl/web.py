@@ -17,11 +17,13 @@ from concurrent.futures import ProcessPoolExecutor
 from karl.schemas import UserStatsSchema, RankingSchema, LeaderboardSchema, \
     ParametersSchema, \
     ScheduleResponseSchema, ScheduleRequestSchema, UpdateRequestSchema, \
-    Visualization
+    Visualization, \
+    ScheduleRequestV2, UpdateRequestV2
 from karl.models import User, UserStats, Parameters, Record, \
     UserCardFeatureVector, UserFeatureVector, CardFeatureVector, \
     CurrUserFeatureVector, CurrUserCardFeatureVector, \
     Leitner, SM2
+
 from karl.scheduler import KARLScheduler
 from karl.db.session import SessionLocal, engine
 from karl.config import settings
@@ -495,6 +497,14 @@ def schedule(
     schedule_response = scheduler.schedule(schedule_requests, date)
     return schedule_response
 
+@app.post('/api/karl/schedule_v2')
+def schedule_v2(
+    schedule_request: ScheduleRequestV2,
+) -> ScheduleResponseSchema:
+    date = datetime.now(pytz.utc)
+    schedule_response = scheduler.schedule_v2(schedule_request, date)
+    return schedule_response
+
 
 @app.post('/api/karl/update')
 def update(
@@ -506,6 +516,15 @@ def update(
     else:
         date = datetime.now(pytz.utc)
     profile = scheduler.update(update_request, date)
+    return {'profile': profile}
+
+
+@app.post('/api/karl/update_v2')
+def update_v2(
+    update_request: UpdateRequestV2,
+) -> dict:
+    date = datetime.now(pytz.utc)
+    profile = scheduler.update_v2(update_request, date)
     return {'profile': profile}
 
 

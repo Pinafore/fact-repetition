@@ -11,7 +11,8 @@ from datetime import datetime, timedelta
 from concurrent.futures import ProcessPoolExecutor
 from sqlalchemy.orm import Session
 
-from karl.schemas import ScheduleRequestSchema, UpdateRequestSchema, ScheduleResponseSchema
+from karl.schemas import ScheduleRequestSchema, UpdateRequestSchema, ScheduleResponseSchema,\
+    ScheduleRequestV2, UpdateRequestV2, KarlFactV2
 from karl.schemas import ParametersSchema
 from karl.schemas import VUser, VCard, VUserCard
 from karl.models import User, Card, Record, Parameters, UserStats,\
@@ -45,14 +46,18 @@ class KARLScheduler:
 
         return user
 
-    def get_card(self, request: ScheduleRequestSchema, session: Session) -> Card:
-        card = session.query(Card).get(request.fact_id)  # TODO will change to card_id at some point
+    def get_card(
+        self,
+        request: Union[ScheduleRequestSchema, KarlFactV2],
+        session: Session,
+    ) -> Card:
+        card = session.query(Card).get(request.fact_id)
 
         if card is not None:
             return card
 
         card = Card(
-            id=request.fact_id,  # TODO will change to card_id at some point
+            id=request.fact_id,
             text=request.text,
             answer=request.answer,
             category=request.category,
@@ -132,6 +137,81 @@ class KARLScheduler:
             is_new_fact = True
 
         # generate record.id (debug_id)
+        record_id = json.dumps({
+            'user_id': user.id,
+            'card_id': card_selected.id,
+            'date': str(date.replace(tzinfo=pytz.UTC)),
+        })
+
+        # store record with front_end_id empty @ debug_id
+        record = Record(
+            id=record_id,
+            user_id=user.id,
+            card_id=card_selected.id,
+            deck_id=card_selected.deck_id,
+            is_new_fact=is_new_fact,
+            date=date,
+        )
+        session.add(record)
+        session.commit()
+
+        # store feature vectors @ debug_id
+        self.save_feature_vectors(record.id, user.id, card_selected.id, date)
+
+        rationale = self.get_rationale(
+            record_id=record_id,
+            user=user,
+            cards=cards,
+            date=date,
+            scores=scores,
+            order=order,
+        )
+
+        # session.commit()
+        session.close()
+
+        # return
+        return ScheduleResponseSchema(
+            order=order,
+            debug_id=record_id,
+            scores=scores,
+            rationale=rationale,
+            profile=profile,
+        )
+
+    def schedule_v2(
+        self,
+        schedule_request: ScheduleRequestV2,
+        date: datetime,
+    ) -> ScheduleResponseSchema:
+        session = SessionLocal()
+        # get user and cards
+        user = self.get_user(schedule_request.user_id, session)
+        cards = [self.get_card(fact, session) for fact in schedule_request.facts]
+
+        # score cards
+        scores, profile = self.score_user_cards(user, cards, date, session)
+
+        # computer total score
+        for i, _ in enumerate(scores):
+            scores[i]['sum'] = sum([
+                user.parameters.__dict__.get(key, 0) * value
+                for key, value in scores[i].items()
+            ])
+
+        # sort cards
+        order = np.argsort([s['sum'] for s in scores]).tolist()
+        card_selected = cards[order[0]]
+
+        # determine if is new card
+        if session.query(Record).\
+                filter(Record.user_id == user.id).\
+                filter(Record.card_id == card_selected.id).count() > 0:
+            is_new_fact = False
+        else:
+            is_new_fact = True
+
+        # generate record_id (akk schedule_request_id, debug_id)
         record_id = json.dumps({
             'user_id': user.id,
             'card_id': card_selected.id,
@@ -419,7 +499,7 @@ class KARLScheduler:
 
         scores = json.loads(
             requests.get(
-                f'{settings.API_URL}/api/karl/predict',
+                f'{settings.MODEL_API_URL}/api/karl/predict',
                 data=json.dumps(feature_vectors)
             ).text
         )
@@ -617,6 +697,48 @@ class KARLScheduler:
         session.close()
 
     def update(self, request: UpdateRequestSchema, date: datetime) -> dict:
+        session = SessionLocal()
+        t0 = datetime.now(pytz.utc)
+
+        # read debug_id from request, find corresponding record
+        record = session.query(Record).get(request.debug_id)
+
+        if record is None:
+            return {}
+
+        # add front_end_id to record, response, elapsed_times to record
+        record.date = date
+        record.front_end_id = request.history_id
+        record.response = request.label
+        record.elapsed_milliseconds_text = request.elapsed_milliseconds_text
+        record.elapsed_milliseconds_answer = request.elapsed_milliseconds_answer
+        t1 = datetime.now(pytz.utc)
+        session.commit()
+
+        # update user stats
+        utc_date = date.astimezone(pytz.utc).date()
+        self.update_user_stats(record, deck_id='all', utc_date=utc_date, session=session)
+        t2 = datetime.now(pytz.utc)
+        if record.deck_id is not None:
+            self.update_user_stats(record, deck_id=record.deck_id, utc_date=utc_date, session=session)
+        t3 = datetime.now(pytz.utc)
+
+        # update current features
+        # includes leitner and sm2 updates
+        self.update_feature_vectors(record, date, session)
+        session.commit()
+        session.close()
+
+        t4 = datetime.now(pytz.utc)
+
+        return {
+            'update record': (t1 - t0).total_seconds(),
+            'update user_stats all': (t2 - t1).total_seconds(),
+            'update user_stats deck': (t3 - t2).total_seconds(),
+            'update feature vectors': (t4 - t3).total_seconds(),
+        }
+
+    def update_v2(self, request: UpdateRequestV2, date: datetime) -> dict:
         session = SessionLocal()
         t0 = datetime.now(pytz.utc)
 

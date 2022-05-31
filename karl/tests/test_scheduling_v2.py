@@ -7,6 +7,7 @@ from datetime import timedelta
 from dateutil.parser import parse as parse_date
 
 from karl.schemas import ScheduleRequestSchema, UpdateRequestSchema, ParametersSchema
+from karl.schemas import KarlFactV2, ScheduleRequestV2, UpdateRequestV2
 from karl.config import settings
 
 
@@ -21,7 +22,7 @@ user_id = 'dummy'
 start_date = parse_date('2028-06-01 08:00:00.000001 -0400')
 
 requests.get(f'{URL}/reset_user?env=prod&user_id={user_id}')
-requests.put(f'{URL}/set_params?env=prod&user_id={user_id}', data=json.dumps(ParametersSchema().__dict__))
+requests.put(f'{URL}/set_params?env=prod&user_id={user_id}', data=json.dumps(ParametersSchema().dict()))
 
 profile = {}  # key -> [values]
 
@@ -32,21 +33,27 @@ for nth_day in range(n_days):
         current_date = start_date + timedelta(days=nth_day) + timedelta(seconds=seconds_offset)
         print(current_date.strftime('%Y-%m-%dT%H:%M:%S%z'))
 
-        schedule_requests = [
-            ScheduleRequestSchema(
+        facts = [
+            KarlFactV2(
+                fact_id=fact['fact_id'] + 1000000,
                 text=fact['text'],
-                date=current_date.strftime('%Y-%m-%dT%H:%M:%S%z'),
                 answer=fact['answer'],
+                deck_name='dummy',
+                deck_id=1000000,
                 category=fact['category'],
-                user_id=user_id,
-                fact_id='sim_' + str(fact['fact_id']),
             )
             for fact in random.sample(diagnostic_facts, n_facts_per_query)
         ]
+        schedule_request = ScheduleRequestV2(
+            facts=facts,
+            repetition_model='karl',
+            env='dev',
+            user_id=user_id,
+        )
         schedule_response = json.loads(
             requests.post(
-                f'{URL}/schedule?env=prod',
-                data=json.dumps([r.__dict__ for r in schedule_requests])
+                f'{URL}/schedule_v2',
+                data=json.dumps(schedule_request.dict())
             ).text
         )
 
@@ -56,29 +63,28 @@ for nth_day in range(n_days):
             profile[key].append(value)
 
         index = schedule_response['order'][0]
-        fact_id = schedule_requests[index].fact_id
+        fact_id = schedule_request.facts[index].fact_id
         debug_id = schedule_response['debug_id']
         print(fact_id, debug_id)
 
         response = bool(np.random.binomial(1, 0.5))
 
-        update_request = UpdateRequestSchema(
-            text=schedule_requests[index].text,
-            date=current_date.strftime('%Y-%m-%dT%H:%M:%S%z'),
-            answer=schedule_requests[index].answer,
-            category=schedule_requests[index].category,
+        update_request = UpdateRequestV2(
             user_id=user_id,
-            fact_id=schedule_requests[index].fact_id,
+            fact_id=schedule_request.facts[index].fact_id,
             label=response,
-            history_id=f'sim_history_{nth_day}_{nth_fact}',
+            deck_name='dummy',
+            deck_id=1000000,
             elapsed_milliseconds_text=10000,
             elapsed_milliseconds_answer=10000,
             debug_id=debug_id,
+            history_id=f'sim_history_{nth_day}_{nth_fact}',
+            studyset_id='dummy_studyset_' + debug_id,
         )
         update_response = json.loads(
             requests.post(
-                f'{URL}/update?env=prod',
-                data=json.dumps([update_request.__dict__]),
+                f'{URL}/update_v2',
+                data=json.dumps(update_request.dict()),
             ).text
         )
 
