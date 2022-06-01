@@ -13,3 +13,4 @@ class Card(Base):
     deck_id = Column(String)
 
     records = relationship('Record', order_by='Record.date', back_populates='card')
+    study_records = relationship('StudyRecord', order_by='StudyRecord.date', back_populates='card')
