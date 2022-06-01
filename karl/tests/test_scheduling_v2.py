@@ -21,8 +21,8 @@ n_facts_per_query = 300
 user_id = 'dummy'
 start_date = parse_date('2028-06-01 08:00:00.000001 -0400')
 
-requests.get(f'{URL}/reset_user?env=prod&user_id={user_id}')
-requests.put(f'{URL}/set_params?env=prod&user_id={user_id}', data=json.dumps(ParametersSchema().dict()))
+requests.get(f'{URL}/reset_user?user_id={user_id}')
+requests.put(f'{URL}/set_params?user_id={user_id}', data=json.dumps(ParametersSchema().dict()))
 
 profile = {}  # key -> [values]
 
@@ -47,7 +47,6 @@ for nth_day in range(n_days):
         schedule_request = ScheduleRequestV2(
             facts=facts,
             repetition_model='karl',
-            env='dev',
             user_id=user_id,
         )
         schedule_response = json.loads(

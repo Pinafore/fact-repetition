@@ -14,7 +14,6 @@ class ScheduleRequestV2(BaseModel):
     user_id: str
     facts: List[KarlFactV2]
     repetition_model: str
-    env: Optional[str]
 
 
 class UpdateRequestV2(BaseModel):
@@ -28,7 +27,6 @@ class UpdateRequestV2(BaseModel):
     debug_id: str  # aka schedule_request_id
     history_id: str  # uniquely identifies a study
     studyset_id: str
-    env: Optional[str]
 
 
 class ScheduleRequestSchema(BaseModel):
@@ -59,7 +57,6 @@ class UpdateRequestSchema(BaseModel):
     # repetition_model: Optional[str]
     deck_name: Optional[str]
     deck_id: Optional[str]
-    # env: Optional[str] (moved out of the request)
     # elapsed_seconds_text: Optional[int]
     # elapsed_seconds_answer: Optional[int]
     elapsed_milliseconds_text: int

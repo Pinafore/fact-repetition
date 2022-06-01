@@ -39,7 +39,7 @@ def schedule(
     ]
     schedule_response = json.loads(
         requests.post(
-            f'{URL}/schedule?env=prod',
+            f'{URL}/schedule',
             data=json.dumps([r.__dict__ for r in schedule_requests])
         ).text
     )
@@ -73,7 +73,7 @@ def update(
         debug_id=debug_id,
     )
     requests.post(
-        f'{URL}/update?env=prod',
+        f'{URL}/update',
         data=json.dumps([update_request.__dict__]),
     )
 
@@ -81,12 +81,12 @@ def update(
 
 def user_stats(user_id: str):
     print('stats starts at'.ljust(20), datetime.now().strftime('%H:%M:%S %f'))
-    requests.get(f'{URL}/get_user_stats?env=prod&user_id={user_id}')
+    requests.get(f'{URL}/get_user_stats?user_id={user_id}')
     print('stats finishes at'.ljust(20), datetime.now().strftime('%H:%M:%S %f'))
 
 def leaderboard(user_id: str):
     print('leaderboard starts at'.ljust(20), datetime.now().strftime('%H:%M:%S %f'))
-    requests.get(f'{URL}/leaderboard?rank_type=total_seen&limit=10&min_studied=10&env=43&user_id={user_id}')
+    requests.get(f'{URL}/leaderboard?rank_type=total_seen&limit=10&min_studied=10&user_id={user_id}')
     print('leaderboard finishes at'.ljust(20), datetime.now().strftime('%H:%M:%S %f'))
 
 def wait_and_print(wait: int, what: str):
