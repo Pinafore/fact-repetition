@@ -42,8 +42,8 @@ class StudyRecord(Base):
     date = Column(TIMESTAMP(timezone=True))
     elapsed_milliseconds_text = Column(Integer)
     elapsed_milliseconds_answer = Column(Integer)
-    times_seen = Column(Integer, nullable=False, default=0)
-    times_seen_in_session = Column(Integer, nullable=False, default=0)
+    count = Column(Integer, nullable=False, default=0)
+    count_session = Column(Integer, nullable=False, default=0)
 
     user = relationship("User", back_populates="study_records")
     card = relationship("Card", back_populates="study_records")
@@ -61,8 +61,8 @@ class TestRecord(Base):
     date = Column(TIMESTAMP(timezone=True))
     elapsed_milliseconds_text = Column(Integer)
     elapsed_milliseconds_answer = Column(Integer)
-    times_seen = Column(Integer, nullable=False, default=0)
-    times_seen_in_session = Column(Integer, nullable=False, default=0)
+    count = Column(Integer, nullable=False, default=0)
+    count_session = Column(Integer, nullable=False, default=0)
 
     user = relationship("User", back_populates="test_records")
     card = relationship("Card", back_populates="test_records")

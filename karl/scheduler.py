@@ -205,14 +205,6 @@ class KARLScheduler:
         order = np.argsort([s['sum'] for s in scores]).tolist()
         card_selected = cards[order[0]]
 
-        # determine if is new card
-        if session.query(Record).\
-                filter(Record.user_id == user.id).\
-                filter(Record.card_id == card_selected.id).count() > 0:
-            is_new_fact = False
-        else:
-            is_new_fact = True
-
         # schedule_request_id is also debug_id
         schedule_request_id = json.dumps({
             'user_id': user.id,
@@ -220,7 +212,7 @@ class KARLScheduler:
             'date': str(date.replace(tzinfo=pytz.UTC)),
         })
 
-        # store record with front_end_id empty @ debug_id
+        # store schedule request
         session.add(
             ScheduleRequest(
                 id=schedule_request_id,
@@ -628,9 +620,9 @@ class KARLScheduler:
 
         session = SessionLocal()
 
-        v_user = session.query(CurrUserFeatureVector).get(user_id)
-        v_card = session.query(CurrCardFeatureVector).get(card_id)
-        v_usercard = session.query(CurrUserCardFeatureVector).get((user_id, card_id))
+        # v_user = session.query(CurrUserFeatureVector).get(user_id)
+        # v_card = session.query(CurrCardFeatureVector).get(card_id)
+        # v_usercard = session.query(CurrUserCardFeatureVector).get((user_id, card_id))
 
         delta_usercard = None
         if v_usercard.previous_study_date is not None:
@@ -710,7 +702,7 @@ class KARLScheduler:
         # add front_end_id to record, response, elapsed_times to record
         record.date = date
         record.front_end_id = request.history_id
-        record.response = request.label
+        record.label = request.label
         record.elapsed_milliseconds_text = request.elapsed_milliseconds_text
         record.elapsed_milliseconds_answer = request.elapsed_milliseconds_answer
         t1 = datetime.now(pytz.utc)
@@ -752,8 +744,8 @@ class KARLScheduler:
                 date=date,
                 elapsed_milliseconds_text=request.elapsed_milliseconds_text,
                 elapsed_milliseconds_answer=request.elapsed_milliseconds_answer,
-                times_seen=0,  # TODO
-                times_seen_in_session=0,  # TODO
+                count=0,  # TODO
+                count_session=0,  # TODO
             )
         )
         session.commit()
@@ -768,8 +760,16 @@ class KARLScheduler:
             update_v2_test(request, date)
             return
 
-        session.add(
-            StudyRecord(
+        v_usercard = session.query(CurrUserCardFeatureVector).get((request.user_id, request.card_id))
+        count = 0
+        count_session = 0
+        if v_usercard is not None:
+            count = v_usercard.count
+            if v_usercard.studyset_id == request.studyset_id:
+                count_session = v_usercard.count_session
+
+
+        record = StudyRecord(
                 id=request.history_id,
                 debug_id=request.debug_id,
                 studyset_id=request.studyset_id,
@@ -780,10 +780,10 @@ class KARLScheduler:
                 date=date,
                 elapsed_milliseconds_text=request.elapsed_milliseconds_text,
                 elapsed_milliseconds_answer=request.elapsed_milliseconds_answer,
-                times_seen=0,  # TODO
-                times_seen_in_session=0,  # TODO
+                count=count,
+                count_session=count_session,
             )
-        )
+        session.add(record)
         session.commit()
 
         # update user stats
@@ -812,38 +812,60 @@ class KARLScheduler:
 
     def save_snapshots(
         self,
-        record_id: str,
+        schedule_request_id: str,
         user_id: str,
         card_id: str,
         date: datetime,
     ) -> None:
-        # TODO
         v_user = self.get_curr_user_vector(user_id)
         v_card = self.get_curr_card_vector(card_id)
         v_usercard = self.get_curr_usercard_vector(user_id, card_id)
 
         session = SessionLocal()
 
-        v_user = session.query(CurrUserFeatureVector).get(user_id)
-        v_card = session.query(CurrCardFeatureVector).get(card_id)
-        v_usercard = session.query(CurrUserCardFeatureVector).get((user_id, card_id))
-
-        delta_usercard = None
+        delta = None
         if v_usercard.previous_study_date is not None:
-            delta_usercard = (date - v_usercard.previous_study_date).total_seconds()
+            delta = (date - v_usercard.previous_study_date).total_seconds()
+        if v_usercard.schedule_request_id is None or v_usercard.schedule_request_id != schedule_request_id:
+            # new session/studyset
+            # using schedule_request_id in place of studyset_id here since the 
+            # latter is created after the schedule request on Matthew's end
+            count_positive_session = count_negative_session = count_session = 0
+            delta_session = previous_delta_session = previous_study_date_session = previous_study_response_session = None
+            correct_on_first_try_session = None
+        else:
+            # same session
+            count_positive_session = v_usercard.count_positive_session 
+            count_negative_session = v_usercard.count_negative_session 
+            count_session = v_usercard.count_session 
+            previous_delta_session = v_usercard.previous_delta_session 
+            previous_study_date_session = v_usercard.previous_study_date_session 
+            previous_study_response_session = v_usercard.previous_study_response_session 
+            correct_on_first_try_session = v_usercard.correct_on_first_try_session 
+            if v_usercard.previous_study_date_session is not None:
+                delta_session = (date - v_usercard.previous_study_date_session).total_seconds()
+            else:
+                delta_session = None
         session.add(
-            UserCardFeatureVector(
-                id=record_id,
+            UserSnapshot(
+                id=schedule_request_id,
                 user_id=user_id,
                 card_id=card_id,
                 date=date,
                 count_positive=v_usercard.count_positive,
                 count_negative=v_usercard.count_negative,
                 count=v_usercard.count,
-                delta=delta_usercard,
+                count_positive_session=count_positive_session,
+                count_negative_session=count_negative_session,
+                count_session=count_session,
+                delta=delta,
                 previous_delta=v_usercard.previous_delta,
                 previous_study_date=v_usercard.previous_study_date,
                 previous_study_response=v_usercard.previous_study_response,
+                delta_session=delta_session,
+                previous_delta_session=previous_delta_session,
+                previous_study_date_session=previous_study_date_session,
+                previous_study_response_session=previous_study_response_session,
                 leitner_box=v_usercard.leitner_box,
                 leitner_scheduled_date=v_usercard.leitner_scheduled_date,
                 sm2_efactor=v_usercard.sm2_efactor,
@@ -851,12 +873,33 @@ class KARLScheduler:
                 sm2_repetition=v_usercard.sm2_repetition,
                 sm2_scheduled_date=v_usercard.sm2_scheduled_date,
                 correct_on_first_try=v_usercard.correct_on_first_try,
+                correct_on_first_try_session=correct_on_first_try_session,
             ))
         session.commit()
 
-        delta_user = None
+        delta = None
         if v_user.previous_study_date is not None:
-            delta_user = (date - v_user.previous_study_date).total_seconds()
+            delta = (date - v_user.previous_study_date).total_seconds()
+
+        if v_user.schedule_request_id is None or v_user.schedule_request_id != schedule_request_id:
+            # new session/studyset
+            # using schedule_request_id in place of studyset_id here since the 
+            # latter is created after the schedule request on Matthew's end
+            count_positive_session = count_negative_session = count_session = 0
+            delta_session = previous_delta_session = previous_study_date_session = previous_study_response_session = None
+        else:
+            # same session
+            count_positive_session = v_user.count_positive_session 
+            count_negative_session = v_user.count_negative_session 
+            count_session = v_user.count_session 
+            previous_delta_session = v_user.previous_delta_session 
+            previous_study_date_session = v_user.previous_study_date_session 
+            previous_study_response_session = v_user.previous_study_response_session 
+            if v_user.previous_study_date_session is not None:
+                delta_session = (date - v_user.previous_study_date_session).total_seconds()
+            else:
+                delta_session = None
+
         params = ParametersSchema(**self.get_user(user_id, session).parameters.__dict__)
         session.add(
             UserFeatureVector(
@@ -866,17 +909,24 @@ class KARLScheduler:
                 count_positive=v_user.count_positive,
                 count_negative=v_user.count_negative,
                 count=v_user.count,
-                delta=delta_user,
+                count_positive_session=count_positive_session,
+                count_negative_session=count_negative_session,
+                count_session=count_session,
+                delta=delta,
                 previous_delta=v_user.previous_delta,
                 previous_study_date=v_user.previous_study_date,
                 previous_study_response=v_user.previous_study_response,
+                delta_session=delta_session,
+                previous_delta_session=previous_delta_session,
+                previous_study_date_session=previous_study_date_session,
+                previous_study_response_session=previous_study_response_session,
                 parameters=json.dumps(params.__dict__),
             ))
         session.commit()
 
-        delta_card = None
+        delta = None
         if v_card.previous_study_date is not None:
-            delta_card = (date - v_card.previous_study_date).total_seconds()
+            delta = (date - v_card.previous_study_date).total_seconds()
         session.add(
             CardFeatureVector(
                 id=record_id,
@@ -885,7 +935,7 @@ class KARLScheduler:
                 count_positive=v_card.count_positive,
                 count_negative=v_card.count_negative,
                 count=v_card.count,
-                delta=delta_card,
+                delta=delta,
                 previous_delta=v_card.previous_delta,
                 previous_study_date=v_card.previous_study_date,
                 previous_study_response=v_card.previous_study_response,
@@ -895,7 +945,7 @@ class KARLScheduler:
 
     def update_feature_vectors(
         self,
-        record: Record,
+        record: StudyRecord,
         date: datetime,
         session: Session,
         simulated: bool = False,
@@ -912,18 +962,36 @@ class KARLScheduler:
         delta_usercard = None
         if v_usercard.previous_study_date is not None:
             delta_usercard = (date - v_usercard.previous_study_date).total_seconds()
-        v_usercard.count_positive += record.response
-        v_usercard.count_negative += (not record.response)
+        v_usercard.count_positive += record.label
+        v_usercard.count_negative += (not record.label)
         v_usercard.count += 1
         v_usercard.previous_delta = delta_usercard
         v_usercard.previous_study_date = date
-        v_usercard.previous_study_response = record.response
+        v_usercard.previous_study_response = record.label
         if v_usercard.correct_on_first_try is None:
-            v_usercard.correct_on_first_try = record.response
+            v_usercard.correct_on_first_try = record.label
             # NOTE the correponding `UserCardFeatureVector` saved in # `save_feature_vectors`
             # from the scheduling request also has None in its `correct_on_first_try`.
             # this is fine, we leave it as None, since that saved feature vector is what was
             # visible to the scheduler before the response was sent by the user.
+
+        if v_usercard.schedule_request_id is None or v_usercard.schedule_request_id != record.debug_id:
+            v_usercard.count_positive_session = record.label
+            v_usercard.count_negative_session = (not record.label)
+            v_usercard.count_session = 1
+            v_usercard.previous_delta_session = None
+            v_usercard.previous_study_date_session = date
+            v_usercard.previous_study_response_session = record.label
+            v_usercard.correct_on_first_try_session = record.label
+        else:
+            v_usercard.count_positive_session += record.label
+            v_usercard.count_negative_session += (not record.label)
+            v_usercard.count_session += 1
+            v_usercard.previous_delta_session = delta_usercard
+            v_usercard.previous_study_date_session = date
+            v_usercard.previous_study_response_session = record.label
+            if v_usercard.correct_on_first_try_session is None:
+                v_usercard.correct_on_first_try_session = record.label
 
         # update leitner
         self.update_leitner(v_usercard, record, date, session)
@@ -933,26 +1001,41 @@ class KARLScheduler:
         delta_user = None
         if v_user.previous_study_date is not None:
             delta_user = (date - v_user.previous_study_date).total_seconds()
-        v_user.count_positive += record.response
-        v_user.count_negative += (not record.response)
+        v_user.count_positive += record.label
+        v_user.count_negative += (not record.label)
         v_user.count += 1
         v_user.previous_delta = delta_user
         v_user.previous_study_date = date
-        v_user.previous_study_response = record.response
+        v_user.previous_study_response = record.label
+
+        if v_user.schedule_request_id is None or v_user.schedule_request_id != record.debug_id:
+            v_user.count_positive_session = record.label
+            v_user.count_negative_session = (not record.label)
+            v_user.count_session = 1
+            v_user.previous_delta_session = None
+            v_user.previous_study_date_session = date
+            v_user.previous_study_response_session = record.label
+        else:
+            v_user.count_positive_session += record.label
+            v_user.count_negative_session += (not record.label)
+            v_user.count_session += 1
+            v_user.previous_delta_session = delta_usercard
+            v_user.previous_study_date_session = date
+            v_user.previous_study_response_session = record.label
 
         delta_card = None
         if v_card.previous_study_date is not None:
             delta_card = (date - v_card.previous_study_date).total_seconds()
-        v_card.count_positive += record.response
-        v_card.count_negative += (not record.response)
+        v_card.count_positive += record.label
+        v_card.count_negative += (not record.label)
         v_card.count += 1
         v_card.previous_delta = delta_card
         v_card.previous_study_date = date
-        v_card.previous_study_response = record.response
+        v_card.previous_study_response = record.label
 
     def update_user_stats(
         self,
-        record: Record,
+        record: StudyRecord,
         utc_date,
         deck_id: str,
         session: Session,
@@ -1013,15 +1096,15 @@ class KARLScheduler:
             curr_stats = new_stat
             is_new_stat = True
 
-        if record.is_new_fact:
+        if record.times_seen == 0:
             curr_stats.n_new_cards_total += 1
-            curr_stats.n_new_cards_positive += record.response
+            curr_stats.n_new_cards_positive += record.label
         else:
             curr_stats.n_old_cards_total += 1
-            curr_stats.n_old_cards_positive += record.response
+            curr_stats.n_old_cards_positive += record.label
 
         curr_stats.n_cards_total += 1
-        curr_stats.n_cards_positive += record.response
+        curr_stats.n_cards_positive += record.label
         curr_stats.elapsed_milliseconds_text += record.elapsed_milliseconds_text
         curr_stats.elapsed_milliseconds_answer += record.elapsed_milliseconds_answer
 
@@ -1031,7 +1114,7 @@ class KARLScheduler:
     def update_leitner(
         self,
         v_usercard: Union[CurrUserCardFeatureVector, SimUserCardFeatureVector],
-        record: Record,
+        record: StudyRecord,
         date: datetime,
         session: Session,
     ) -> None:
@@ -1045,7 +1128,7 @@ class KARLScheduler:
             # boxes: 1 ~ 10
             v_usercard.leitner_box = 1
 
-        v_usercard.leitner_box += (1 if record.response else -1)
+        v_usercard.leitner_box += (1 if record.label else -1)
         v_usercard.leitner_box = max(min(v_usercard.leitner_box, 10), 1)
         interval = timedelta(days=increment_days[v_usercard.leitner_box])
         v_usercard.leitner_scheduled_date = date + interval
@@ -1053,7 +1136,7 @@ class KARLScheduler:
     def update_sm2(
         self,
         v_usercard: Union[CurrUserCardFeatureVector, SimUserCardFeatureVector],
-        record: Record,
+        record: StudyRecord,
         date: datetime,
         session: Session,
     ) -> None:
@@ -1066,11 +1149,11 @@ class KARLScheduler:
             v_usercard.sm2_interval = 1
             v_usercard.sm2_repetition = 0
 
-        q = get_quality_from_response(record.response)
+        q = get_quality_from_response(record.label)
         v_usercard.sm2_repetition += 1
         v_usercard.sm2_efactor = max(1.3, v_usercard.sm2_efactor + 0.1 - (5.0 - q) * (0.08 + (5.0 - q) * 0.02))
 
-        if not record.response:
+        if not record.label:
             v_usercard.sm2_interval = 0
             v_usercard.sm2_repetition = 0
         else:

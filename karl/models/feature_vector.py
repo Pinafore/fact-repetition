@@ -59,9 +59,15 @@ class CurrUserCardFeatureVector(Base):
     count_positive = Column(Integer)
     count_negative = Column(Integer)
     count = Column(Integer)
+    count_positive_session = Column(Integer)
+    count_negative_session = Column(Integer)
+    count_session = Column(Integer)
     previous_delta = Column(Integer)
     previous_study_date = Column(TIMESTAMP(timezone=True))
     previous_study_response = Column(Boolean)
+    previous_delta_session = Column(Integer)
+    previous_study_date_session = Column(TIMESTAMP(timezone=True))
+    previous_study_response_session = Column(Boolean)
     correct_on_first_try = Column(Boolean)
     correct_on_first_try_session = Column(Boolean)
     leitner_box = Column(Integer)
@@ -70,7 +76,7 @@ class CurrUserCardFeatureVector(Base):
     sm2_interval = Column(Float)
     sm2_repetition = Column(Integer)
     sm2_scheduled_date = Column(TIMESTAMP(timezone=True))
-    studyset_id = Column(String)
+    schedule_request_id = Column(String)
 
     # v_card = relationship()
 
@@ -80,11 +86,17 @@ class CurrUserFeatureVector(Base):
     count_positive = Column(Integer)
     count_negative = Column(Integer)
     count = Column(Integer)
+    count_positive_session = Column(Integer)
+    count_negative_session = Column(Integer)
+    count_session = Column(Integer)
     previous_delta = Column(Integer)
     previous_study_date = Column(TIMESTAMP(timezone=True))
     previous_study_response = Column(Boolean)
+    previous_delta_session = Column(Integer)
+    previous_study_date_session = Column(TIMESTAMP(timezone=True))
+    previous_study_response_session = Column(Boolean)
     parameters = Column(JSONB)
-    studyset_id = Column(String)
+    schedule_request_id = Column(String)
 
 
 class CurrCardFeatureVector(Base):
