@@ -21,6 +21,8 @@ from karl.schemas import UserStatsSchema, RankingSchema, LeaderboardSchema, \
     ScheduleRequestV2, UpdateRequestV2
 from karl.models import User, UserStats, Parameters, Record, \
     UserCardFeatureVector, UserFeatureVector, CardFeatureVector, \
+    UserCardSnapshot, UserSnapshot, CardSnapshot, \
+    StudyRecord, TestRecord, ScheduleRequest,\
     CurrUserFeatureVector, CurrUserCardFeatureVector, \
     Leitner, SM2
 
@@ -73,9 +75,15 @@ def reset_user(
         session.query(UserCardFeatureVector).filter(UserCardFeatureVector.id == record.id).delete()
         session.query(UserFeatureVector).filter(UserFeatureVector.id == record.id).delete()
         session.query(CardFeatureVector).filter(CardFeatureVector.id == record.id).delete()
+    for request in session.query(ScheduleRequest).filter(ScheduleRequest.user_id == user_id):
+        session.query(UserCardSnapshot).filter(UserCardSnapshot.id == request.id).delete()
+        session.query(UserSnapshot).filter(UserSnapshot.id == request.id).delete()
+        session.query(CardSnapshot).filter(CardSnapshot.id == request.id).delete()
     session.query(CurrUserCardFeatureVector).filter(CurrUserCardFeatureVector.user_id == user_id).delete()
     session.query(CurrUserFeatureVector).filter(CurrUserFeatureVector.user_id == user_id).delete()
     session.query(Record).filter(Record.user_id == user_id).delete()
+    session.query(StudyRecord).filter(StudyRecord.user_id == user_id).delete()
+    session.query(TestRecord).filter(TestRecord.user_id == user_id).delete()
     session.query(Parameters).filter(Parameters.id == user_id).delete()
     session.query(Leitner).filter(Leitner.user_id == user_id).delete()
     session.query(SM2).filter(SM2.user_id == user_id).delete()

@@ -23,8 +23,10 @@ class Record(Base):
 
 class ScheduleRequest(Base):
     id = Column(String, primary_key=True, index=True)
+    user_id = Column(String)
     card_ids = Column(ARRAY(String), nullable=False)
     date = Column(TIMESTAMP(timezone=True))
+    repetition_model = Column(String)
 
     study_records = relationship('StudyRecord', order_by='StudyRecord.date', back_populates='schedule_request')
 

@@ -15,10 +15,12 @@ from karl.schemas import ScheduleRequestSchema, UpdateRequestSchema, ScheduleRes
     ScheduleRequestV2, UpdateRequestV2, KarlFactV2
 from karl.schemas import ParametersSchema
 from karl.schemas import VUser, VCard, VUserCard
-from karl.models import User, Card, Record, Parameters, UserStats,\
-    UserCardFeatureVector, UserFeatureVector, CardFeatureVector,\
+from karl.models import User, Card, Parameters, UserStats,\
     CurrUserCardFeatureVector, CurrUserFeatureVector, CurrCardFeatureVector,\
-    SimUserCardFeatureVector, SimUserFeatureVector, SimCardFeatureVector
+    SimUserCardFeatureVector, SimUserFeatureVector, SimCardFeatureVector,\
+    UserCardSnapshot, UserSnapshot, CardSnapshot,\
+    Record, StudyRecord, TestRecord, ScheduleRequest
+
 from karl.retention_hf import vectors_to_features
 from karl.db.session import SessionLocal, engine
 from karl.config import settings
@@ -69,9 +71,9 @@ class KARLScheduler:
 
         v_card = CurrCardFeatureVector(
             card_id=card.id,
-            n_study_positive=0,
-            n_study_negative=0,
-            n_study_total=0,
+            count_positive=0,
+            count_negative=0,
+            count=0,
             previous_delta=None,
             previous_study_date=None,
             previous_study_response=None,
@@ -211,27 +213,26 @@ class KARLScheduler:
         else:
             is_new_fact = True
 
-        # generate record_id (akk schedule_request_id, debug_id)
-        record_id = json.dumps({
+        # schedule_request_id is also debug_id
+        schedule_request_id = json.dumps({
             'user_id': user.id,
-            'card_id': card_selected.id,
+            'repetition_model': schedule_request.repetition_model,
             'date': str(date.replace(tzinfo=pytz.UTC)),
         })
 
         # store record with front_end_id empty @ debug_id
-        record = Record(
-            id=record_id,
-            user_id=user.id,
-            card_id=card_selected.id,
-            deck_id=card_selected.deck_id,
-            is_new_fact=is_new_fact,
-            date=date,
+        session.add(
+            ScheduleRequest(
+                id=schedule_request_id,
+                user_id=user.id,
+                card_ids=[x.id for x in cards],
+                repetition_model=schedule_request.repetition_model,
+                date=date,
+            )
         )
-        session.add(record)
         session.commit()
 
-        # store feature vectors @ debug_id
-        self.save_feature_vectors(record.id, user.id, card_selected.id, date)
+        self.save_snapshots(schedule_request_id, user.id, card_selected.id, date)
 
         rationale = self.get_rationale(
             record_id=record_id,
@@ -248,7 +249,7 @@ class KARLScheduler:
         # return
         return ScheduleResponseSchema(
             order=order,
-            debug_id=record_id,
+            debug_id=schedule_request_id,
             scores=scores,
             rationale=rationale,
             profile=profile,
@@ -261,9 +262,9 @@ class KARLScheduler:
         if v_user is None:
             v_user = CurrUserFeatureVector(
                 user_id=user_id,
-                n_study_positive=0,
-                n_study_negative=0,
-                n_study_total=0,
+                count_positive=0,
+                count_negative=0,
+                count=0,
                 previous_delta=None,
                 previous_study_date=None,
                 previous_study_response=None,
@@ -281,9 +282,9 @@ class KARLScheduler:
         if v_card is None:
             v_card = CurrCardFeatureVector(
                 card_id=card_id,
-                n_study_positive=0,
-                n_study_negative=0,
-                n_study_total=0,
+                count_positive=0,
+                count_negative=0,
+                count=0,
                 previous_delta=None,
                 previous_study_date=None,
                 previous_study_response=None,
@@ -301,9 +302,9 @@ class KARLScheduler:
             v_usercard = CurrUserCardFeatureVector(
                 user_id=user_id,
                 card_id=card_id,
-                n_study_positive=0,
-                n_study_negative=0,
-                n_study_total=0,
+                count_positive=0,
+                count_negative=0,
+                count=0,
                 previous_delta=None,
                 previous_study_date=None,
                 previous_study_response=None,
@@ -328,9 +329,9 @@ class KARLScheduler:
         if v_user is None:
             v_user = SimUserFeatureVector(
                 user_id=user_id,
-                n_study_positive=0,
-                n_study_negative=0,
-                n_study_total=0,
+                count_positive=0,
+                count_negative=0,
+                count=0,
                 previous_delta=None,
                 previous_study_date=None,
                 previous_study_response=None,
@@ -348,9 +349,9 @@ class KARLScheduler:
         if v_card is None:
             v_card = SimCardFeatureVector(
                 card_id=card_id,
-                n_study_positive=0,
-                n_study_negative=0,
-                n_study_total=0,
+                count_positive=0,
+                count_negative=0,
+                count=0,
                 previous_delta=None,
                 previous_study_date=None,
                 previous_study_response=None,
@@ -369,9 +370,9 @@ class KARLScheduler:
             v_usercard = SimUserCardFeatureVector(
                 user_id=user_id,
                 card_id=card_id,
-                n_study_positive=0,
-                n_study_negative=0,
-                n_study_total=0,
+                count_positive=0,
+                count_negative=0,
+                count=0,
                 previous_delta=None,
                 previous_study_date=None,
                 previous_study_response=None,
@@ -399,9 +400,9 @@ class KARLScheduler:
         if v_user is None:
             v_user = VUser(
                 user_id=user_id,
-                n_study_positive=0,
-                n_study_negative=0,
-                n_study_total=0,
+                count_positive=0,
+                count_negative=0,
+                count=0,
                 parameters=json.dumps(params.__dict__),
             )
         else:
@@ -419,9 +420,9 @@ class KARLScheduler:
         if v_card is None:
             v_card = VCard(
                 card_id=card_id,
-                n_study_positive=0,
-                n_study_negative=0,
-                n_study_total=0,
+                count_positive=0,
+                count_negative=0,
+                count=0,
             )
         else:
             v_card = VCard(**v_card.__dict__)
@@ -440,9 +441,9 @@ class KARLScheduler:
             v_usercard = VUserCard(
                 user_id=user_id,
                 card_id=card_id,
-                n_study_positive=0,
-                n_study_negative=0,
-                n_study_total=0,
+                count_positive=0,
+                count_negative=0,
+                count=0,
             )
         else:
             v_usercard = VUserCard(**v_usercard.__dict__)
@@ -640,9 +641,9 @@ class KARLScheduler:
                 user_id=user_id,
                 card_id=card_id,
                 date=date,
-                n_study_positive=v_usercard.n_study_positive,
-                n_study_negative=v_usercard.n_study_negative,
-                n_study_total=v_usercard.n_study_total,
+                count_positive=v_usercard.count_positive,
+                count_negative=v_usercard.count_negative,
+                count=v_usercard.count,
                 delta=delta_usercard,
                 previous_delta=v_usercard.previous_delta,
                 previous_study_date=v_usercard.previous_study_date,
@@ -666,9 +667,9 @@ class KARLScheduler:
                 id=record_id,
                 user_id=user_id,
                 date=date,
-                n_study_positive=v_user.n_study_positive,
-                n_study_negative=v_user.n_study_negative,
-                n_study_total=v_user.n_study_total,
+                count_positive=v_user.count_positive,
+                count_negative=v_user.count_negative,
+                count=v_user.count,
                 delta=delta_user,
                 previous_delta=v_user.previous_delta,
                 previous_study_date=v_user.previous_study_date,
@@ -685,9 +686,9 @@ class KARLScheduler:
                 id=record_id,
                 card_id=card_id,
                 date=date,
-                n_study_positive=v_card.n_study_positive,
-                n_study_negative=v_card.n_study_negative,
-                n_study_total=v_card.n_study_total,
+                count_positive=v_card.count_positive,
+                count_negative=v_card.count_negative,
+                count=v_card.count,
                 delta=delta_card,
                 previous_delta=v_card.previous_delta,
                 previous_study_date=v_card.previous_study_date,
@@ -738,26 +739,55 @@ class KARLScheduler:
             'update feature vectors': (t4 - t3).total_seconds(),
         }
 
+    def update_v2_test(self, request: UpdateRequestV2, date: datetime) -> dict:
+        session = SessionLocal()
+        session.add(
+            StudyRecord(
+                id=request.history_id,
+                studyset_id=request.studyset_id,
+                user_id=request.user_id,
+                card_id=request.card_id,
+                deck_id=request.deck_id,
+                label=request.label,
+                date=date,
+                elapsed_milliseconds_text=request.elapsed_milliseconds_text,
+                elapsed_milliseconds_answer=request.elapsed_milliseconds_answer,
+                times_seen=0,  # TODO
+                times_seen_in_session=0,  # TODO
+            )
+        )
+        session.commit()
+        session.close()
+
+
     def update_v2(self, request: UpdateRequestV2, date: datetime) -> dict:
         session = SessionLocal()
         t0 = datetime.now(pytz.utc)
 
-        # read debug_id from request, find corresponding record
-        record = session.query(Record).get(request.debug_id)
+        if request.test_mode:
+            update_v2_test(request, date)
+            return
 
-        if record is None:
-            return {}
-
-        # add front_end_id to record, response, elapsed_times to record
-        record.date = date
-        record.front_end_id = request.history_id
-        record.response = request.label
-        record.elapsed_milliseconds_text = request.elapsed_milliseconds_text
-        record.elapsed_milliseconds_answer = request.elapsed_milliseconds_answer
-        t1 = datetime.now(pytz.utc)
+        session.add(
+            StudyRecord(
+                id=request.history_id,
+                debug_id=request.debug_id,
+                studyset_id=request.studyset_id,
+                user_id=request.user_id,
+                card_id=request.card_id,
+                deck_id=request.deck_id,
+                label=request.label,
+                date=date,
+                elapsed_milliseconds_text=request.elapsed_milliseconds_text,
+                elapsed_milliseconds_answer=request.elapsed_milliseconds_answer,
+                times_seen=0,  # TODO
+                times_seen_in_session=0,  # TODO
+            )
+        )
         session.commit()
 
         # update user stats
+        t1 = datetime.now(pytz.utc)
         utc_date = date.astimezone(pytz.utc).date()
         self.update_user_stats(record, deck_id='all', utc_date=utc_date, session=session)
         t2 = datetime.now(pytz.utc)
@@ -774,11 +804,94 @@ class KARLScheduler:
         t4 = datetime.now(pytz.utc)
 
         return {
-            'update record': (t1 - t0).total_seconds(),
+            'save record': (t1 - t0).total_seconds(),
             'update user_stats all': (t2 - t1).total_seconds(),
             'update user_stats deck': (t3 - t2).total_seconds(),
             'update feature vectors': (t4 - t3).total_seconds(),
         }
+
+    def save_snapshots(
+        self,
+        record_id: str,
+        user_id: str,
+        card_id: str,
+        date: datetime,
+    ) -> None:
+        # TODO
+        v_user = self.get_curr_user_vector(user_id)
+        v_card = self.get_curr_card_vector(card_id)
+        v_usercard = self.get_curr_usercard_vector(user_id, card_id)
+
+        session = SessionLocal()
+
+        v_user = session.query(CurrUserFeatureVector).get(user_id)
+        v_card = session.query(CurrCardFeatureVector).get(card_id)
+        v_usercard = session.query(CurrUserCardFeatureVector).get((user_id, card_id))
+
+        delta_usercard = None
+        if v_usercard.previous_study_date is not None:
+            delta_usercard = (date - v_usercard.previous_study_date).total_seconds()
+        session.add(
+            UserCardFeatureVector(
+                id=record_id,
+                user_id=user_id,
+                card_id=card_id,
+                date=date,
+                count_positive=v_usercard.count_positive,
+                count_negative=v_usercard.count_negative,
+                count=v_usercard.count,
+                delta=delta_usercard,
+                previous_delta=v_usercard.previous_delta,
+                previous_study_date=v_usercard.previous_study_date,
+                previous_study_response=v_usercard.previous_study_response,
+                leitner_box=v_usercard.leitner_box,
+                leitner_scheduled_date=v_usercard.leitner_scheduled_date,
+                sm2_efactor=v_usercard.sm2_efactor,
+                sm2_interval=v_usercard.sm2_interval,
+                sm2_repetition=v_usercard.sm2_repetition,
+                sm2_scheduled_date=v_usercard.sm2_scheduled_date,
+                correct_on_first_try=v_usercard.correct_on_first_try,
+            ))
+        session.commit()
+
+        delta_user = None
+        if v_user.previous_study_date is not None:
+            delta_user = (date - v_user.previous_study_date).total_seconds()
+        params = ParametersSchema(**self.get_user(user_id, session).parameters.__dict__)
+        session.add(
+            UserFeatureVector(
+                id=record_id,
+                user_id=user_id,
+                date=date,
+                count_positive=v_user.count_positive,
+                count_negative=v_user.count_negative,
+                count=v_user.count,
+                delta=delta_user,
+                previous_delta=v_user.previous_delta,
+                previous_study_date=v_user.previous_study_date,
+                previous_study_response=v_user.previous_study_response,
+                parameters=json.dumps(params.__dict__),
+            ))
+        session.commit()
+
+        delta_card = None
+        if v_card.previous_study_date is not None:
+            delta_card = (date - v_card.previous_study_date).total_seconds()
+        session.add(
+            CardFeatureVector(
+                id=record_id,
+                card_id=card_id,
+                date=date,
+                count_positive=v_card.count_positive,
+                count_negative=v_card.count_negative,
+                count=v_card.count,
+                delta=delta_card,
+                previous_delta=v_card.previous_delta,
+                previous_study_date=v_card.previous_study_date,
+                previous_study_response=v_card.previous_study_response,
+            ))
+        session.commit()
+        session.close()
 
     def update_feature_vectors(
         self,
@@ -799,9 +912,9 @@ class KARLScheduler:
         delta_usercard = None
         if v_usercard.previous_study_date is not None:
             delta_usercard = (date - v_usercard.previous_study_date).total_seconds()
-        v_usercard.n_study_positive += record.response
-        v_usercard.n_study_negative += (not record.response)
-        v_usercard.n_study_total += 1
+        v_usercard.count_positive += record.response
+        v_usercard.count_negative += (not record.response)
+        v_usercard.count += 1
         v_usercard.previous_delta = delta_usercard
         v_usercard.previous_study_date = date
         v_usercard.previous_study_response = record.response
@@ -820,9 +933,9 @@ class KARLScheduler:
         delta_user = None
         if v_user.previous_study_date is not None:
             delta_user = (date - v_user.previous_study_date).total_seconds()
-        v_user.n_study_positive += record.response
-        v_user.n_study_negative += (not record.response)
-        v_user.n_study_total += 1
+        v_user.count_positive += record.response
+        v_user.count_negative += (not record.response)
+        v_user.count += 1
         v_user.previous_delta = delta_user
         v_user.previous_study_date = date
         v_user.previous_study_response = record.response
@@ -830,9 +943,9 @@ class KARLScheduler:
         delta_card = None
         if v_card.previous_study_date is not None:
             delta_card = (date - v_card.previous_study_date).total_seconds()
-        v_card.n_study_positive += record.response
-        v_card.n_study_negative += (not record.response)
-        v_card.n_study_total += 1
+        v_card.count_positive += record.response
+        v_card.count_negative += (not record.response)
+        v_card.count += 1
         v_card.previous_delta = delta_card
         v_card.previous_study_date = date
         v_card.previous_study_response = record.response
@@ -1043,8 +1156,8 @@ class KARLScheduler:
             else:
                 sm2_scheduled_date = None
 
-            rr += row_template.format('#Correct', v_usercard.n_study_positive)
-            rr += row_template.format('#Wrong', v_usercard.n_study_negative)
+            rr += row_template.format('#Correct', v_usercard.count_positive)
+            rr += row_template.format('#Wrong', v_usercard.count_negative)
             rr += row_template.format('Previous delta', v_usercard.previous_delta)
             rr += row_template.format('Previous date', v_usercard.previous_study_date)
             rr += row_template.format('Previous result', v_usercard.previous_study_response)
