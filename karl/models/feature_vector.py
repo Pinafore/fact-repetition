@@ -63,12 +63,14 @@ class CurrUserCardFeatureVector(Base):
     previous_study_date = Column(TIMESTAMP(timezone=True))
     previous_study_response = Column(Boolean)
     correct_on_first_try = Column(Boolean)
+    correct_on_first_try_session = Column(Boolean)
     leitner_box = Column(Integer)
     leitner_scheduled_date = Column(TIMESTAMP(timezone=True))
     sm2_efactor = Column(Float)
     sm2_interval = Column(Float)
     sm2_repetition = Column(Integer)
     sm2_scheduled_date = Column(TIMESTAMP(timezone=True))
+    studyset_id = Column(String)
 
     # v_card = relationship()
 
@@ -82,6 +84,7 @@ class CurrUserFeatureVector(Base):
     previous_study_date = Column(TIMESTAMP(timezone=True))
     previous_study_response = Column(Boolean)
     parameters = Column(JSONB)
+    studyset_id = Column(String)
 
 
 class CurrCardFeatureVector(Base):
