@@ -79,6 +79,7 @@ for nth_day in range(n_days):
             debug_id=debug_id,
             history_id=f'sim_history_{nth_day}_{nth_fact}',
             studyset_id='dummy_studyset_' + debug_id,
+            test_mode=False,
         )
         update_response = json.loads(
             requests.post(

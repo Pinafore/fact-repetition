@@ -27,6 +27,7 @@ class UpdateRequestV2(BaseModel):
     history_id: str  # uniquely identifies a study
     studyset_id: str
     debug_id: Optional[str] # aka schedule_request_id, n/a in test updates
+    test_mode: bool
 
 
 class ScheduleRequestSchema(BaseModel):
