@@ -4,7 +4,7 @@ from .record import Record, ScheduleRequest, StudyRecord, TestRecord
 from .embedding import Embedding, BinaryNumpy
 from .parameters import Parameters
 
-from .user_stats import UserStats
+from .user_stats import UserStats, UserStatsV2
 from .feature_vector import UserCardFeatureVector, UserFeatureVector, CardFeatureVector
 from .feature_vector import CurrUserCardFeatureVector, CurrUserFeatureVector, CurrCardFeatureVector
 from .feature_vector import SimUserCardFeatureVector, SimUserFeatureVector, SimCardFeatureVector

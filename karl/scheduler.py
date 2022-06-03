@@ -15,7 +15,7 @@ from karl.schemas import ScheduleRequestSchema, UpdateRequestSchema, ScheduleRes
     ScheduleRequestV2, UpdateRequestV2, KarlFactV2
 from karl.schemas import ParametersSchema
 from karl.schemas import VUser, VCard, VUserCard
-from karl.models import User, Card, Parameters, UserStats,\
+from karl.models import User, Card, Parameters, UserStats, UserStatsV2,\
     CurrUserCardFeatureVector, CurrUserFeatureVector, CurrCardFeatureVector,\
     SimUserCardFeatureVector, SimUserFeatureVector, SimCardFeatureVector,\
     UserCardSnapshot, UserSnapshot, CardSnapshot,\
@@ -1055,10 +1055,10 @@ class KARLScheduler:
         session: Session,
     ):
         # get the latest user_stat ordered by date
-        curr_stats = session.query(UserStats).\
-            filter(UserStats.user_id == record.user_id).\
-            filter(UserStats.deck_id == deck_id).\
-            order_by(UserStats.date.desc()).first()
+        curr_stats = session.query(UserStatsV2).\
+            filter(UserStatsV2.user_id == record.user_id).\
+            filter(UserStatsV2.deck_id == deck_id).\
+            order_by(UserStatsV2.date.desc()).first()
 
         is_new_stat = False
         if curr_stats is None:
@@ -1067,7 +1067,7 @@ class KARLScheduler:
                 'deck_id': deck_id,
                 'date': str(utc_date),
             })
-            curr_stats = UserStats(
+            curr_stats = UserStatsV2(
                 id=stats_id,
                 user_id=record.user_id,
                 deck_id=deck_id,
@@ -1092,7 +1092,7 @@ class KARLScheduler:
                 'deck_id': deck_id,
                 'date': str(utc_date),
             })
-            new_stat = UserStats(
+            new_stat = UserStatsV2(
                 id=stats_id,
                 user_id=record.user_id,
                 deck_id=deck_id,
