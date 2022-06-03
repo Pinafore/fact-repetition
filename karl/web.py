@@ -19,7 +19,7 @@ from karl.schemas import UserStatsSchema, RankingSchema, LeaderboardSchema, \
     ScheduleResponseSchema, ScheduleRequestSchema, UpdateRequestSchema, \
     Visualization, \
     ScheduleRequestV2, UpdateRequestV2
-from karl.models import User, UserStats, Parameters, Record, \
+from karl.models import User, UserStats, UserStatsV2, Parameters, Record, \
     UserCardFeatureVector, UserFeatureVector, CardFeatureVector, \
     UserCardSnapshot, UserSnapshot, CardSnapshot, \
     StudyRecord, TestRecord, ScheduleRequest,\
@@ -88,6 +88,7 @@ def reset_user(
     session.query(Leitner).filter(Leitner.user_id == user_id).delete()
     session.query(SM2).filter(SM2.user_id == user_id).delete()
     session.query(UserStats).filter(UserStats.user_id == user_id).delete()
+    session.query(UserStatsV2).filter(UserStatsV2.user_id == user_id).delete()
     session.query(User).filter(User.id == user_id).delete()
     session.commit()
     session.close()
