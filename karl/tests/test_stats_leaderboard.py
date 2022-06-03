@@ -11,6 +11,10 @@ from sqlalchemy.orm import Session
 from karl.models import User, Record
 from karl.schemas import UserStatsSchema
 from karl.db.session import SessionLocal
+from karl.config import settings
+
+
+URL = f'{settings.API_URL}/api/karl'
 
 
 def get_session():
@@ -132,22 +136,21 @@ def test_user_stats():
             date_end=date_end,
         ).__dict__
 
-        URL = 'http://127.0.0.1:8000/api/karl'
         r = requests.get(f'{URL}/get_user_stats?user_id={user_id}&date_start={date_start}&date_end={date_end}&min_studied={min_studied}')
         user_stats_fast = json.loads(r.text)
 
-        date_end = parse_date(date_end).date() - timedelta(days=1)
-        date_end = date_end.strftime('%Y-%m-%dT%H:%M:%S%z')
+        # date_end = parse_date(date_end).date() - timedelta(days=1)
+        # date_end = date_end.strftime('%Y-%m-%dT%H:%M:%S%z')
 
-        URL = 'http://0.tcp.ngrok.io:10081/api/karl'
-        r = requests.get(f'{URL}/get_user_stats?user_id={user_id}&date_start={date_start}&date_end={date_end}&min_studied={min_studied}')
-        user_stats_stable = json.loads(r.text)
+        # r = requests.get(f'{URL}/get_user_stats?user_id={user_id}&date_start={date_start}&date_end={date_end}&min_studied={min_studied}')
+        # user_stats_stable = json.loads(r.text)
 
         for key in user_stats_slow.keys():
             a = user_stats_slow[key]
             b = user_stats_fast[key]
-            c = user_stats_stable[key]
-            print(a == b, b == c, key, a, b, c)
+            # c = user_stats_stable[key]
+            # print(a == b, b == c, key, a, b, c)
+            print(f'{"pass" if a == b else "fail"} @ {key}, slow: {a}, fast: {b}')
 
     print()
 
@@ -172,7 +175,6 @@ def test_leaderboard():
 
         t0 = datetime.now()
 
-        URL = 'http://127.0.0.1:8000/api/karl'
         # r = requests.get(f'{URL}/leaderboard?user_id={user_id}&date_star={date_start}&date_end={date_end}&min_studied={min_studied}&rank_type={rank_type}')
         r = requests.get(f'{URL}/leaderboard/?rank_type=total_seen&limit=10&min_studied=10&user_id=44&date_start=2020-12-15+00%3A00%3A00-05%3A00')
         r = requests.get(f'{URL}/leaderboard/?rank_type=total_seen&limit=10&min_studied=10&user_id=44')
@@ -181,7 +183,6 @@ def test_leaderboard():
 
         t1 = datetime.now()
 
-        URL = 'http://0.tcp.ngrok.io:10081/api/karl'
         # r = requests.get(f'{URL}/leaderboard?user_id={user_id}&date_star={date_start}&date_end={date_end}&min_studied={min_studied}&rank_type={rank_type}')
         # r = requests.get(f'{URL}/leaderboard?rank_type=total_seen&limit=10&min_studied=10&user_id=44')
         r = requests.get(f'{URL}/leaderboard/?rank_type=total_seen&limit=10&min_studied=10&user_id=44&date_start=2020-12-15+00%3A00%3A00-05%3A00')
