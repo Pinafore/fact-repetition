@@ -19,5 +19,5 @@ class BinaryNumpy(types.TypeDecorator):
 
 
 class Embedding(Base):
-    id = Column(String, ForeignKey(Card.id), primary_key=True, index=True)
+    id = Column(String, ForeignKey(Card.id, ondelete='CASCADE'), primary_key=True, index=True)
     embedding = Column(BinaryNumpy, nullable=False)

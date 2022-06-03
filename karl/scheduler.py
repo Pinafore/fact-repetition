@@ -15,11 +15,11 @@ from karl.schemas import ScheduleRequestSchema, UpdateRequestSchema, ScheduleRes
     ScheduleRequestV2, UpdateRequestV2, KarlFactV2
 from karl.schemas import ParametersSchema
 from karl.schemas import VUser, VCard, VUserCard
-from karl.models import User, Card, Parameters, UserStats, UserStatsV2,\
+from karl.models import User, Card, Parameters, UserStatsV2,\
     CurrUserCardFeatureVector, CurrUserFeatureVector, CurrCardFeatureVector,\
     SimUserCardFeatureVector, SimUserFeatureVector, SimCardFeatureVector,\
     UserCardSnapshot, UserSnapshot, CardSnapshot,\
-    Record, StudyRecord, TestRecord, ScheduleRequest
+    StudyRecord, TestRecord, ScheduleRequest
 
 from karl.retention_hf import vectors_to_features
 from karl.db.session import SessionLocal, engine
@@ -103,83 +103,6 @@ class KARLScheduler:
             for i, card in enumerate(cards)
         ]
         return scores, profile
-
-    def schedule(
-        self,
-        schedule_requests: List[ScheduleRequestSchema],
-        date: datetime,
-        rationale=False,
-        details=False,
-    ) -> ScheduleResponseSchema:
-        session = SessionLocal()
-        # get user and cards
-        user = self.get_user(schedule_requests[0].user_id, session)
-        cards = [self.get_card(request, session) for request in schedule_requests]
-
-        # score cards
-        scores, profile = self.score_user_cards(user, cards, date, session)
-
-        # computer total score
-        for i, _ in enumerate(scores):
-            scores[i]['sum'] = sum([
-                user.parameters.__dict__.get(key, 0) * value
-                for key, value in scores[i].items()
-            ])
-
-        # sort cards
-        order = np.argsort([s['sum'] for s in scores]).tolist()
-        card_selected = cards[order[0]]
-
-        # determine if is new card
-        if session.query(Record).\
-                filter(Record.user_id == user.id).\
-                filter(Record.card_id == card_selected.id).count() > 0:
-            is_new_fact = False
-        else:
-            is_new_fact = True
-
-        # generate record.id (debug_id)
-        record_id = json.dumps({
-            'user_id': user.id,
-            'card_id': card_selected.id,
-            'date': str(date.replace(tzinfo=pytz.UTC)),
-        })
-
-        # store record with front_end_id empty @ debug_id
-        record = Record(
-            id=record_id,
-            user_id=user.id,
-            card_id=card_selected.id,
-            deck_id=card_selected.deck_id,
-            is_new_fact=is_new_fact,
-            date=date,
-        )
-        session.add(record)
-        session.commit()
-
-        # store feature vectors @ debug_id
-        self.save_feature_vectors(record.id, user.id, card_selected.id, date)
-
-        rationale = self.get_rationale(
-            record_id=record_id,
-            user=user,
-            cards=cards,
-            date=date,
-            scores=scores,
-            order=order,
-        )
-
-        # session.commit()
-        session.close()
-
-        # return
-        return ScheduleResponseSchema(
-            order=order,
-            debug_id=record_id,
-            scores=scores,
-            rationale=rationale,
-            profile=profile,
-        )
 
     def schedule_v2(
         self,
@@ -703,48 +626,6 @@ class KARLScheduler:
             ))
         session.commit()
         session.close()
-
-    def update(self, request: UpdateRequestSchema, date: datetime) -> dict:
-        session = SessionLocal()
-        t0 = datetime.now(pytz.utc)
-
-        # read debug_id from request, find corresponding record
-        record = session.query(Record).get(request.debug_id)
-
-        if record is None:
-            return {}
-
-        # add front_end_id to record, response, elapsed_times to record
-        record.date = date
-        record.front_end_id = request.history_id
-        record.label = request.label
-        record.elapsed_milliseconds_text = request.elapsed_milliseconds_text
-        record.elapsed_milliseconds_answer = request.elapsed_milliseconds_answer
-        t1 = datetime.now(pytz.utc)
-        session.commit()
-
-        # update user stats
-        utc_date = date.astimezone(pytz.utc).date()
-        self.update_user_stats(record, deck_id='all', utc_date=utc_date, session=session)
-        t2 = datetime.now(pytz.utc)
-        if record.deck_id is not None:
-            self.update_user_stats(record, deck_id=record.deck_id, utc_date=utc_date, session=session)
-        t3 = datetime.now(pytz.utc)
-
-        # update current features
-        # includes leitner and sm2 updates
-        self.update_feature_vectors(record, date, session)
-        session.commit()
-        session.close()
-
-        t4 = datetime.now(pytz.utc)
-
-        return {
-            'update record': (t1 - t0).total_seconds(),
-            'update user_stats all': (t2 - t1).total_seconds(),
-            'update user_stats deck': (t3 - t2).total_seconds(),
-            'update feature vectors': (t4 - t3).total_seconds(),
-        }
 
     def update_v2_test(self, request: UpdateRequestV2, date: datetime) -> dict:
         session = SessionLocal()

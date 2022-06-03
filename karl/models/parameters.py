@@ -6,7 +6,7 @@ from karl.models import User
 
 
 class Parameters(Base):
-    id = Column(String, ForeignKey(User.id), primary_key=True, index=True)
+    id = Column(String, ForeignKey(User.id, ondelete='CASCADE'), primary_key=True, index=True)
     repetition_model = Column(String, nullable=False)
     card_embedding = Column(Float, default=1, nullable=False)
     recall = Column(Float, default=1, nullable=False)

@@ -5,7 +5,7 @@ from karl.models import User, Card
 
 
 class Leitner(Base):
-    user_id = Column(String, ForeignKey(User.id), primary_key=True, index=True)
-    card_id = Column(String, ForeignKey(Card.id), primary_key=True, index=True)
+    user_id = Column(String, ForeignKey(User.id, ondelete='CASCADE'), primary_key=True, index=True)
+    card_id = Column(String, ForeignKey(Card.id, ondelete='CASCADE'), primary_key=True, index=True)
     box = Column(Integer, nullable=False)
     scheduled_date = Column(TIMESTAMP(timezone=True))

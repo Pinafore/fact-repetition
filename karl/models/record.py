@@ -7,8 +7,8 @@ from karl.models import User, Card
 
 class Record(Base):
     id = Column(String, primary_key=True, index=True)
-    user_id = Column(String, ForeignKey(User.id), index=True)
-    card_id = Column(String, ForeignKey(Card.id), index=True)
+    user_id = Column(String, ForeignKey(User.id, ondelete='CASCADE'), index=True)
+    card_id = Column(String, ForeignKey(Card.id, ondelete='CASCADE'), index=True)
     front_end_id = Column(String, index=True)
     deck_id = Column(String)
     response = Column(Boolean)
@@ -33,10 +33,10 @@ class ScheduleRequest(Base):
 
 class StudyRecord(Base):
     id = Column(String, primary_key=True, index=True)  # history_id / front_end_id provided by Matthew
-    debug_id = Column(String, ForeignKey(ScheduleRequest.id), index=True)
+    debug_id = Column(String, ForeignKey(ScheduleRequest.id, ondelete='CASCADE'), index=True)
     studyset_id = Column(String, index=True)  # session id
-    user_id = Column(String, ForeignKey(User.id), index=True)
-    card_id = Column(String, ForeignKey(Card.id), index=True)
+    user_id = Column(String, ForeignKey(User.id, ondelete='CASCADE'), index=True)
+    card_id = Column(String, ForeignKey(Card.id, ondelete='CASCADE'), index=True)
     deck_id = Column(String)
     label = Column(Boolean)
     date = Column(TIMESTAMP(timezone=True))
@@ -54,8 +54,8 @@ class TestRecord(Base):
     id = Column(String, primary_key=True, index=True)  # history_id / front_end_id provided by Matthew
     # debug_id = Column(String, ForeignKey(ScheduleRequest.id), index=True)  # test model doesn't create schedule requests, thus no schedule_request_id / debug_id
     studyset_id = Column(String, index=True)  # session id
-    user_id = Column(String, ForeignKey(User.id), index=True)
-    card_id = Column(String, ForeignKey(Card.id), index=True)
+    user_id = Column(String, ForeignKey(User.id, ondelete='CASCADE'), index=True)
+    card_id = Column(String, ForeignKey(Card.id, ondelete='CASCADE'), index=True)
     deck_id = Column(String)
     label = Column(Boolean)
     date = Column(TIMESTAMP(timezone=True))
