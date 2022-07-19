@@ -1,6 +1,6 @@
 CODE_DIR = '/home/ubuntu/scheduler'
 DATA_DIR = f'{CODE_DIR}/data'
-API_URL = 'http://0.0.0.0:8000'
+API_URL = 'http://127.0.0.1:4000'
 MODEL_API_URL = 'http://0.0.0.0:8001'
 SQLALCHEMY_DATABASE_URL = 'postgresql+psycopg2://shifeng:fengshi824@localhost:5432/karl-prod'
 STABLE_DATABASE_URL = 'postgresql+psycopg2://shifeng@localhost:5433/karl-prod'

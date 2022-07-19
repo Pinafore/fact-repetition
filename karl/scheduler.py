@@ -653,7 +653,7 @@ class KARLScheduler:
         t0 = datetime.now(pytz.utc)
 
         if request.test_mode:
-            update_v2_test(request, date)
+            self.update_v2_test(request, date)
             return
 
         v_usercard = session.query(CurrUserCardFeatureVector).get((request.user_id, request.fact_id))
