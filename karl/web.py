@@ -26,7 +26,7 @@ from karl.models import User, UserStats, UserStatsV2, Parameters, Record, \
     CurrUserFeatureVector, CurrUserCardFeatureVector, \
     Leitner, SM2
 
-from karl.scheduler import KARLScheduler
+from karl.scheduler_v2 import KARLScheduler
 from karl.db.session import SessionLocal, engine
 from karl.config import settings
 from karl.retention_hf import get_retention_features_df
