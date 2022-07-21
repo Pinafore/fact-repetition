@@ -1,3 +1,9 @@
+'''
+Test the following:
+1. schedule request with empty list of facts
+2. schedule once, study multiple cards
+3. test mode updates
+'''
 import json
 import pickle
 import random
@@ -119,6 +125,36 @@ for nth_day in range(n_days):
             profile[key].append(value)
 
         seconds_offset += 20
+
+
+#### test mode
+
+for nth_fact in range(n_facts_per_day):
+    index = schedule_response['order'][nth_fact]
+    fact_id = schedule_request.facts[index].fact_id
+
+    # randomly sample user response
+    response = bool(np.random.binomial(1, 0.5))
+
+    update_request = UpdateRequestV2(
+        user_id=user_id,
+        fact_id=schedule_request.facts[index].fact_id,
+        label=response,
+        deck_name='dummy',
+        deck_id=1000000,
+        elapsed_milliseconds_text=10000,
+        elapsed_milliseconds_answer=10000,
+        debug_id=debug_id,
+        history_id=f'sim_history_test_{nth_fact}',
+        studyset_id='dummy_studyset_test',
+        test_mode=True,
+    )
+    update_response = json.loads(
+        requests.post(
+            f'{URL}/update_v2',
+            data=json.dumps(update_request.dict()),
+        ).text
+    )
 
 print()
 print()
