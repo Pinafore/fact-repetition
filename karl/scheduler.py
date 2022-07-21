@@ -104,22 +104,32 @@ class KARLScheduler:
         ]
         return scores, profile
 
-    def schedule_v2(
+    def schedule(
         self,
         schedule_request: ScheduleRequestV2,
         date: datetime,
     ) -> ScheduleResponseSchema:
         session = SessionLocal()
+
+        # schedule_request_id === debug_id
+        schedule_request_id = json.dumps({
+            'user_id': schedule_request.user_id,
+            'repetition_model': schedule_request.repetition_model,
+            'date': str(date.replace(tzinfo=pytz.UTC)),
+            # TODO store more information, maybe not here but in the table
+        })
+
+        if len(schedule_request.facts) == 0:
+            # TODO do we store a record anyways?
+            return ScheduleResponseSchema(
+                debug_id=schedule_request_id,
+                order=[],
+                scores=[],
+            )
+
         # get user and cards
         user = self.get_user(schedule_request.user_id, session)
         cards = [self.get_card(fact, session) for fact in schedule_request.facts]
-
-        # schedule_request_id is also debug_id
-        schedule_request_id = json.dumps({
-            'user_id': user.id,
-            'repetition_model': schedule_request.repetition_model,
-            'date': str(date.replace(tzinfo=pytz.UTC)),
-        })
 
         # score cards
         scores, profile = self.score_user_cards(user, cards, date, session)

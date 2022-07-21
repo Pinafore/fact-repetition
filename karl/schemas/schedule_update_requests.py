@@ -10,10 +10,17 @@ class KarlFactV2(BaseModel):
     category: Optional[str] = None
 
 
+class RecallTarget(BaseModel):
+    target: float
+    target_window_lowest: float
+    target_window_highest: float
+
+
 class ScheduleRequestV2(BaseModel):
     user_id: str
-    facts: List[KarlFactV2]
+    facts: List[KarlFactV2]  # this list can be empty
     repetition_model: str
+    recall_target: RecallTarget
 
 
 class UpdateRequestV2(BaseModel):

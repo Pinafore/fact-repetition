@@ -476,37 +476,13 @@ def get_leaderboard(
     )
 
 
-@app.post('/api/karl/schedule')
-def schedule(
-    schedule_requests: List[ScheduleRequestSchema],
-) -> ScheduleResponseSchema:
-    if schedule_requests[0].date is not None:
-        date = parse_date(schedule_requests[0].date)
-    else:
-        date = datetime.now(pytz.utc)
-    schedule_response = scheduler.schedule(schedule_requests, date)
-    return schedule_response
-
 @app.post('/api/karl/schedule_v2')
 def schedule_v2(
     schedule_request: ScheduleRequestV2,
 ) -> ScheduleResponseSchema:
     date = datetime.now(pytz.utc)
-    schedule_response = scheduler.schedule_v2(schedule_request, date)
+    schedule_response = scheduler.schedule(schedule_request, date)
     return schedule_response
-
-
-@app.post('/api/karl/update')
-def update(
-    update_requests: List[UpdateRequestSchema],
-) -> dict:
-    update_request = update_requests[0]  # only accept one request. for backward compatability
-    if update_request.date is not None:
-        date = parse_date(update_request.date)
-    else:
-        date = datetime.now(pytz.utc)
-    profile = scheduler.update(update_request, date)
-    return {'profile': profile}
 
 
 @app.post('/api/karl/update_v2')
