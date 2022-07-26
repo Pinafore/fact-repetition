@@ -30,4 +30,4 @@ For example, to keep the development branch DB up to date with master branch.
 
 ## Figures
 1. For figures you might need `vega-lite`. Install with conda: `conda install -c conda-forge vega vega-lite vega-embed vega-lite-cli`.
-2. You should run `npm install -g` for vega, vega-lite, vega-embed, and vega-cli.
+2. Note, can also be done by doing `npm install -g` for vega, vega-lite, vega-embed, and vega-cli.
