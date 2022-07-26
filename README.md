@@ -6,7 +6,7 @@ Make sure to use `git-lfs` to pull the model checkpoints too alongside the code.
 1. If you are using `conda`, consider creating a new environment, and make sure
    to run `conda install pip` so that the following dependencies are installed
    for your environment.
-2. Install dependencies with `pip install -r requirements.txt`.
+2. Install dependencies with `poetry install`.
 3. Install Spacy module with `python -m spacy download en_core_web_lg`.
 
 ## PostgreSQL server
@@ -30,3 +30,4 @@ For example, to keep the development branch DB up to date with master branch.
 
 ## Figures
 1. For figures you might need `vega-lite`. Install with conda: `conda install -c conda-forge vega vega-lite vega-embed vega-lite-cli`.
+2. You should run `npm install -g` for vega, vega-lite, vega-embed, and vega-cli.

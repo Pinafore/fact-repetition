@@ -23,6 +23,7 @@ SQLAlchemy = "^1.4.36"
 altair = "^4.2.0"
 uvicorn = "^0.17.6"
 alembic = "^1.7.7"
+numpy = "^1.23.1"
 
 [tool.poetry.dev-dependencies]
 
