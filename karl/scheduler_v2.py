@@ -108,8 +108,6 @@ class KARLScheduler:
         schedule_request: ScheduleRequestV2,
         date: datetime,
     ) -> ScheduleResponseSchema:
-        session = SessionLocal()
-
         # schedule_request_id === debug_id
         schedule_request_id = json.dumps({
             'user_id': schedule_request.user_id,
@@ -118,6 +116,7 @@ class KARLScheduler:
             # TODO store more information, maybe not here but in the table
         })
 
+        session = SessionLocal()
         # store schedule request
         session.add(
             ScheduleRequest(
@@ -129,6 +128,7 @@ class KARLScheduler:
             )
         )
         session.commit()
+        session.close()
 
         if len(schedule_request.facts) == 0:
             return ScheduleResponseSchema(
@@ -137,6 +137,7 @@ class KARLScheduler:
                 scores=[],
             )
 
+        session = SessionLocal()
         # get user and cards
         user = self.get_user(schedule_request.user_id, session)
         cards = [self.get_card(fact, session) for fact in schedule_request.facts]
@@ -396,33 +397,30 @@ class KARLScheduler:
             # NOTE distance in days, can be negative
             return (v_usercard.sm2_scheduled_date - date).total_seconds() / 86400
 
-    def update_v2_test(self, request: UpdateRequestV2, date: datetime) -> dict:
-        session = SessionLocal()
-        session.add(
-            StudyRecord(
-                id=request.history_id,
-                studyset_id=request.studyset_id,
-                user_id=request.user_id,
-                card_id=request.fact_id,
-                deck_id=request.deck_id,
-                label=request.label,
-                date=date,
-                elapsed_milliseconds_text=request.elapsed_milliseconds_text,
-                elapsed_milliseconds_answer=request.elapsed_milliseconds_answer,
-                count=0,  # TODO
-                count_session=0,  # TODO
-            )
-        )
-        session.commit()
-        session.close()
-
-
-    def update_v2(self, request: UpdateRequestV2, date: datetime) -> dict:
+    def update(self, request: UpdateRequestV2, date: datetime) -> dict:
         session = SessionLocal()
         t0 = datetime.now(pytz.utc)
 
+        card = self.get_card(request.fact, session)
+
         if request.test_mode:
-            self.update_v2_test(request, date)
+            session.add(
+                TestRecord(
+                    id=request.history_id,
+                    studyset_id=request.studyset_id,
+                    user_id=request.user_id,
+                    card_id=request.fact_id,
+                    deck_id=request.deck_id,
+                    label=request.label,
+                    date=date,
+                    elapsed_milliseconds_text=request.elapsed_milliseconds_text,
+                    elapsed_milliseconds_answer=request.elapsed_milliseconds_answer,
+                    count=0,  # TODO
+                    count_session=0,  # TODO
+                )
+            )
+            session.commit()
+            session.close()
             return
 
         v_usercard = session.query(CurrUserCardFeatureVector).get((request.user_id, request.fact_id))
@@ -619,9 +617,9 @@ class KARLScheduler:
             v_card = session.query(SimCardFeatureVector).get(record.card_id)
             v_usercard = session.query(SimUserCardFeatureVector).get((record.user_id, record.card_id))
         else:
-            v_user = session.query(CurrUserFeatureVector).get(record.user_id)
-            v_card = session.query(CurrCardFeatureVector).get(record.card_id)
-            v_usercard = session.query(CurrUserCardFeatureVector).get((record.user_id, record.card_id))
+            v_user = self.get_curr_user_vector(record.user_id)
+            v_card = self.get_curr_card_vector(record.card_id)
+            v_usercard = self.get_curr_usercard_vector(record.user_id, record.card_id)
 
         delta_usercard = None
         if v_usercard.previous_study_date is not None:

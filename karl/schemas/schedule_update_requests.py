@@ -35,6 +35,7 @@ class UpdateRequestV2(BaseModel):
     studyset_id: str
     debug_id: Optional[str] # aka schedule_request_id, n/a in test updates
     test_mode: bool
+    fact: KarlFactV2
 
 
 class ScheduleRequestSchema(BaseModel):

@@ -490,7 +490,7 @@ def update_v2(
     update_request: UpdateRequestV2,
 ) -> dict:
     date = datetime.now(pytz.utc)
-    profile = scheduler.update_v2(update_request, date)
+    profile = scheduler.update(update_request, date)
     return {'profile': profile}
 
 
