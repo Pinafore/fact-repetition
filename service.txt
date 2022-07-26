@@ -1,0 +1,24 @@
+sudo systemctl status karl_scheduler
+sudo systemctl start karl_scheduler
+sudo systemctl enable karl_scheduler
+sudo systemctl daemon-reload
+cd
+sudo vim karl_scheduler.service
+
+/etc/systemd/system/karl_scheduler.service
+
+
+[Unit]
+Description=KARL scheduler
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/scheduler
+LimitNOFILE=4096
+ExecStart=/home/ubuntu/.poetry/bin/poetry run uvicorn karl.web:app --log-level info --host 0.0.0.0
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
