@@ -15,18 +15,15 @@ from concurrent.futures import ProcessPoolExecutor
 # from cachetools import cached, TTLCache
 
 from karl.schemas import UserStatsSchema, RankingSchema, LeaderboardSchema, \
-    ParametersSchema, \
-    ScheduleResponseSchema, ScheduleRequestSchema, UpdateRequestSchema, \
-    Visualization, \
-    ScheduleRequestV2, UpdateRequestV2
-from karl.models import User, UserStats, UserStatsV2, Parameters, Record, \
+    ParametersSchema, ScheduleResponseSchema, Visualization, \
+    ScheduleRequestSchema, UpdateRequestSchema
+from karl.models import User, UserStats, Parameters, Record, \
     UserCardFeatureVector, UserFeatureVector, CardFeatureVector, \
     UserCardSnapshot, UserSnapshot, CardSnapshot, \
     StudyRecord, TestRecord, ScheduleRequest,\
-    CurrUserFeatureVector, CurrUserCardFeatureVector, \
     Leitner, SM2
 
-from karl.scheduler_v2 import KARLScheduler
+from karl.scheduler import KARLScheduler
 from karl.db.session import SessionLocal, engine
 from karl.config import settings
 from karl.retention_hf import get_retention_features_df
@@ -478,7 +475,7 @@ def get_leaderboard(
 
 @app.post('/api/karl/schedule_v2')
 def schedule_v2(
-    schedule_request: ScheduleRequestV2,
+    schedule_request: ScheduleRequestSchema,
 ) -> ScheduleResponseSchema:
     date = datetime.now(pytz.utc)
     schedule_response = scheduler.schedule(schedule_request, date)
@@ -487,7 +484,7 @@ def schedule_v2(
 
 @app.post('/api/karl/update_v2')
 def update_v2(
-    update_request: UpdateRequestV2,
+    update_request: UpdateRequestSchema,
 ) -> dict:
     date = datetime.now(pytz.utc)
     profile = scheduler.update(update_request, date)

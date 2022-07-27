@@ -6,54 +6,6 @@ from karl.models import User, Card, Record, ScheduleRequest
 
 
 class UserCardFeatureVector(Base):
-    id = Column(String, ForeignKey(Record.id, ondelete='CASCADE'), primary_key=True, index=True)
-    user_id = Column(String, ForeignKey(User.id, ondelete='CASCADE'), index=True)
-    card_id = Column(String, ForeignKey(Card.id, ondelete='CASCADE'), index=True)
-    date = Column(TIMESTAMP(timezone=True), index=True)
-    count_positive = Column(Integer)
-    count_negative = Column(Integer)
-    count = Column(Integer)
-    delta = Column(Integer)
-    previous_delta = Column(Integer)
-    previous_study_date = Column(TIMESTAMP(timezone=True))
-    previous_study_response = Column(Boolean)
-    leitner_box = Column(Integer)
-    leitner_scheduled_date = Column(TIMESTAMP(timezone=True))
-    sm2_efactor = Column(Float)
-    sm2_interval = Column(Float)
-    sm2_repetition = Column(Integer)
-    sm2_scheduled_date = Column(TIMESTAMP(timezone=True))
-    correct_on_first_try = Column(Boolean)
-
-
-class UserFeatureVector(Base):
-    id = Column(String, ForeignKey(Record.id, ondelete='CASCADE'), primary_key=True, index=True)
-    user_id = Column(String, ForeignKey(User.id, ondelete='CASCADE'), index=True)
-    date = Column(TIMESTAMP(timezone=True), index=True)
-    count_positive = Column(Integer)
-    count_negative = Column(Integer)
-    count = Column(Integer)
-    delta = Column(Integer)
-    previous_delta = Column(Integer)
-    previous_study_date = Column(TIMESTAMP(timezone=True))
-    previous_study_response = Column(Boolean)
-    parameters = Column(JSONB)
-
-
-class CardFeatureVector(Base):
-    id = Column(String, ForeignKey(Record.id, ondelete='CASCADE'), primary_key=True, index=True)
-    card_id = Column(String, ForeignKey(Card.id, ondelete='CASCADE'), index=True)
-    date = Column(TIMESTAMP(timezone=True), index=True)
-    count_positive = Column(Integer)
-    count_negative = Column(Integer)
-    count = Column(Integer)
-    delta = Column(Integer)
-    previous_delta = Column(Integer)
-    previous_study_date = Column(TIMESTAMP(timezone=True))
-    previous_study_response = Column(Boolean)
-
-
-class CurrUserCardFeatureVector(Base):
     user_id = Column(String, ForeignKey(User.id, ondelete='CASCADE'), primary_key=True, index=True)
     card_id = Column(String, ForeignKey(Card.id, ondelete='CASCADE'), primary_key=True, index=True)
     count_positive = Column(Integer)
@@ -81,7 +33,7 @@ class CurrUserCardFeatureVector(Base):
     # v_card = relationship()
 
 
-class CurrUserFeatureVector(Base):
+class UserFeatureVector(Base):
     user_id = Column(String, ForeignKey(User.id, ondelete='CASCADE'), primary_key=True, index=True)
     count_positive = Column(Integer)
     count_negative = Column(Integer)
@@ -99,7 +51,7 @@ class CurrUserFeatureVector(Base):
     schedule_request_id = Column(String)
 
 
-class CurrCardFeatureVector(Base):
+class CardFeatureVector(Base):
     card_id = Column(String, ForeignKey(Card.id, ondelete='CASCADE'), primary_key=True, index=True)
     count_positive = Column(Integer)
     count_negative = Column(Integer)

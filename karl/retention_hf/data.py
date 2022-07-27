@@ -20,7 +20,7 @@ from transformers import DistilBertTokenizerFast
 
 from karl.db.session import SessionLocal, engine
 from karl.config import settings
-from karl.models import User, UserCardSnapshot, UserSnapshot, CardSnapshot
+from karl.models import User, Card, UserCardSnapshot, UserSnapshot, CardSnapshot
 from karl.schemas import VUserCard, VUser, VCard
 
 
@@ -170,11 +170,19 @@ def get_retention_features_df(overwrite: bool = False):
             features.extend(f1)
             labels.extend(f2)
 
+        card_to_deck_id = {}
+        card_to_deck_name = {}
+        for card in session.query(Card):
+            card_to_deck_id[card.id] = card.deck_id
+            card_to_deck_name[card.id] = card.deck_name
+
         df = []
         for record_id, feature, label in zip(record_ids, features, labels):
             row = feature.__dict__
             row['response'] = label
             row['record_id'] = record_id
+            row['deck_id'] = card_to_deck_id.get(row['card_id'], None)
+            row['deck_name'] = card_to_deck_name.get(row['card_id'], None)
             df.append(row)
 
         df = pd.DataFrame(df)

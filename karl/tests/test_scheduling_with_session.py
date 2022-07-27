@@ -12,8 +12,8 @@ import numpy as np
 from datetime import timedelta
 from dateutil.parser import parse as parse_date
 
-from karl.schemas import ScheduleRequestSchema, UpdateRequestSchema, ParametersSchema, RecallTarget
-from karl.schemas import KarlFactV2, ScheduleRequestV2, UpdateRequestV2
+from karl.schemas import ParametersSchema, RecallTarget
+from karl.schemas import KarlFactSchema, ScheduleRequestSchema, UpdateRequestSchema
 from karl.config import settings
 
 
@@ -31,7 +31,7 @@ requests.get(f'{URL}/reset_user?user_id={user_id}')
 requests.put(f'{URL}/set_params?user_id={user_id}', data=json.dumps(ParametersSchema().dict()))
 
 # schedule requests with empty list of facts
-schedule_request = ScheduleRequestV2(
+schedule_request = ScheduleRequestSchema(
     facts=[],
     repetition_model='karl',
     user_id=user_id,
@@ -56,7 +56,7 @@ for nth_day in range(n_days):
 
     # randomly sample n_facts_per_query
     facts = [
-        KarlFactV2(
+        KarlFactSchema(
             fact_id=fact['fact_id'] + 1000000,
             text=fact['text'],
             answer=fact['answer'],
@@ -68,7 +68,7 @@ for nth_day in range(n_days):
     ]
 
     # schedule request for the day
-    schedule_request = ScheduleRequestV2(
+    schedule_request = ScheduleRequestSchema(
         facts=facts,
         repetition_model='karl',
         user_id=user_id,
@@ -99,7 +99,7 @@ for nth_day in range(n_days):
         # randomly sample user response
         response = bool(np.random.binomial(1, 0.5))
 
-        update_request = UpdateRequestV2(
+        update_request = UpdateRequestSchema(
             user_id=user_id,
             fact_id=schedule_request.facts[index].fact_id,
             label=response,
@@ -111,6 +111,7 @@ for nth_day in range(n_days):
             history_id=f'sim_history_{nth_day}_{nth_fact}',
             studyset_id='dummy_studyset_' + debug_id,
             test_mode=False,
+            fact=schedule_request.facts[index],
         )
         update_response = json.loads(
             requests.post(
@@ -136,7 +137,7 @@ for nth_fact in range(n_facts_per_day):
     # randomly sample user response
     response = bool(np.random.binomial(1, 0.5))
 
-    update_request = UpdateRequestV2(
+    update_request = UpdateRequestSchema(
         user_id=user_id,
         fact_id=schedule_request.facts[index].fact_id,
         label=response,
