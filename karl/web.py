@@ -17,7 +17,7 @@ from concurrent.futures import ProcessPoolExecutor
 from karl.schemas import UserStatsSchema, RankingSchema, LeaderboardSchema, \
     ParametersSchema, ScheduleResponseSchema, Visualization, \
     ScheduleRequestSchema, UpdateRequestSchema
-from karl.models import User, UserStatsV2, Parameters, Record, \
+from karl.models import User, UserStatsV2, Parameters, \
     UserCardFeatureVector, UserFeatureVector, CardFeatureVector, \
     UserCardSnapshot, UserSnapshot, CardSnapshot, \
     StudyRecord, TestRecord, ScheduleRequest,\
