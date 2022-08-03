@@ -2,7 +2,7 @@ from sqlalchemy import Column, ForeignKey, Integer, Float, Boolean, String, TIME
 from sqlalchemy.dialects.postgresql import JSONB
 
 from karl.db.base_class import Base
-from karl.models import User, Card, Record, ScheduleRequest
+from karl.models import User, Card, ScheduleRequest
 
 
 class UserCardFeatureVector(Base):

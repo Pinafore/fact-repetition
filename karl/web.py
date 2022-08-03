@@ -17,7 +17,7 @@ from concurrent.futures import ProcessPoolExecutor
 from karl.schemas import UserStatsSchema, RankingSchema, LeaderboardSchema, \
     ParametersSchema, ScheduleResponseSchema, Visualization, \
     ScheduleRequestSchema, UpdateRequestSchema
-from karl.models import User, UserStats, Parameters, Record, \
+from karl.models import User, UserStatsV2, Parameters, Record, \
     UserCardFeatureVector, UserFeatureVector, CardFeatureVector, \
     UserCardSnapshot, UserSnapshot, CardSnapshot, \
     StudyRecord, TestRecord, ScheduleRequest,\
@@ -270,19 +270,19 @@ def _get_user_stats(
         deck_id = 'all'
 
     # last record before start date
-    before = session.query(UserStats).\
-        filter(UserStats.user_id == user_id).\
-        filter(UserStats.deck_id == deck_id).\
-        filter(UserStats.date < date_start).\
-        order_by(UserStats.date.desc()).\
+    before = session.query(UserStatsV2).\
+        filter(UserStatsV2.user_id == user_id).\
+        filter(UserStatsV2.deck_id == deck_id).\
+        filter(UserStatsV2.date < date_start).\
+        order_by(UserStatsV2.date.desc()).\
         first()
 
     # last record no later than end date
-    after = session.query(UserStats).\
-        filter(UserStats.user_id == user_id).\
-        filter(UserStats.deck_id == deck_id).\
-        filter(UserStats.date < date_end).\
-        order_by(UserStats.date.desc()).\
+    after = session.query(UserStatsV2).\
+        filter(UserStatsV2.user_id == user_id).\
+        filter(UserStatsV2.deck_id == deck_id).\
+        filter(UserStatsV2.date < date_end).\
+        order_by(UserStatsV2.date.desc()).\
         first()
 
     if after is None or after.date < date_start:
@@ -297,7 +297,7 @@ def _get_user_stats(
         )
 
     if before is None:
-        before = UserStats(
+        before = UserStatsV2(
             id=json.dumps({
                 'user_id': user_id,
                 'deck_id': deck_id,
@@ -357,11 +357,11 @@ def _get_user_stats(
         n_days_studied = 0
         prev_n_cards_total = before.n_new_cards_total + before.n_old_cards_total
         # go through user stats within the interval
-        for user_stat in session.query(UserStats).\
-                filter(UserStats.user_id == user_id).\
-                filter(UserStats.deck_id == deck_id).\
-                filter(UserStats.date >= date_start, UserStats.date < date_end).\
-                order_by(UserStats.date):
+        for user_stat in session.query(UserStatsV2).\
+                filter(UserStatsV2.user_id == user_id).\
+                filter(UserStatsV2.deck_id == deck_id).\
+                filter(UserStatsV2.date >= date_start, UserStats.date < date_end).\
+                order_by(UserStatsV2.date):
             curr_n_cards_total = user_stat.n_new_cards_total + user_stat.n_old_cards_total
             if curr_n_cards_total - prev_n_cards_total >= min_studied:
                 n_days_studied += 1
