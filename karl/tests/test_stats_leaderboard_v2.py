@@ -114,9 +114,9 @@ def test_user_stats():
         user_id = random.choice(user_ids)
         user = session.query(User).get(user_id)
 
-        date_range = user.records[-1].date - user.records[0].date
-        date_start = user.records[0].date + date_range * random.uniform(0, 0.3)
-        date_end = user.records[0].date + date_range * random.uniform(0.7, 1.0)
+        date_range = user.study_records[-1].date - user.study_records[0].date
+        date_start = user.study_records[0].date + date_range * random.uniform(0, 0.3)
+        date_end = user.study_records[0].date + date_range * random.uniform(0.7, 1.0)
         date_start = date_start.date().strftime('%Y-%m-%dT%H:%M:%S%z')
         date_end = date_end.date().strftime('%Y-%m-%dT%H:%M:%S%z')
 
