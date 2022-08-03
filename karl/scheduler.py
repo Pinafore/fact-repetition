@@ -17,7 +17,6 @@ from karl.schemas import ParametersSchema
 from karl.schemas import VUser, VCard, VUserCard
 from karl.models import User, Card, Parameters, UserStatsV2,\
     UserCardFeatureVector, UserFeatureVector, CardFeatureVector,\
-    SimUserCardFeatureVector, SimUserFeatureVector, SimCardFeatureVector,\
     UserCardSnapshot, UserSnapshot, CardSnapshot,\
     StudyRecord, TestRecord, ScheduleRequest
 
@@ -89,15 +88,14 @@ class KARLScheduler:
         cards: List[Card],
         date: datetime,
         session: Session,
-        simulated: bool = False,
     ) -> List[Dict[str, float]]:
-        recall_scores, profile = self.score_recall_batch(user, cards, date, simulated)
+        recall_scores, profile = self.score_recall_batch(user, cards, date)
         scores = [
             {
                 'recall': recall_scores[i],
-                'cool_down': self.score_cool_down(user, card, date, session, simulated),
-                'leitner': self.score_leitner(user, card, date, session, simulated),
-                'sm2': self.score_sm2(user, card, date, session, simulated),
+                'cool_down': self.score_cool_down(user, card, date, session),
+                'leitner': self.score_leitner(user, card, date, session),
+                'sm2': self.score_sm2(user, card, date, session),
             }
             for i, card in enumerate(cards)
         ]
@@ -193,6 +191,13 @@ class KARLScheduler:
                 parameters=json.dumps(params.__dict__),
             )
             session.add(v_user)
+
+        if v_user.count_positive_session is None:
+            v_user.count_positive_session = 0
+        if v_user.count_negative_session is None:
+            v_user.count_negative_session = 0
+        if v_user.count_session is None:
+            v_user.count_session = 0
         v_user = VUser(**v_user.__dict__)
         session.commit()
         session.close()
@@ -263,17 +268,13 @@ class KARLScheduler:
         user: User,
         cards: List[Card],
         date: datetime,
-        simulated: bool = False,  # simulating old history
     ) -> List[float]:
 
         t0 = datetime.now(pytz.utc)
 
         # gather card features
         feature_vectors = []
-        if simulated:
-            v_user = self.get_simulated_user_vector(user.id)
-        else:
-            v_user = self.get_user_vector(user.id)
+        v_user = self.get_user_vector(user.id)
 
         if not settings.USE_MULTIPROCESSING:
             feature_vectors = [
@@ -323,17 +324,13 @@ class KARLScheduler:
         card: Card,
         date: datetime,
         session: Session,
-        simulated: bool = False,
     ) -> float:
         """
         Avoid repetition of the same card within a cool down time.
         We set a longer cool down time for correctly recalled cards.
         :return: portion of cool down period remained. 0 if passed.
         """
-        if simulated:
-            v_usercard = self.get_simulated_usercard_vector(user.id, card.id)
-        else:
-            v_usercard = self.get_usercard_vector(user.id, card.id)
+        v_usercard = self.get_usercard_vector(user.id, card.id)
 
         if v_usercard is None or v_usercard.previous_study_date is None:
             return 0
@@ -352,17 +349,13 @@ class KARLScheduler:
         card: Card,
         date: datetime,
         session: Session,
-        simulated: bool = False,
     ) -> float:
         """
         Time till the scheduled date by Leitner measured by number of hours.
         The value can be negative when the card is over-due in Leitner.
         :return: distance in number of hours.
         """
-        if simulated:
-            v_usercard = self.get_simulated_usercard_vector(user.id, card.id)
-        else:
-            v_usercard = self.get_usercard_vector(user.id, card.id)
+        v_usercard = self.get_usercard_vector(user.id, card.id)
 
         if v_usercard.leitner_scheduled_date is None:
             return 0
@@ -376,7 +369,6 @@ class KARLScheduler:
         card: Card,
         date: datetime,
         session: Session,
-        simulated: bool = False,
     ) -> float:
         """
         Time till the scheduled date by SM-2 measured by number of hours.
@@ -386,10 +378,7 @@ class KARLScheduler:
         :param card:
         :return: distance in number of hours.
         """
-        if simulated:
-            v_usercard = self.get_simulated_usercard_vector(user.id, card.id)
-        else:
-            v_usercard = self.get_usercard_vector(user.id, card.id)
+        v_usercard = self.get_usercard_vector(user.id, card.id)
 
         if v_usercard.sm2_scheduled_date is None:
             return 0
@@ -611,16 +600,10 @@ class KARLScheduler:
         record: StudyRecord,
         date: datetime,
         session: Session,
-        simulated: bool = False,
     ):
-        if simulated:
-            v_user = session.query(SimUserFeatureVector).get(record.user_id)
-            v_card = session.query(SimCardFeatureVector).get(record.card_id)
-            v_usercard = session.query(SimUserCardFeatureVector).get((record.user_id, record.card_id))
-        else:
-            v_user = self.get_user_vector(record.user_id)
-            v_card = self.get_card_vector(record.card_id)
-            v_usercard = self.get_usercard_vector(record.user_id, record.card_id)
+        v_user = self.get_user_vector(record.user_id)
+        v_card = self.get_card_vector(record.card_id)
+        v_usercard = self.get_usercard_vector(record.user_id, record.card_id)
 
         delta_usercard = None
         if v_usercard.previous_study_date is not None:
@@ -776,7 +759,7 @@ class KARLScheduler:
 
     def update_leitner(
         self,
-        v_usercard: Union[UserCardFeatureVector, SimUserCardFeatureVector],
+        v_usercard: UserCardFeatureVector,
         record: StudyRecord,
         date: datetime,
         session: Session,
@@ -798,7 +781,7 @@ class KARLScheduler:
 
     def update_sm2(
         self,
-        v_usercard: Union[UserCardFeatureVector, SimUserCardFeatureVector],
+        v_usercard: UserCardFeatureVector, 
         record: StudyRecord,
         date: datetime,
         session: Session,

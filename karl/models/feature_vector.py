@@ -61,45 +61,6 @@ class CardFeatureVector(Base):
     previous_study_response = Column(Boolean)
 
 
-class SimUserCardFeatureVector(Base):
-    user_id = Column(String, ForeignKey(User.id, ondelete='CASCADE'), primary_key=True, index=True)
-    card_id = Column(String, ForeignKey(Card.id, ondelete='CASCADE'), primary_key=True, index=True)
-    count_positive = Column(Integer)
-    count_negative = Column(Integer)
-    count = Column(Integer)
-    previous_delta = Column(Integer)
-    previous_study_date = Column(TIMESTAMP(timezone=True))
-    previous_study_response = Column(Boolean)
-    correct_on_first_try = Column(Boolean)
-    leitner_box = Column(Integer)
-    leitner_scheduled_date = Column(TIMESTAMP(timezone=True))
-    sm2_efactor = Column(Float)
-    sm2_interval = Column(Float)
-    sm2_repetition = Column(Integer)
-    sm2_scheduled_date = Column(TIMESTAMP(timezone=True))
-
-
-class SimUserFeatureVector(Base):
-    user_id = Column(String, ForeignKey(User.id, ondelete='CASCADE'), primary_key=True, index=True)
-    count_positive = Column(Integer)
-    count_negative = Column(Integer)
-    count = Column(Integer)
-    previous_delta = Column(Integer)
-    previous_study_date = Column(TIMESTAMP(timezone=True))
-    previous_study_response = Column(Boolean)
-    parameters = Column(JSONB)
-
-
-class SimCardFeatureVector(Base):
-    card_id = Column(String, ForeignKey(Card.id, ondelete='CASCADE'), primary_key=True, index=True)
-    count_positive = Column(Integer)
-    count_negative = Column(Integer)
-    count = Column(Integer)
-    previous_delta = Column(Integer)
-    previous_study_date = Column(TIMESTAMP(timezone=True))
-    previous_study_response = Column(Boolean)
-
-
 class UserCardSnapshot(Base):
     id = Column(String, ForeignKey(ScheduleRequest.id, ondelete='CASCADE'), primary_key=True, index=True)
     user_id = Column(String, ForeignKey(User.id, ondelete='CASCADE'), index=True)
