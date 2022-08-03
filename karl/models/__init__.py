@@ -1,6 +1,6 @@
 from .user import User
 from .card import Card
-from .record import Record, ScheduleRequest, StudyRecord, TestRecord
+from .record import ScheduleRequest, StudyRecord, TestRecord
 from .embedding import Embedding, BinaryNumpy
 from .parameters import Parameters
 
