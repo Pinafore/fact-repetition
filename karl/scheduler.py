@@ -192,13 +192,6 @@ class KARLScheduler:
             )
             session.add(v_user)
 
-        if v_user.count_positive_session is None:
-            v_user.count_positive_session = 0
-        if v_user.count_negative_session is None:
-            v_user.count_negative_session = 0
-        if v_user.count_session is None:
-            v_user.count_session = 0
-
         v_user = VUser(**v_user.__dict__)
         session.commit()
         session.close()
