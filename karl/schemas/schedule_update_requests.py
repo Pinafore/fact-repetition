@@ -1,5 +1,6 @@
+from enum import Enum
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Dict, Optional
 
 class KarlFactSchema(BaseModel):
     fact_id: str
@@ -16,11 +17,33 @@ class RecallTarget(BaseModel):
     target_window_highest: float
 
 
+class RepetitionModel(str, Enum):
+    leitner = "leitner"
+    karl = "karl"
+    sm2 = "sm-2"
+    karl100 = "karl100"
+    karl50 = "karl50"
+    karl85 = "karl85"
+    settles = "settles"
+
+    @classmethod
+    def select_model(cls):
+        return choice([Repetition.leitner, Repetition.karl, Repetition.settles])
+
 class ScheduleRequestSchema(BaseModel):
     user_id: str
     facts: List[KarlFactSchema]  # this list can be empty
-    repetition_model: str
+    repetition_model: RepetitionModel
     recall_target: RecallTarget
+
+
+class ScheduleResponseSchema(BaseModel):
+    debug_id: str  # same as schedule_request_id
+    order: List[int]
+    scores: List[float]
+    details: Optional[List]
+    rationale: Optional[str]
+    profile: Optional[dict]
 
 
 class UpdateRequestSchema(BaseModel):

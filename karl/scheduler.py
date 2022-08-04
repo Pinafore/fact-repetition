@@ -15,6 +15,7 @@ from karl.schemas import ScheduleResponseSchema,\
     ScheduleRequestSchema, UpdateRequestSchema, KarlFactSchema
 from karl.schemas import ParametersSchema
 from karl.schemas import VUser, VCard, VUserCard
+from karl.schemas import RepetitionModel
 from karl.models import User, Card, Parameters, UserStatsV2,\
     UserCardFeatureVector, UserFeatureVector, CardFeatureVector,\
     UserCardSnapshot, UserSnapshot, CardSnapshot,\
@@ -68,28 +69,20 @@ class KARLScheduler:
         session.add(card)
         session.commit()
 
-        v_card = CardFeatureVector(
-            card_id=card.id,
-            count_positive=0,
-            count_negative=0,
-            count=0,
-            previous_delta=None,
-            previous_study_date=None,
-            previous_study_response=None,
-        )
+        v_card = CardFeatureVector(card_id=card.id)
         session.add(v_card)
         session.commit()
 
         return card
 
-    def score_user_cards(
+    def karl_score_user_cards(
         self,
         user: User,
         cards: List[Card],
         date: datetime,
-        session: Session,
-    ) -> List[Dict[str, float]]:
-        recall_scores, profile = self.score_recall_batch(user, cards, date)
+        session: Session,  # expire_on_commit=False
+    ):
+        recall_scores, profile = self.karl_score_recall_batch(user, cards, date, session)
         scores = [
             {
                 'recall': recall_scores[i],
@@ -99,6 +92,16 @@ class KARLScheduler:
             }
             for i, card in enumerate(cards)
         ]
+
+        # TODO remove this
+        # computer total score
+        for i, _ in enumerate(scores):
+            scores[i]['sum'] = sum([
+                user.parameters.__dict__.get(key, 0) * value
+                for key, value in scores[i].items()
+            ])
+
+        scores = [x['sum'] for x in scores]
         return scores, profile
 
     def schedule(
@@ -114,8 +117,8 @@ class KARLScheduler:
             # TODO store more information, maybe not here but in the table
         })
 
-        session = SessionLocal()
         # store schedule request
+        session = SessionLocal()
         session.add(
             ScheduleRequest(
                 id=schedule_request_id,
@@ -135,32 +138,41 @@ class KARLScheduler:
                 scores=[],
             )
 
-        session = SessionLocal()
-        # get user and cards
+        session = SessionLocal(expire_on_commit=False)
+
         user = self.get_user(schedule_request.user_id, session)
         cards = [self.get_card(fact, session) for fact in schedule_request.facts]
 
         # score cards
-        scores, profile = self.score_user_cards(user, cards, date, session)
-
-        # computer total score
-        for i, _ in enumerate(scores):
-            scores[i]['sum'] = sum([
-                user.parameters.__dict__.get(key, 0) * value
-                for key, value in scores[i].items()
-            ])
+        if schedule_request.repetition_model == RepetitionModel.karl:
+            # scores, profile = self.karl_score_user_cards(user, cards, date, session)
+            scores, profile = self.karl_score_recall_batch(user, cards, date, session)
+        elif schedule_request.repetition_model == RepetitionModel.settles:
+            pass # TODO
+        else:
+            pass # TODO
 
         # sort cards
-        # TODO use schedule_request.recall_target
-        order = np.argsort([s['sum'] for s in scores]).tolist()
-        card_selected = cards[order[0]]
+        index_score_in_window = []
+        for i, score in enumerate(scores):
+            if score >= schedule_request.recall_target.target_window_lowest and \
+                    score <= schedule_request.recall_target.target_window_highest:
+                index_score_in_window.append((i, score))
+        index_score_in_window = sorted(
+            index_score_in_window,
+            key=lambda x: abs(x[1] - schedule_request.recall_target.target),
+        )
+        order = [x[0] for x in index_score_in_window]
 
-        self.save_snapshots(schedule_request_id, user.id, card_selected.id, date)
+        # TODO probably have to store all snapshots?
+        # call save_snapshots in update instead of schedule
+        # but still use schedule_request.date
+        card_selected = cards[order[0]]
+        self.save_snapshots(schedule_request_id, user.id, card_selected.id, date, session)
 
         session.commit()
         session.close()
 
-        # return
         return ScheduleResponseSchema(
             order=order,
             debug_id=schedule_request_id,
@@ -168,107 +180,51 @@ class KARLScheduler:
             profile=profile,
         )
 
-    def get_user_vector(self, user_id: str) -> VUser:
-        session = SessionLocal()
+    def get_user_vector(self, user_id: str, session):
         v_user = session.query(UserFeatureVector).get(user_id)
         params = ParametersSchema(**self.get_user(user_id, session).parameters.__dict__)
         if v_user is None:
-            v_user = UserFeatureVector(
-                user_id=user_id,
-                count_positive=0,
-                count_negative=0,
-                count=0,
-                count_positive_session=0,
-                count_negative_session=0,
-                count_session=0,
-                previous_delta=None,
-                previous_study_date=None,
-                previous_study_response=None,
-                previous_delta_session=None,
-                previous_study_date_session=None,
-                previous_study_response_session=None,
-                schedule_request_id=None,
-                parameters=json.dumps(params.__dict__),
-            )
+            v_user = UserFeatureVector(user_id=user_id, parameters=json.dumps(params.__dict__))
             session.add(v_user)
-
-        v_user = VUser(**v_user.__dict__)
-        session.commit()
-        session.close()
+            session.commit()
         return v_user
 
-    def get_card_vector(self, card_id: str) -> VCard:
-        session = SessionLocal()
+    def get_card_vector(self, card_id: str, session):
         v_card = session.query(CardFeatureVector).get(card_id)
         if v_card is None:
-            v_card = CardFeatureVector(
-                card_id=card_id,
-                count_positive=0,
-                count_negative=0,
-                count=0,
-                previous_delta=None,
-                previous_study_date=None,
-                previous_study_response=None,
-            )
+            v_card = CardFeatureVector(card_id=card_id)
             session.add(v_card)
-        v_card = VCard(**v_card.__dict__)
-        session.commit()
-        session.close()
+            session.commit()
         return v_card
 
-    def get_usercard_vector(self, user_id: str, card_id: str) -> VUserCard:
-        session = SessionLocal()
+    def get_usercard_vector(self, user_id: str, card_id: str, session):
         v_usercard = session.query(UserCardFeatureVector).get((user_id, card_id))
         if v_usercard is None:
-            v_usercard = UserCardFeatureVector(
-                user_id=user_id,
-                card_id=card_id,
-                count_positive=0,
-                count_negative=0,
-                count=0,
-                count_positive_session=0,
-                count_negative_session=0,
-                count_session=0,
-                previous_delta=None,
-                previous_study_date=None,
-                previous_study_response=None,
-                correct_on_first_try=None,
-                previous_delta_session=None,
-                previous_study_date_session=None,
-                previous_study_response_session=None,
-                correct_on_first_try_session=None,
-                leitner_box=None,
-                leitner_scheduled_date=None,
-                sm2_efactor=None,
-                sm2_interval=None,
-                sm2_repetition=None,
-                sm2_scheduled_date=None,
-                schedule_request_id=None,
-            )
+            v_usercard = UserCardFeatureVector(user_id=user_id, card_id=card_id)
             session.add(v_usercard)
-        v_usercard = VUserCard(**v_usercard.__dict__)
-        session.commit()
-        session.close()
+            session.commit()
         return v_usercard
 
     def collect_features(self, user_id, card_id, card_text, v_user, date):
         '''helper for multiprocessing'''
-        v_card = self.get_card_vector(card_id)
-        v_usercard = self.get_usercard_vector(user_id, card_id)
+        session = SessionLocal(expire_on_commit=False)
+        v_card = VCard(**self.get_card_vector(card_id, session).__dict__)
+        v_usercard = VUserCard(**self.get_usercard_vector(user_id, card_id, session).__dict__)
+        session.close()
         return vectors_to_features(v_usercard, v_user, v_card, date, card_text)
 
-    def score_recall_batch(
+    def karl_score_recall_batch(
         self,
         user: User,
         cards: List[Card],
         date: datetime,
+        session: Session,
     ) -> List[float]:
-
         t0 = datetime.now(pytz.utc)
 
         # gather card features
         feature_vectors = []
-        v_user = self.get_user_vector(user.id)
+        v_user = VUser(**self.get_user_vector(user.id, session).__dict__)
 
         if not settings.USE_MULTIPROCESSING:
             feature_vectors = [
@@ -301,9 +257,6 @@ class KARLScheduler:
             ).text
         )
 
-        if 'karl' in user.parameters.repetition_model:
-            scores = [abs(user.parameters.recall_target - x) for x in scores]
-
         t2 = datetime.now(pytz.utc)
 
         profile = {
@@ -324,7 +277,7 @@ class KARLScheduler:
         We set a longer cool down time for correctly recalled cards.
         :return: portion of cool down period remained. 0 if passed.
         """
-        v_usercard = self.get_usercard_vector(user.id, card.id)
+        v_usercard = self.get_usercard_vector(user.id, card.id, session)
 
         if v_usercard is None or v_usercard.previous_study_date is None:
             return 0
@@ -349,7 +302,7 @@ class KARLScheduler:
         The value can be negative when the card is over-due in Leitner.
         :return: distance in number of hours.
         """
-        v_usercard = self.get_usercard_vector(user.id, card.id)
+        v_usercard = self.get_usercard_vector(user.id, card.id, session)
 
         if v_usercard.leitner_scheduled_date is None:
             return 0
@@ -372,7 +325,7 @@ class KARLScheduler:
         :param card:
         :return: distance in number of hours.
         """
-        v_usercard = self.get_usercard_vector(user.id, card.id)
+        v_usercard = self.get_usercard_vector(user.id, card.id, session)
 
         if v_usercard.sm2_scheduled_date is None:
             return 0
@@ -462,12 +415,11 @@ class KARLScheduler:
         user_id: str,
         card_id: str,
         date: datetime,
+        session: Session,
     ) -> None:
-        v_user = self.get_user_vector(user_id)
-        v_card = self.get_card_vector(card_id)
-        v_usercard = self.get_usercard_vector(user_id, card_id)
-
-        session = SessionLocal()
+        v_user = self.get_user_vector(user_id, session)
+        v_card = self.get_card_vector(card_id, session)
+        v_usercard = self.get_usercard_vector(user_id, card_id, session)
 
         delta = None
         if v_usercard.previous_study_date is not None:
@@ -521,7 +473,6 @@ class KARLScheduler:
                 correct_on_first_try=v_usercard.correct_on_first_try,
                 correct_on_first_try_session=correct_on_first_try_session,
             ))
-        session.commit()
 
         delta = None
         if v_user.previous_study_date is not None:
@@ -568,7 +519,6 @@ class KARLScheduler:
                 previous_study_response_session=previous_study_response_session,
                 parameters=json.dumps(params.__dict__),
             ))
-        session.commit()
 
         delta = None
         if v_card.previous_study_date is not None:
@@ -586,8 +536,6 @@ class KARLScheduler:
                 previous_study_date=v_card.previous_study_date,
                 previous_study_response=v_card.previous_study_response,
             ))
-        session.commit()
-        session.close()
 
     def update_feature_vectors(
         self,
@@ -595,9 +543,9 @@ class KARLScheduler:
         date: datetime,
         session: Session,
     ):
-        v_user = self.get_user_vector(record.user_id)
-        v_card = self.get_card_vector(record.card_id)
-        v_usercard = self.get_usercard_vector(record.user_id, record.card_id)
+        v_user = self.get_user_vector(record.user_id, session)
+        v_card = self.get_card_vector(record.card_id, session)
+        v_usercard = self.get_usercard_vector(record.user_id, record.card_id, session)
 
         delta_usercard = None
         if v_usercard.previous_study_date is not None:
