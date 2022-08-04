@@ -1,0 +1,9 @@
+name: karl
+channels:
+  - defaults
+dependencies:
+  - python=3.9
+  - psycopg2
+  - flake8
+  - vega-lite-cli
+prefix: /fs/clip-quiz/shifeng/anaconda3/envs/karl

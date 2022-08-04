@@ -1,4 +1,4 @@
-CODE_DIR = '/home/ubuntu/scheduler'
+CODE_DIR = '/fs/clip-quiz/shifeng/karl'
 DATA_DIR = f'{CODE_DIR}/data'
 API_URL = 'http://172.17.0.1:4000'
 MODEL_API_URL = 'http://0.0.0.0:8001'
