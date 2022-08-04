@@ -360,7 +360,7 @@ def _get_user_stats(
         for user_stat in session.query(UserStatsV2).\
                 filter(UserStatsV2.user_id == user_id).\
                 filter(UserStatsV2.deck_id == deck_id).\
-                filter(UserStatsV2.date >= date_start, UserStats.date < date_end).\
+                filter(UserStatsV2.date >= date_start, UserStatsV2.date < date_end).\
                 order_by(UserStatsV2.date):
             curr_n_cards_total = user_stat.n_new_cards_total + user_stat.n_old_cards_total
             if curr_n_cards_total - prev_n_cards_total >= min_studied:

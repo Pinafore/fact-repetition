@@ -1150,9 +1150,9 @@ optional = false
 python-versions = "*"
 
 [package.extras]
-nativelib = ["pyobjc-framework-cocoa", "pywin32"]
-objc = ["pyobjc-framework-cocoa"]
 win32 = ["pywin32"]
+objc = ["pyobjc-framework-cocoa"]
+nativelib = ["pywin32", "pyobjc-framework-cocoa"]
 
 [[package]]
 name = "six"
@@ -1646,7 +1646,7 @@ notebook = ">=4.4.1"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "84778b829895ed54211fdd48a7b3bafc4b54c55eefcf69a99139c7a95f97839b"
+content-hash = "f9a4f8b1b5784adc352b5ada0ca7517d4fe6513c85f4851ae26ae08b11c0907d"
 
 [metadata.files]
 alembic = [
