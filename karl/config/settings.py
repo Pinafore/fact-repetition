@@ -1,9 +1,12 @@
-CODE_DIR = '/home/ubuntu/scheduler'
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+CODE_DIR = os.environ.get('CODE_DIR')
 DATA_DIR = f'{CODE_DIR}/data'
-API_URL = 'http://172.17.0.1:4000'
-MODEL_API_URL = 'http://0.0.0.0:8001'
-SQLALCHEMY_DATABASE_URL = 'postgresql+psycopg2://shifeng:fengshi824@localhost:5432/karl-prod'
-STABLE_DATABASE_URL = 'postgresql+psycopg2://shifeng@localhost:5433/karl-prod'
-USE_MULTIPROCESSING = True
-USER_STATS_CACHE = True
-MP_CONTEXT = 'fork'
+API_URL = os.environ.get('API_URL')
+MODEL_API_URL = os.environ.get('MODEL_API_URL')
+SQLALCHEMY_DATABASE_URL = os.environ.get('SQLALCHEMY_DATABASE_URL')
+USE_MULTIPROCESSING = os.environ.get('USE_MULTIPROCESSING')
+MP_CONTEXT = os.environ.get('MP_CONTEXT')
