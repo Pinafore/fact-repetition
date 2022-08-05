@@ -59,3 +59,5 @@ class UpdateRequestSchema(BaseModel):
     debug_id: Optional[str] # aka schedule_request_id, n/a in test updates
     test_mode: bool
     fact: Optional[KarlFactSchema]
+    typed: Optional[str]  # user-entered answer
+    recommendation: Optional[bool]  # system's judgment of whether the user-entered answer is correct

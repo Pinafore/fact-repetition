@@ -348,6 +348,8 @@ class KARLScheduler:
                 elapsed_milliseconds_answer=request.elapsed_milliseconds_answer,
                 count=count,
                 count_session=count_session,
+                typed=request.typed,
+                recommendation=request.recommendation,
             )
         session.add(record)
         session.commit()

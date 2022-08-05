@@ -17,6 +17,9 @@ class ScheduleRequest(Base):
     recall_target_highest = Column(Float)
 
     study_records = relationship('StudyRecord', order_by='StudyRecord.date', back_populates='schedule_request')
+    user_snapshots = relationship('UserSnapshot', order_by='UserSnapshot.date', back_populates='schedule_request')
+    card_snapshots = relationship('CardSnapshot', order_by='CardSnapshot.date', back_populates='schedule_request')
+    usercard_snapshots = relationship('UserCardSnapshot', order_by='UserCardSnapshot.date', back_populates='schedule_request')
 
 
 class StudyRecord(Base):
@@ -32,6 +35,8 @@ class StudyRecord(Base):
     elapsed_milliseconds_answer = Column(Integer)
     count = Column(Integer, nullable=False, default=0)
     count_session = Column(Integer, nullable=False, default=0)
+    typed = Column(String)  # user-entered answer
+    recommendation = Column(Boolean)  # system's judgment of whether the user-entered answer is correct
 
     user = relationship("User", back_populates="study_records")
     card = relationship("Card", back_populates="study_records")
