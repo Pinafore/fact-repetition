@@ -18,7 +18,7 @@ from karl.schemas import VUser, VCard, VUserCard
 from karl.schemas import RepetitionModel
 from karl.models import User, Card, Parameters, UserStatsV2,\
     UserCardFeatureVector, UserFeatureVector, CardFeatureVector,\
-    UserCardSnapshot, UserSnapshot, CardSnapshot,\
+    UserCardSnapshotV2, UserSnapshotV2, CardSnapshotV2,\
     StudyRecord, TestRecord, ScheduleRequest
 
 from karl.retention_hf import vectors_to_features
@@ -356,7 +356,7 @@ class KARLScheduler:
         if schedule_request is None:
             print('******* schedule request not found**********')
             return
-        self.save_snapshots(request.debug_id, request.user_id, request.card_id, schedule_request.date, session)
+        self.save_snapshots(request.debug_id, request.user_id, request.fact_id, schedule_request.date, session)
         session.commit()
 
         # update user stats
@@ -419,10 +419,10 @@ class KARLScheduler:
             else:
                 delta_session = None
         session.add(
-            UserCardSnapshot(
-                id=schedule_request_id,
+            UserCardSnapshotV2(
                 user_id=user_id,
                 card_id=card_id,
+                schedule_request_id=schedule_request_id,
                 date=date,
                 count_positive=v_usercard.count_positive,
                 count_negative=v_usercard.count_negative,
@@ -473,9 +473,9 @@ class KARLScheduler:
 
         params = ParametersSchema(**self.get_user(user_id, session).parameters.__dict__)
         session.add(
-            UserSnapshot(
-                id=schedule_request_id,
+            UserSnapshotV2(
                 user_id=user_id,
+                schedule_request_id=schedule_request_id,
                 date=date,
                 count_positive=v_user.count_positive,
                 count_negative=v_user.count_negative,
@@ -498,9 +498,9 @@ class KARLScheduler:
         if v_card.previous_study_date is not None:
             delta = (date - v_card.previous_study_date).total_seconds()
         session.add(
-            CardSnapshot(
-                id=schedule_request_id,
+            CardSnapshotV2(
                 card_id=card_id,
+                schedule_request_id=schedule_request_id,
                 date=date,
                 count_positive=v_card.count_positive,
                 count_negative=v_card.count_negative,
