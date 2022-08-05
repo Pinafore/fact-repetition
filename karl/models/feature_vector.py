@@ -1,5 +1,6 @@
 from sqlalchemy import Column, ForeignKey, Integer, Float, Boolean, String, TIMESTAMP
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import relationship
 
 from karl.db.base_class import Base
 from karl.models import User, Card, ScheduleRequest
@@ -151,6 +152,8 @@ class UserCardSnapshotV2(Base):
     correct_on_first_try = Column(Boolean)
     correct_on_first_try_session = Column(Boolean)
 
+    schedule_request = relationship('ScheduleRequest', back_populates='usercard_snapshots')
+
 
 class UserSnapshotV2(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
@@ -173,6 +176,9 @@ class UserSnapshotV2(Base):
     previous_study_response_session = Column(Boolean)
     parameters = Column(JSONB)
 
+    schedule_request = relationship('ScheduleRequest', back_populates='user_snapshots')
+
+
 
 class CardSnapshotV2(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
@@ -186,3 +192,5 @@ class CardSnapshotV2(Base):
     previous_delta = Column(Integer)
     previous_study_date = Column(TIMESTAMP(timezone=True))
     previous_study_response = Column(Boolean)
+
+    schedule_request = relationship('ScheduleRequest', back_populates='card_snapshots')

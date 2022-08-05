@@ -17,9 +17,9 @@ class ScheduleRequest(Base):
     recall_target_highest = Column(Float)
 
     study_records = relationship('StudyRecord', order_by='StudyRecord.date', back_populates='schedule_request')
-    user_snapshots = relationship('UserSnapshot', order_by='UserSnapshot.date', back_populates='schedule_request')
-    card_snapshots = relationship('CardSnapshot', order_by='CardSnapshot.date', back_populates='schedule_request')
-    usercard_snapshots = relationship('UserCardSnapshot', order_by='UserCardSnapshot.date', back_populates='schedule_request')
+    user_snapshots = relationship('UserSnapshotV2', order_by='UserSnapshotV2.date', back_populates='schedule_request')
+    card_snapshots = relationship('CardSnapshotV2', order_by='CardSnapshotV2.date', back_populates='schedule_request')
+    usercard_snapshots = relationship('UserCardSnapshotV2', order_by='UserCardSnapshotV2.date', back_populates='schedule_request')
 
 
 class StudyRecord(Base):
