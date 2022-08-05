@@ -75,46 +75,16 @@ class KARLScheduler:
 
         return card
 
-    def karl_score_user_cards(
-        self,
-        user: User,
-        cards: List[Card],
-        date: datetime,
-        session: Session,  # expire_on_commit=False
-    ):
-        recall_scores, profile = self.karl_score_recall_batch(user, cards, date, session)
-        scores = [
-            {
-                'recall': recall_scores[i],
-                'cool_down': self.score_cool_down(user, card, date, session),
-                'leitner': self.score_leitner(user, card, date, session),
-                'sm2': self.score_sm2(user, card, date, session),
-            }
-            for i, card in enumerate(cards)
-        ]
-
-        # TODO remove this
-        # computer total score
-        for i, _ in enumerate(scores):
-            scores[i]['sum'] = sum([
-                user.parameters.__dict__.get(key, 0) * value
-                for key, value in scores[i].items()
-            ])
-
-        scores = [x['sum'] for x in scores]
-        return scores, profile
-
     def schedule(
         self,
-        schedule_request: ScheduleRequestSchema,
+        request: ScheduleRequestSchema,
         date: datetime,
     ) -> ScheduleResponseSchema:
         # schedule_request_id === debug_id
         schedule_request_id = json.dumps({
-            'user_id': schedule_request.user_id,
-            'repetition_model': schedule_request.repetition_model,
+            'user_id': request.user_id,
+            'repetition_model': request.repetition_model,
             'date': str(date.replace(tzinfo=pytz.UTC)),
-            # TODO store more information, maybe not here but in the table
         })
 
         # store schedule request
@@ -122,16 +92,19 @@ class KARLScheduler:
         session.add(
             ScheduleRequest(
                 id=schedule_request_id,
-                user_id=schedule_request.user_id,
-                card_ids=[x.fact_id for x in schedule_request.facts],
-                repetition_model=schedule_request.repetition_model,
+                user_id=request.user_id,
+                card_ids=[x.fact_id for x in request.facts],
+                repetition_model=request.repetition_model,
+                recall_target=request.recall_target.target,
+                recall_target_lowest=request.recall_target.target_window_lowest,
+                recall_target_highest=request.recall_target.target_window_highest,
                 date=date,
             )
         )
         session.commit()
         session.close()
 
-        if len(schedule_request.facts) == 0:
+        if len(request.facts) == 0:
             return ScheduleResponseSchema(
                 debug_id=schedule_request_id,
                 order=[],
@@ -140,14 +113,14 @@ class KARLScheduler:
 
         session = SessionLocal(expire_on_commit=False)
 
-        user = self.get_user(schedule_request.user_id, session)
-        cards = [self.get_card(fact, session) for fact in schedule_request.facts]
+        user = self.get_user(request.user_id, session)
+        cards = [self.get_card(fact, session) for fact in request.facts]
 
         # score cards
-        if schedule_request.repetition_model == RepetitionModel.karl:
-            # scores, profile = self.karl_score_user_cards(user, cards, date, session)
+        if request.repetition_model == RepetitionModel.karl:
+            # TODO check for other KARL variants
             scores, profile = self.karl_score_recall_batch(user, cards, date, session)
-        elif schedule_request.repetition_model == RepetitionModel.settles:
+        elif request.repetition_model == RepetitionModel.settles:
             pass # TODO
         else:
             pass # TODO
@@ -155,20 +128,14 @@ class KARLScheduler:
         # sort cards
         index_score_in_window = []
         for i, score in enumerate(scores):
-            if score >= schedule_request.recall_target.target_window_lowest and \
-                    score <= schedule_request.recall_target.target_window_highest:
+            if score >= request.recall_target.target_window_lowest and \
+                    score <= request.recall_target.target_window_highest:
                 index_score_in_window.append((i, score))
         index_score_in_window = sorted(
             index_score_in_window,
-            key=lambda x: abs(x[1] - schedule_request.recall_target.target),
+            key=lambda x: abs(x[1] - request.recall_target.target),
         )
         order = [x[0] for x in index_score_in_window]
-
-        # TODO probably have to store all snapshots?
-        # call save_snapshots in update instead of schedule
-        # but still use schedule_request.date
-        card_selected = cards[order[0]]
-        self.save_snapshots(schedule_request_id, user.id, card_selected.id, date, session)
 
         session.commit()
         session.close()
@@ -383,6 +350,13 @@ class KARLScheduler:
                 count_session=count_session,
             )
         session.add(record)
+        session.commit()
+
+        schedule_request = session.query(ScheduleRequest).get(request.debug_id)
+        if schedule_request is None:
+            print('******* schedule request not found**********')
+            return
+        self.save_snapshots(request.debug_id, request.user_id, request.card_id, schedule_request.date, session)
         session.commit()
 
         # update user stats

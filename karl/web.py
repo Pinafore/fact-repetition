@@ -160,77 +160,78 @@ def set_repetition_model(
     user_id: str,
     repetition_model: str,
 ):
-    if repetition_model == 'sm2':
-        params = ParametersSchema(
-            repetition_model='sm2',
-            card_embedding=0,
-            recall=0,
-            recall_target=0,
-            category=0,
-            answer=0,
-            leitner=0,
-            sm2=1,
-            decay_qrep=0,
-            cool_down=0,
-            cool_down_time_correct=0,
-            cool_down_time_wrong=0,
-            max_recent_facts=0,
-        )
-    elif repetition_model == 'leitner':
-        params = ParametersSchema(
-            repetition_model='leitner',
-            card_embedding=0,
-            recall=0,
-            recall_target=0,
-            category=0,
-            answer=0,
-            leitner=1,
-            sm2=0,
-            decay_qrep=0,
-            cool_down=0,
-            cool_down_time_correct=0,
-            cool_down_time_wrong=0,
-            max_recent_facts=0,
-        )
-    elif repetition_model.startswith('karl'):
-        recall_target = int(repetition_model[4:])
-        params = ParametersSchema(
-            repetition_model=f'karl{recall_target}',
-            recall_target=float(recall_target) / 100,
-        )
-    else:
-        print('******** unknown repetition_model ********')
-        params = ParametersSchema()
+    return
+    # if repetition_model == 'sm2':
+    #     params = ParametersSchema(
+    #         repetition_model='sm2',
+    #         card_embedding=0,
+    #         recall=0,
+    #         recall_target=0,
+    #         category=0,
+    #         answer=0,
+    #         leitner=0,
+    #         sm2=1,
+    #         decay_qrep=0,
+    #         cool_down=0,
+    #         cool_down_time_correct=0,
+    #         cool_down_time_wrong=0,
+    #         max_recent_facts=0,
+    #     )
+    # elif repetition_model == 'leitner':
+    #     params = ParametersSchema(
+    #         repetition_model='leitner',
+    #         card_embedding=0,
+    #         recall=0,
+    #         recall_target=0,
+    #         category=0,
+    #         answer=0,
+    #         leitner=1,
+    #         sm2=0,
+    #         decay_qrep=0,
+    #         cool_down=0,
+    #         cool_down_time_correct=0,
+    #         cool_down_time_wrong=0,
+    #         max_recent_facts=0,
+    #     )
+    # elif repetition_model.startswith('karl'):
+    #     recall_target = int(repetition_model[4:])
+    #     params = ParametersSchema(
+    #         repetition_model=f'karl{recall_target}',
+    #         recall_target=float(recall_target) / 100,
+    #     )
+    # else:
+    #     print('******** unknown repetition_model ********')
+    #     params = ParametersSchema()
 
-    session = SessionLocal()
-    curr_params = session.query(Parameters).get(user_id)
-    is_new_params = False
-    if curr_params is None:
-        is_new_params = True
-        curr_params = Parameters(id=user_id, **(params.__dict__))
+    # session = SessionLocal()
+    # curr_params = session.query(Parameters).get(user_id)
+    # is_new_params = False
+    # if curr_params is None:
+    #     is_new_params = True
+    #     curr_params = Parameters(id=user_id, **(params.__dict__))
 
-    curr_params.repetition_model = params.repetition_model
-    curr_params.card_embedding = params.card_embedding
-    curr_params.recall = params.recall
-    curr_params.recall_target = params.recall_target
-    curr_params.category = params.category
-    curr_params.answer = params.answer
-    curr_params.leitner = params.leitner
-    curr_params.sm2 = params.sm2
-    curr_params.decay_qrep = params.decay_qrep
-    curr_params.cool_down = params.cool_down
-    curr_params.cool_down_time_correct = params.cool_down_time_correct
-    curr_params.cool_down_time_wrong = params.cool_down_time_wrong
-    curr_params.max_recent_facts = params.max_recent_facts
+    # curr_params.repetition_model = params.repetition_model
+    # curr_params.card_embedding = params.card_embedding
+    # curr_params.recall = params.recall
+    # curr_params.recall_target = params.recall_target
+    # curr_params.category = params.category
+    # curr_params.answer = params.answer
+    # curr_params.leitner = params.leitner
+    # curr_params.sm2 = params.sm2
+    # curr_params.decay_qrep = params.decay_qrep
+    # curr_params.cool_down = params.cool_down
+    # curr_params.cool_down_time_correct = params.cool_down_time_correct
+    # curr_params.cool_down_time_wrong = params.cool_down_time_wrong
+    # curr_params.max_recent_facts = params.max_recent_facts
 
-    if is_new_params:
-        session.add(User(id=user_id))
-        session.commit()
-        session.add(curr_params)
-        session.commit()
-    session.commit()
-    session.close()
-    return params
+    # if is_new_params:
+    #     session.add(User(id=user_id))
+    #     session.commit()
+    #     session.add(curr_params)
+    #     session.commit()
+    # session.commit()
+    # session.close()
+    # return params
 
 
 @app.get('/api/karl/get_user_stats', response_model=UserStatsSchema)

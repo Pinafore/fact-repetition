@@ -1,8 +1,9 @@
-from sqlalchemy import Column, ForeignKey, String, Integer, Boolean, TIMESTAMP, ARRAY
+from sqlalchemy import Column, ForeignKey, String, Integer, Float, Boolean, TIMESTAMP, ARRAY, Enum
 from sqlalchemy.orm import relationship
 
 from karl.db.base_class import Base
 from karl.models import User, Card
+from karl.schemas import RepetitionModel
 
 
 class ScheduleRequest(Base):
@@ -10,7 +11,10 @@ class ScheduleRequest(Base):
     user_id = Column(String)
     card_ids = Column(ARRAY(String), nullable=False)
     date = Column(TIMESTAMP(timezone=True))
-    repetition_model = Column(String)
+    repetition_model = Column(Enum(RepetitionModel), default=RepetitionModel.karl)
+    recall_target = Column(Float)
+    recall_target_lowest = Column(Float)
+    recall_target_highest = Column(Float)
 
     study_records = relationship('StudyRecord', order_by='StudyRecord.date', back_populates='schedule_request')
 
