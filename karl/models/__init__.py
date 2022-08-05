@@ -7,5 +7,6 @@ from .parameters import Parameters
 from .user_stats import UserStatsV2
 from .feature_vector import UserCardFeatureVector, UserFeatureVector, CardFeatureVector
 from .feature_vector import UserCardSnapshot, UserSnapshot, CardSnapshot
+from .feature_vector import UserCardSnapshotV2, UserSnapshotV2, CardSnapshotV2
 from .leitner import Leitner
 from .sm2 import SM2
