@@ -118,10 +118,11 @@ class KARLScheduler:
 
         # score cards
         if request.repetition_model == RepetitionModel.karl:
-            # TODO check for other KARL variants
             scores, profile = self.karl_score_recall_batch(user, cards, date, session)
         elif request.repetition_model == RepetitionModel.settles:
             pass # TODO
+        elif request.repetition_model == RepetitionModel.leitner:
+            pass
         else:
             pass # TODO
 
