@@ -41,7 +41,8 @@ class KARLScheduler:
             session.add(user)
             session.commit()
 
-        if user.parameters is None:
+        params = session.query(Parameters).get(user_id)
+        if params is None:
             params = Parameters(id=user_id, **(ParametersSchema().__dict__))
             session.add(params)
             session.commit()
