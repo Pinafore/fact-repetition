@@ -137,6 +137,7 @@ class KARLScheduler:
             key=lambda x: abs(x[1] - request.recall_target.target),
         )
         order = [x[0] for x in index_score_in_window]
+        print(len(order))
 
         session.commit()
         session.close()
