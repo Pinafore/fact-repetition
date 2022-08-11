@@ -1,4 +1,2 @@
 checkpoints/retention_model.pt filter=lfs diff=lfs merge=lfs -text
 checkpoints/gensim_quizbowl_10_1585102364.5221019/ filter=lfs diff=lfs merge=lfs -text
-retention_features.h5 filter=lfs diff=lfs merge=lfs -text
-facts.csv filter=lfs diff=lfs merge=lfs -text
