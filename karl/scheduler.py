@@ -118,14 +118,16 @@ class KARLScheduler:
         cards = [self.get_card(fact, session) for fact in request.facts]
 
         # score cards
-        if request.repetition_model == RepetitionModel.karl:
-            scores, profile = self.karl_score_recall_batch(user, cards, date, session)
-        elif request.repetition_model == RepetitionModel.settles:
-            pass # TODO
-        elif request.repetition_model == RepetitionModel.leitner:
-            pass
-        else:
-            pass # TODO
+        # if request.repetition_model == RepetitionModel.karl:
+        #     scores, profile = self.karl_score_recall_batch(user, cards, date, session)
+        # elif request.repetition_model == RepetitionModel.settles:
+        #     pass # TODO
+        # elif request.repetition_model == RepetitionModel.leitner:
+        #     pass
+        # else:
+        #     pass # TODO
+
+        scores, profile = self.karl_score_recall_batch(user, cards, date, session)
 
         # sort cards
         index_score_in_window = []
@@ -138,6 +140,7 @@ class KARLScheduler:
             key=lambda x: abs(x[1] - request.recall_target.target),
         )
         order = [x[0] for x in index_score_in_window]
+        print(len(order))
 
         session.commit()
         session.close()
