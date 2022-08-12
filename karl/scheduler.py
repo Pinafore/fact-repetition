@@ -21,7 +21,7 @@ from karl.models import User, Card, Parameters, UserStatsV2,\
     UserCardSnapshotV2, UserSnapshotV2, CardSnapshotV2,\
     StudyRecord, TestRecord, ScheduleRequest
 
-from karl.retention_hf import vectors_to_features
+from karl.retention_phase1 import vectors_to_features
 from karl.db.session import SessionLocal, engine
 from karl.config import settings
 

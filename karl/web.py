@@ -26,7 +26,7 @@ from karl.models import User, UserStatsV2, Parameters, \
 from karl.scheduler import KARLScheduler
 from karl.db.session import SessionLocal, engine
 from karl.config import settings
-from karl.retention_hf import get_retention_features_df
+from karl.retention_phase1 import get_retention_features_df
 from karl import figures
 
 
