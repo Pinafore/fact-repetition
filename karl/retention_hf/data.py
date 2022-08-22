@@ -20,7 +20,7 @@ from transformers import DistilBertTokenizerFast
 
 from karl.db.session import SessionLocal, engine
 from karl.config import settings
-from karl.models import User, Card, UserCardSnapshot, UserSnapshot, CardSnapshot
+from karl.models import User, Card, UserCardSnapshotV2, UserSnapshotV2, CardSnapshotV2
 from karl.schemas import VUserCard, VUser, VCard
 
 
@@ -130,9 +130,9 @@ def _get_user_features(
     for record in user.records:
         if record.response is None:
             continue
-        v_user = session.query(UserSnapshot).get(record.id)
-        v_card = session.query(CardSnapshot).get(record.id)
-        v_usercard = session.query(UserCardSnapshot).get(record.id)
+        v_user = session.query(UserSnapshotV2).get(record.id)
+        v_card = session.query(CardSnapshotV2).get(record.id)
+        v_usercard = session.query(UserCardSnapshotV2).get(record.id)
         if v_user is None or v_card is None or v_usercard is None:
             continue
         v_user = VUser(**v_user.__dict__)

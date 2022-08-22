@@ -10,6 +10,7 @@ from typing import List
 from datetime import datetime
 from pydantic import BaseModel
 from fastapi import FastAPI
+from fastapi.exceptions import HTTPException
 from dateutil.parser import parse as parse_date
 from concurrent.futures import ProcessPoolExecutor
 # from cachetools import cached, TTLCache
@@ -19,7 +20,6 @@ from karl.schemas import UserStatsSchema, RankingSchema, LeaderboardSchema, \
     ScheduleRequestSchema, UpdateRequestSchema
 from karl.models import User, UserStatsV2, Parameters, \
     UserCardFeatureVector, UserFeatureVector, CardFeatureVector, \
-    UserCardSnapshot, UserSnapshot, CardSnapshot, \
     StudyRecord, TestRecord, ScheduleRequest,\
     Leitner, SM2
 
@@ -475,20 +475,26 @@ def get_leaderboard(
 
 
 @app.post('/api/karl/schedule_v2')
-def schedule_v2(
+def schedule(
     schedule_request: ScheduleRequestSchema,
 ) -> ScheduleResponseSchema:
     date = datetime.now(pytz.utc)
-    schedule_response = scheduler.schedule(schedule_request, date)
+    try:
+        schedule_response = scheduler.schedule(schedule_request, date)
+    except Exception as e:
+        raise HTTPException(status_code=555, detail="Schedule request failed")
     return schedule_response
 
 
 @app.post('/api/karl/update_v2')
-def update_v2(
+def update(
     update_request: UpdateRequestSchema,
 ) -> dict:
     date = datetime.now(pytz.utc)
-    profile = scheduler.update(update_request, date)
+    try:
+        profile = scheduler.update(update_request, date)
+    except Exception as e:
+        raise HTTPException(status_code=555, detail="Update request failed")
     return {'profile': profile}
 
 
