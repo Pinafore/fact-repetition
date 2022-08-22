@@ -482,6 +482,7 @@ def schedule(
     try:
         schedule_response = scheduler.schedule(schedule_request, date)
     except Exception as e:
+        logger.info(e)
         raise HTTPException(status_code=555, detail="Schedule request failed")
     return schedule_response
 
@@ -494,6 +495,7 @@ def update(
     try:
         profile = scheduler.update(update_request, date)
     except Exception as e:
+        logger.info(e)
         raise HTTPException(status_code=555, detail="Update request failed")
     return {'profile': profile}
 
