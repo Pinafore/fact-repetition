@@ -6,7 +6,7 @@ import altair as alt
 import pandas as pd
 from dateutil.parser import parse as parse_date
 
-from karl.retention_hf.data import get_retention_features_df
+from karl.retention_phase1.data import get_retention_features_df
 from karl.config import settings
 
 alt.data_transformers.disable_max_rows()

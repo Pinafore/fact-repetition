@@ -147,7 +147,7 @@ def _get_user_features(
 
 
 def get_retention_features_df(overwrite: bool = False):
-    df_path = f'{settings.CODE_DIR}/retention_features.h5'
+    df_path = f'{settings.DATA_DIR}/retention_features.h5'
     if not overwrite and os.path.exists(df_path):
         df = pd.read_hdf(df_path, 'df')
     else:
