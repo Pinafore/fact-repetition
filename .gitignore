@@ -5,7 +5,14 @@ runs
 whoosh_index
 build_lda.sh
 *.sqlite*
-.pytype
+.pity
+
+# Figures
+figures_stat/
+# Mac
+.DS_Store
+# Node
+node_modules/
 
 # Byte-compiled / optimized / DLL files
 */__pycache__/

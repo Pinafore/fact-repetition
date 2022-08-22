@@ -13,7 +13,8 @@ alt.data_transformers.disable_max_rows()
 alt.renderers.enable('mimetype')
 
 
-def save_chart_and_pdf(chart, path, to_pdf=False):
+def save_chart_and_pdf(chart, path, to_pdf=True):
+    print(f'{path}.json')
     chart.save(f'{path}.json')
     if to_pdf:
         os.system(f'vl2vg {path}.json | vg2pdf > {path}.pdf')
@@ -59,6 +60,7 @@ def figure_composition(df, path):
     ).configure_legend(
         labelFontSize=15,
     )
+    print("HAHAA")
     save_chart_and_pdf(chart, f'{path}/composition')
 
 
@@ -240,15 +242,18 @@ def get_user_charts(
 
 
 if __name__ == '__main__':
-    df = get_retention_features_df()
+    # df = get_retention_features_df()
+    df = pd.read_hdf("./retention_features.h5")
+    print(df.columns)
+    df. rename(columns = {'label':'response'}, inplace = True)
     path = f'{settings.CODE_DIR}/figures_stat'
     from pathlib import Path
     Path(path).mkdir(parents=True, exist_ok=True)
 
-    # figure_composition(df, path)
-    # figure_recall_rate(df, path=path)
-    # figure_forgetting_curve(df, path=path)
-    # figure_recall_rate(df, user_id='463', path=path)
-    # figure_forgetting_curve(df, user_id='463', path=path)
+    figure_composition(df, path)
+    figure_recall_rate(df, path=path)
+    figure_forgetting_curve(df, path=path)
+    figure_recall_rate(df, user_id='463', path=path)
+    figure_forgetting_curve(df, user_id='463', path=path)
 
-    # figure_karl100_vs_karl85(df, path)
+    figure_karl100_vs_karl85(df, path)
