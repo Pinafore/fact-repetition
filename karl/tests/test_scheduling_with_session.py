@@ -157,6 +157,31 @@ for nth_fact in range(n_facts_per_day):
         ).text
     )
 
+
+# see if scheduler correctly raises an exception due to duplicate study record ID
+update_request = UpdateRequestSchema(
+    user_id=user_id,
+    fact_id=schedule_request.facts[index].fact_id,
+    label=response,
+    deck_name='dummy',
+    deck_id=1000000,
+    elapsed_milliseconds_text=10000,
+    elapsed_milliseconds_answer=10000,
+    debug_id=debug_id,
+    history_id='295584',
+    studyset_id='dummy_studyset_' + debug_id,
+    test_mode=False,
+    fact=schedule_request.facts[index],
+)
+
+update_response = json.loads(
+    requests.post(
+        f'{URL}/update_v2',
+        data=json.dumps(update_request.dict()),
+    ).text
+)
+print(update_response)
+
 print()
 print()
 for key, values in profile.items():

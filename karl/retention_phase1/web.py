@@ -11,8 +11,8 @@ from fastapi import FastAPI
 
 from transformers import DistilBertTokenizerFast
 
-from karl.retention_hf import DistilBertRetentionModel
-from karl.retention_hf.data import RetentionFeaturesSchema, RetentionInput, retention_data_collator, feature_fields
+from karl.retention_phase1 import DistilBertRetentionModel
+from karl.retention_phase1.data import RetentionFeaturesSchema, RetentionInput, retention_data_collator, feature_fields
 from karl.config import settings
 
 
