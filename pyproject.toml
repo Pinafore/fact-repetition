@@ -26,6 +26,7 @@ psycopg2-binary = "^2.9.3"
 psycopg2 = "^2.9.3"
 pandas = "^1.4.3"
 python-dotenv = "^0.20.0"
+sklearn = "^0.0"
 
 [tool.poetry.dev-dependencies]
 

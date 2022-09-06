@@ -147,7 +147,7 @@ def _get_user_features(
 
 
 def get_retention_features_df(overwrite: bool = False):
-    df_path = f'{settings.DATA_DIR}/retention_features.h5'
+    df_path = f'{settings.DATA_DIR}/retention_features_phase1.h5'
     if not overwrite and os.path.exists(df_path):
         df = pd.read_hdf(df_path, 'df')
     else:
@@ -326,9 +326,10 @@ def retention_data_collator(
 
 
 if __name__ == '__main__':
+    data_dir = f'{settings.DATA_DIR}/retention_phase1'
     # tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
     # train_dataset = RetentionDataset(
-    #     data_dir=settings.DATA_DIR,
+    #     data_dir=data_dir,
     #     fold='train_new_card',
     #     tokenizer=tokenizer
     # )

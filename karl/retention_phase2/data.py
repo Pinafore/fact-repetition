@@ -89,13 +89,33 @@ def vectors_to_features(
     card_answer: str,
     elapsed_milliseconds: int = 0,
 ) -> RetentionFeaturesSchema:
+    if v_usercard.previous_study_date is not None:
+        delta = (date - v_usercard.previous_study_date).total_seconds() // 3600  # hrs
+    else:
+        delta = 0
+
+    if v_usercard.previous_study_date_session is not None:
+        delta_session = (date - v_usercard.previous_study_date_session).total_seconds() // 60  # mins
+    else:
+        delta_session = 0
+
+    if v_usercard.previous_delta is not None:
+        previous_delta = v_usercard.previous_delta // 3600  # hrs
+    else:
+        previous_delta = 0
+
+    if v_usercard.previous_delta_session is not None:
+        previous_delta_session = v_usercard.previous_delta_session // 60  # hrs
+    else:
+        previous_delta_session = 0
+
     if v_usercard.leitner_scheduled_date is not None:
-        delta_to_leitner_scheduled_date = (v_usercard.leitner_scheduled_date - date).total_seconds() // 3600
+        delta_to_leitner_scheduled_date = (v_usercard.leitner_scheduled_date - date).total_seconds() // 3600  # hrs
     else:
         delta_to_leitner_scheduled_date = 0
 
     if v_usercard.sm2_scheduled_date is not None:
-        delta_to_sm2_scheduled_date = (v_usercard.sm2_scheduled_date - date).total_seconds() // 3600
+        delta_to_sm2_scheduled_date = (v_usercard.sm2_scheduled_date - date).total_seconds() // 3600  # hrs
     else:
         delta_to_sm2_scheduled_date = 0
 
@@ -124,12 +144,12 @@ def vectors_to_features(
         acc_usercard=0 if v_usercard.count == 0 else v_usercard.count_positive / v_usercard.count,
         acc_session_user=0 if v_user.count_session == 0 else v_user.count_positive_session / v_user.count_session,
         acc_session_card=0 if v_usercard.count_session == 0 else v_usercard.count_positive_session / v_usercard.count_session,
-        delta=v_usercard.delta // 3600,
-        delta_previous=v_usercard.previous_delta // 3600,
+        delta=delta,  # hrs
+        delta_previous=previous_delta,  # hrs
         usercard_previous_study_response=v_usercard.previous_study_response or False,
-        usercard_delta_session=v_usercard.delta_session,
-        usercard_delta_previous_session=v_usercard.previous_delta_session,
-        usercard_previous_study_response_session=v_usercard.previous_study_response_session,
+        usercard_delta_session=delta_session,  # mins
+        usercard_delta_previous_session=previous_delta_session,  # mins
+        usercard_previous_study_response_session=v_usercard.previous_study_response_session or False,
         leitner_box=v_usercard.leitner_box or 0,
         sm2_efactor=v_usercard.sm2_efactor or 0,
         sm2_interval=v_usercard.sm2_interval or 0,
@@ -162,6 +182,9 @@ def _get_user_features(
         v_user = VUser(**v_user.__dict__)
         v_card = VCard(**v_card.__dict__)
         v_usercard = VUserCard(**v_usercard.__dict__)
+
+
+
         elapsed_milliseconds = record.elapsed_milliseconds_text + record.elapsed_milliseconds_answer
         features.append(vectors_to_features(v_usercard, v_user, v_card, record.date, record.card.text, record.card.answer, elapsed_milliseconds))
         labels.append(record.label)
@@ -352,11 +375,12 @@ def retention_data_collator(
 
 
 if __name__ == '__main__':
-    # tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
-    # train_dataset = RetentionDataset(
-    #     data_dir=settings.DATA_DIR,
-    #     fold='train_new_card',
-    #     tokenizer=tokenizer
-    # )
-    # print(len(train_dataset))
-    df = get_retention_features_df()
+    data_dir = f'{settings.DATA_DIR}/retention_phase2'
+    tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
+    train_dataset = RetentionDataset(
+        data_dir=data_dir,
+        fold='train_new_card',
+        tokenizer=tokenizer
+    )
+    print(len(train_dataset))
+    # df = get_retention_features_df()

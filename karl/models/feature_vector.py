@@ -15,6 +15,7 @@ class UserCardFeatureVector(Base):
     count_positive_session = Column(Integer, default=0)
     count_negative_session = Column(Integer, default=0)
     count_session = Column(Integer, default=0)
+    # no delta here since it need to be computed when schedule request arrives
     previous_delta = Column(Integer, default=None)
     previous_study_date = Column(TIMESTAMP(timezone=True), default=None)
     previous_study_response = Column(Boolean, default=None)

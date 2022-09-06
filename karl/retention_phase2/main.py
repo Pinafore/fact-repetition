@@ -28,19 +28,19 @@ from .data import (  # noqa: F401
 )
 from .model_distilbert import DistilBertRetentionModelConfig, DistilBertRetentionModel
 from .model_bert import BertRetentionModelConfig, BertRetentionModel
-from .model_norep import NorepRetentionModelConfig, NorepRetentionModel
+# from .model_norep import NorepRetentionModelConfig, NorepRetentionModel
 
 transformers.logging.set_verbosity_info()
 
 model_cls = {
     'distilbert': DistilBertRetentionModel,
     'bert': BertRetentionModel,
-    'norep': NorepRetentionModel,
+    # 'norep': NorepRetentionModel,
 }
 config_cls = {
     'distilbert': DistilBertRetentionModelConfig,
     'bert': BertRetentionModelConfig,
-    'norep': NorepRetentionModelConfig,
+    # 'norep': NorepRetentionModelConfig,
 }
 tokenizer_cls = {
     'distilbert': DistilBertTokenizerFast,
@@ -76,21 +76,22 @@ def compute_metrics(p: EvalPrediction) -> Dict:
 
 
 def train(
-        model_name,
-        output_dir=f'{settings.CODE_DIR}/output',
-        fold='new_card',
-        resume=None,
-        seed=1,
+    model_name,
+    output_dir=f'{settings.CODE_DIR}/output',
+    fold='new_card',
+    resume=None,
+    seed=1,
 ):
     set_seed(seed)
     retention_feature_size = 0 if fold == 'new_card' else len(feature_fields)
     config = config_cls[model_name](retention_feature_size=retention_feature_size)
     model = model_cls[model_name](config=config)
     tokenizer = tokenizer_cls[model_name].from_pretrained(full_name[model_name])
-    train_dataset = RetentionDataset(settings.DATA_DIR, f'train_{fold}', tokenizer)
-    test_dataset = RetentionDataset(settings.DATA_DIR, f'test_{fold}', tokenizer)
+    data_dir = f'{settings.DATA_DIR}/retention_phase2'
+    train_dataset = RetentionDataset(data_dir, f'train_{fold}', tokenizer)
+    test_dataset = RetentionDataset(data_dir, f'test_{fold}', tokenizer)
     training_args = TrainingArguments(
-        output_dir=f'{output_dir}/retention_hf_{model_name}_{fold}_{seed}',
+        output_dir=f'{output_dir}/retention_phase2_{model_name}_{fold}_{seed}',
         num_train_epochs=10,
         per_device_train_batch_size=8,
         per_device_eval_batch_size=64,
@@ -111,11 +112,13 @@ def train(
 
 def test(model_name, output_dir=f'{settings.CODE_DIR}/output', fold='new_card', seed=1):
     tokenizer = tokenizer_cls[model_name].from_pretrained(full_name[model_name])
-    train_dataset = RetentionDataset(settings.DATA_DIR, f'train_{fold}', tokenizer)
-    test_dataset = RetentionDataset(settings.DATA_DIR, f'test_{fold}', tokenizer)
+    data_dir = f'{settings.DATA_DIR}/retention_phase2'
+    output_dir = f'{output_dir}/retention_phase2_{model_name}_{fold}_{seed}'
+    train_dataset = RetentionDataset(data_dir, f'train_{fold}', tokenizer)
+    test_dataset = RetentionDataset(data_dir, f'test_{fold}', tokenizer)
 
     training_args = TrainingArguments(
-        output_dir=f'{output_dir}/retention_hf_{model_name}_{fold}_{seed}',
+        output_dir=output_dir,
         num_train_epochs=10,
         per_device_train_batch_size=8,
         per_device_eval_batch_size=64,
@@ -141,8 +144,9 @@ def test(model_name, output_dir=f'{settings.CODE_DIR}/output', fold='new_card', 
 
 def test_majority_baseline(fold='new_card'):
     tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
-    train_dataset = RetentionDataset(settings.DATA_DIR, f'train_{fold}', tokenizer)
-    test_dataset = RetentionDataset(settings.DATA_DIR, f'test_{fold}', tokenizer)
+    data_dir = f'{settings.DATA_DIR}/retention_phase2'
+    train_dataset = RetentionDataset(data_dir, f'train_{fold}', tokenizer)
+    test_dataset = RetentionDataset(data_dir, f'test_{fold}', tokenizer)
     labels = [x.label for x in train_dataset]
     label_majority = Counter(labels).most_common()[0][0]
     print(sum([x.label == label_majority for x in test_dataset]) / len(test_dataset))
@@ -160,3 +164,4 @@ if __name__ == '__main__':
     if args.train:
         train(model_name=args.model_name, fold=args.fold, seed=args.seed, resume=args.resume)
     test(model_name=args.model_name, fold=args.fold, seed=args.seed)
+    # test_majority_baseline(fold='new_card')

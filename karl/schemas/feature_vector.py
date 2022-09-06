@@ -11,6 +11,7 @@ class VUserCard(BaseModel):
     count_positive_session: int
     count_negative_session: int
     count_session: int
+    delta: Optional[int]
     previous_delta: Optional[int]
     previous_study_date: Optional[datetime]
     previous_study_response: Optional[bool]
