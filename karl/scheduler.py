@@ -312,6 +312,8 @@ class KARLScheduler:
         if request.fact is not None:
             card = self.get_card(request.fact, session)
 
+        user = self.get_user(request.user_id, session)
+
         if request.test_mode:
             session.add(
                 TestRecord(
