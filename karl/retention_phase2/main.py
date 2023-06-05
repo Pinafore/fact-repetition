@@ -67,7 +67,7 @@ def compute_metrics(p: EvalPrediction) -> Dict:
     acc = accuracy_score(p.label_ids, predicted_labels)
     auc = roc_auc_score(p.label_ids, p.predictions)
     prob_true, prob_pred = calibration_curve(p.label_ids, p.predictions, n_bins=10)
-    ece = np.mean(np.absolute(prob_true - prob_pred))
+    ece = np.mean(np.absolute(prob_true - prob_pred))  # expected calibration error
     return {
         "acc": acc,
         "auc": auc,
@@ -78,11 +78,12 @@ def compute_metrics(p: EvalPrediction) -> Dict:
 def train(
     model_name,
     output_dir=f'{settings.CODE_DIR}/output',
-    fold='new_card',
-    resume=None,
+    fold='new_card',  # new_card or old_card
+    resume_from_checkpoint=False,
     seed=1,
 ):
     set_seed(seed)
+    # TODO use information about the user in addition to card content
     retention_feature_size = 0 if fold == 'new_card' else len(feature_fields)
     config = config_cls[model_name](retention_feature_size=retention_feature_size)
     model = model_cls[model_name](config=config)
@@ -97,6 +98,7 @@ def train(
         per_device_eval_batch_size=64,
         learning_rate=2e-05,
         save_steps=2000,
+        report_to="wandb",
     )
     trainer = Trainer(
         model=model,
@@ -106,7 +108,7 @@ def train(
         data_collator=retention_data_collator,
         compute_metrics=compute_metrics,
     )
-    trainer.train(resume)
+    trainer.train(resume_from_checkpoint=resume_from_checkpoint)
     trainer.save_model()
 
 
@@ -158,10 +160,10 @@ if __name__ == '__main__':
     parser.add_argument('--fold', choices=['new_card', 'old_card'])
     parser.add_argument('--seed', type=int)
     parser.add_argument('--train', type=bool, default=False)
-    parser.add_argument('--resume')
+    parser.add_argument('--resume', type=bool, default=False)
     args = parser.parse_args()
 
     if args.train:
-        train(model_name=args.model_name, fold=args.fold, seed=args.seed, resume=args.resume)
+        train(model_name=args.model_name, fold=args.fold, seed=args.seed, resume_from_checkpoint=args.resume)
     test(model_name=args.model_name, fold=args.fold, seed=args.seed)
     # test_majority_baseline(fold='new_card')
