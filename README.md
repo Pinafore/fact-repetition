@@ -6,10 +6,20 @@ Make sure to use `git-lfs` to pull the model checkpoints too alongside the code.
 1. If you are using `conda`, consider creating a new environment, and make sure
    to run `conda install pip` so that the following dependencies are installed
    for your environment.
-2. Install dependencies with `poetry install`.
-3. Install Spacy module with `python -m spacy download en_core_web_lg`.
+2. It's recommended that you use python 3.11.4
+3. Install dependencies with `poetry install`.
+4. [Optional] Install Spacy module with `python -m spacy download en_core_web_lg`.
+5. Start the poetry shell `poetry shell`.
+6. If you see an error related to `psycopg2-binary`, the easiest solution is probably to install it via pip.
 
-## PostgreSQL server
+## Start PostgreSQL server and load the dev database
+1. Use brew to install PostgreSQL 12: `brew install postgresql@12`.
+2. The server should automatically start. You can use brew services to manage it, e.g., `brew services stop postgresql@12`.
+3. Create DB cluster `initdb`, then create DB `createdb karl-prod`.
+4. Restore from dump `gunzip -c data/karl-dev.gz | psql karl-prod`.
+
+## Start PostgreSQL server on UMIACS
+The default PostgreSQL runtime directory is not available on UMIACS machines, so extra steps are required to redirect it.
 1. Create DB cluster `initdb -D /fs/clip-quiz/shifeng/postgres`
 2. Create the runtime directory `/fs/clip-quiz/shifeng/postgres/run`
 3. Open `/fs/clip-quiz/shifeng/postgres/postgresql.conf`, find `unix_socket_directories` and point it to the runtime directory created above. 
