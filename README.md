@@ -29,8 +29,9 @@ The default PostgreSQL runtime directory is not available on UMIACS machines, so
 7. Restore from dump `gunzip -c /fs/clip-quiz/shifeng/db-karl-backup/karl-prod_20210309.gz | psql -p 5433 karl-prod`. Need to drop existing database first.
 
 ## Run the scheduler
-1. Start the retention model: `uvicorn karl.retention_hf.web:app --log-level info --port 8001`
-2. Start the scheduler itself: `uvicorn karl.web:app --log-level debug`
+1. Start the scheduler itself: `uvicorn karl.web:app --log-level debug`
+2. If you are using a retention model hosted on UMIACS machine, you can likely use the following command to connect to it `ssh -NfL 8001:localhost:8001 your_name@nexusclip00.umiacs.umd.edu`.
+3. If you are running a local retention model, start it with: `uvicorn karl.retention_hf.web:app --log-level info --port 8001`
 
 ## DB migration
 For example, to keep the development branch DB up to date with master branch.
