@@ -33,6 +33,9 @@ The default PostgreSQL runtime directory is not available on UMIACS machines, so
 2. If you are using a retention model hosted on UMIACS machine, you can likely use the following command to connect to it `ssh -NfL 8001:localhost:8001 your_name@nexusclip00.umiacs.umd.edu`.
 3. If you are running a local retention model, start it with: `uvicorn karl.retention_hf.web:app --log-level info --port 8001`
 
+## Running a test
+1. After `poetry shell`, run `python -m karl.tests.test_scheduling_with_session`.
+
 ## DB migration
 For example, to keep the development branch DB up to date with master branch.
 1. Create dump: `pg_dump karl-prod -h /fs/clip-quiz/shifeng/postgres/run -p 5433 | gzip > /fs/clip-quiz/shifeng/karl/backup/karl-prod_20201017.gz`
