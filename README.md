@@ -36,6 +36,17 @@ The default PostgreSQL runtime directory is not available on UMIACS machines, so
 ## Running a test
 1. After `poetry shell`, run `python -m karl.tests.test_scheduling_with_session`.
 
+## `dotenv` file
+You need a `.env` file in this directory.
+```
+CODE_DIR="/Users/shifeng/workspace/fact-repetition"
+API_URL="http://0.0.0.0:8000"
+MODEL_API_URL="http://0.0.0.0:8001"
+SQLALCHEMY_DATABASE_URL="postgresql+psycopg2://shifeng@localhost:5432/karl-prod"
+USE_MULTIPROCESSING=True
+MP_CONTEXT="fork"
+```
+
 ## DB migration
 For example, to keep the development branch DB up to date with master branch.
 1. Create dump: `pg_dump karl-prod -h /fs/clip-quiz/shifeng/postgres/run -p 5433 | gzip > /fs/clip-quiz/shifeng/karl/backup/karl-prod_20201017.gz`
