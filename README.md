@@ -37,10 +37,11 @@ The default PostgreSQL runtime directory is not available on UMIACS machines, so
 1. After `poetry shell`, run `python -m karl.tests.test_scheduling_with_session`.
 
 ## `dotenv` file
-You need a `.env` file in this directory.
+You need a `.env` file in the `karl` directory. Modify `CODE_DIR` as needed and change `shifeng` in `SQLALCHEMY_DATABASE_URL` to your user (check via `SELECT current_user;`). 
 ```
 CODE_DIR="/Users/shifeng/workspace/fact-repetition"
-API_URL="http://0.0.0.0:8000"
+# Should match with port defined in INTERFACE in karl app .env 
+API_URL="http://0.0.0.0:4000" 
 MODEL_API_URL="http://0.0.0.0:8001"
 SQLALCHEMY_DATABASE_URL="postgresql+psycopg2://shifeng@localhost:5432/karl-prod"
 USE_MULTIPROCESSING=True
