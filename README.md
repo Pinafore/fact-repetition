@@ -30,18 +30,27 @@ The default PostgreSQL runtime directory is not available on UMIACS machines, so
 
 ## Run the scheduler
 1. Start the scheduler itself: `uvicorn karl.web:app --log-level debug`
-2. If you are using a retention model hosted on UMIACS machine, you can likely use the following command to connect to it `ssh -NfL 8001:localhost:8001 your_name@nexusclip00.umiacs.umd.edu`.
+2. If you are using a retention model hosted on UMIACS machine, you can likely use the following command to connect to it `ssh -NfL 8001:localhost:8001 your_name@nexusclip00.umiacs.umd.edu`. An alternative is to use an ssh config
 3. If you are running a local retention model, start it with: `uvicorn karl.retention_hf.web:app --log-level info --port 8001`
 
+### SSH Config
+Add the below code to ~/.ssh/config and you can call `ssh clip` going forward to connect to the retention model
+```
+Host clip
+  LocalForward  [your MODEL_API_URL] localhost:8001 # my end, other end
+  User [add user]
+  Hostname nexusclip00.umiacs.umd.edu
+```
 ## Running a test
 1. After `poetry shell`, run `python -m karl.tests.test_scheduling_with_session`.
 
 ## `dotenv` file
 You need a `.env` file in the `karl` directory. Modify `CODE_DIR` as needed and change `shifeng` in `SQLALCHEMY_DATABASE_URL` to your user (check via `SELECT current_user;`). 
+Change `API_URL` to match with the `INTERFACE` variable in the app.
 ```
 CODE_DIR="/Users/shifeng/workspace/fact-repetition"
 # Should match with port defined in INTERFACE in karl app .env 
-API_URL="http://0.0.0.0:4000" 
+API_URL="http://0.0.0.0:8000" 
 MODEL_API_URL="http://0.0.0.0:8001"
 SQLALCHEMY_DATABASE_URL="postgresql+psycopg2://shifeng@localhost:5432/karl-prod"
 USE_MULTIPROCESSING=True
