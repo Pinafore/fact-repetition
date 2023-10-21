@@ -12,11 +12,17 @@ Make sure to use `git-lfs` to pull the model checkpoints too alongside the code.
 5. Start the poetry shell `poetry shell`.
 6. If you see an error related to `psycopg2-binary`, the easiest solution is probably to install it via pip.
 
-## Start PostgreSQL server and load the dev database
+## Start PostgreSQL server
 1. Use brew to install PostgreSQL 12: `brew install postgresql@12`.
 2. The server should automatically start. You can use brew services to manage it, e.g., `brew services stop postgresql@12`.
 3. Create DB cluster `initdb`, then create DB `createdb karl-prod`.
-4. Restore from dump `gunzip -c data/karl-dev.gz | psql karl-prod`.
+4. You may need to modify `alembic.ini` to specify `sqlalchemy.url` to have your name
+
+### load the dev database
+1. Restore from dump `gunzip -c data/karl-dev.gz | psql karl-prod
+
+### start from scratch
+1. Run `alembic upgrade head`
 
 ## Start PostgreSQL server on UMIACS
 The default PostgreSQL runtime directory is not available on UMIACS machines, so extra steps are required to redirect it.
