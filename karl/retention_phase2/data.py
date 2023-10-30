@@ -222,7 +222,7 @@ def retention_data_collator(
         batch['labels'] = labels
 
     if hasattr(first, 'retention_features') and first.retention_features is not None:
-        retention_features = torch.tensor([f.retention_features for f in inputs], dtype=torch.float)
+        retention_features = torch.tensor(np.array([f.retention_features for f in inputs]), dtype=torch.float)
         batch['retention_features'] = retention_features
 
     # Handling of all other possible attributes.

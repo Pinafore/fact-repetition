@@ -29,28 +29,33 @@ from .data import (  # noqa: F401
 from .model_distilbert import DistilBertRetentionModelConfig, DistilBertRetentionModel
 from .model_bert import BertRetentionModelConfig, BertRetentionModel
 # from .model_norep import NorepRetentionModelConfig, NorepRetentionModel
+from .model_faiss import FaissRetentionModelConfig, FaissRetentionModel
 
 transformers.logging.set_verbosity_info()
 
 model_cls = {
     'distilbert': DistilBertRetentionModel,
     'bert': BertRetentionModel,
+    'faiss': FaissRetentionModel,
     # 'norep': NorepRetentionModel,
 }
 config_cls = {
     'distilbert': DistilBertRetentionModelConfig,
     'bert': BertRetentionModelConfig,
+    'faiss': FaissRetentionModelConfig,
     # 'norep': NorepRetentionModelConfig,
 }
 tokenizer_cls = {
     'distilbert': DistilBertTokenizerFast,
     'bert': BertTokenizerFast,
     'norep': DistilBertTokenizerFast,
+    'faiss': BertTokenizerFast,
 }
 full_name = {
     'distilbert': 'distilbert-base-uncased',
     'bert': 'bert-base-uncased',
     'norep': 'distilbert-base-uncased',
+    'faiss': 'bert-base-uncased',
 }
 
 
@@ -78,21 +83,20 @@ def compute_metrics(p: EvalPrediction) -> Dict:
 def train(
     model_name,
     output_dir=f'{settings.CODE_DIR}/output',
-    fold='new_card',  # new_card or old_card
     resume_from_checkpoint=False,
     seed=1,
 ):
     set_seed(seed)
     # TODO use information about the user in addition to card content
-    retention_feature_size = 0 if fold == 'new_card' else len(feature_fields)
+    retention_feature_size = len(feature_fields)
     config = config_cls[model_name](retention_feature_size=retention_feature_size)
     model = model_cls[model_name](config=config)
     tokenizer = tokenizer_cls[model_name].from_pretrained(full_name[model_name])
     data_dir = f'{settings.DATA_DIR}/retention_phase2'
-    train_dataset = RetentionDataset(data_dir, f'train_{fold}', tokenizer)
-    test_dataset = RetentionDataset(data_dir, f'test_{fold}', tokenizer)
+    train_dataset = RetentionDataset(data_dir, 'train', tokenizer)
+    test_dataset = RetentionDataset(data_dir, 'test', tokenizer)
     training_args = TrainingArguments(
-        output_dir=f'{output_dir}/retention_phase2_{model_name}_{fold}_{seed}',
+        output_dir=f'{output_dir}/retention_phase2_{model_name}_{seed}',
         num_train_epochs=10,
         per_device_train_batch_size=8,
         per_device_eval_batch_size=64,
@@ -112,12 +116,12 @@ def train(
     trainer.save_model()
 
 
-def test(model_name, output_dir=f'{settings.CODE_DIR}/output', fold='new_card', seed=1):
+def test(model_name, output_dir=f'{settings.CODE_DIR}/output', seed=1):
     tokenizer = tokenizer_cls[model_name].from_pretrained(full_name[model_name])
     data_dir = f'{settings.DATA_DIR}/retention_phase2'
-    output_dir = f'{output_dir}/retention_phase2_{model_name}_{fold}_{seed}'
-    train_dataset = RetentionDataset(data_dir, f'train_{fold}', tokenizer)
-    test_dataset = RetentionDataset(data_dir, f'test_{fold}', tokenizer)
+    output_dir = f'{output_dir}/retention_phase2_{model_name}_{seed}'
+    train_dataset = RetentionDataset(data_dir, 'train', tokenizer)
+    test_dataset = RetentionDataset(data_dir, 'test', tokenizer)
 
     training_args = TrainingArguments(
         output_dir=output_dir,
@@ -139,31 +143,19 @@ def test(model_name, output_dir=f'{settings.CODE_DIR}/output', fold='new_card', 
     )
 
     result = trainer.evaluate(eval_dataset=test_dataset)
-    print(f"***** Eval {model_name} {fold} {seed} *****")
+    print(f"***** Eval {model_name} {seed} *****")
     for key, value in result.items():
         print("  %s = %s", key, value)
 
 
-def test_majority_baseline(fold='new_card'):
-    tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
-    data_dir = f'{settings.DATA_DIR}/retention_phase2'
-    train_dataset = RetentionDataset(data_dir, f'train_{fold}', tokenizer)
-    test_dataset = RetentionDataset(data_dir, f'test_{fold}', tokenizer)
-    labels = [x.label for x in train_dataset]
-    label_majority = Counter(labels).most_common()[0][0]
-    print(sum([x.label == label_majority for x in test_dataset]) / len(test_dataset))
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_name', choices=['distilbert', 'bert', 'norep'])
-    parser.add_argument('--fold', choices=['new_card', 'old_card'])
+    parser.add_argument('--model_name', choices=['distilbert', 'bert', 'norep', 'faiss'])
     parser.add_argument('--seed', type=int)
     parser.add_argument('--train', type=bool, default=False)
     parser.add_argument('--resume', type=bool, default=False)
     args = parser.parse_args()
 
     if args.train:
-        train(model_name=args.model_name, fold=args.fold, seed=args.seed, resume_from_checkpoint=args.resume)
-    test(model_name=args.model_name, fold=args.fold, seed=args.seed)
-    # test_majority_baseline(fold='new_card')
+        train(model_name=args.model_name, seed=args.seed, resume_from_checkpoint=args.resume)
+    test(model_name=args.model_name, seed=args.seed)
