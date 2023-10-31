@@ -480,7 +480,7 @@ def schedule_v2(
 ) -> ScheduleResponseSchema:
     date = datetime.now(pytz.utc)
     try:
-        schedule_response = scheduler.schedule(schedule_request, date)
+        schedule_response = scheduler.schedule_fsrs_karl_no_delta(schedule_request, date)
     except Exception as e:
         logger.info(e)
         raise HTTPException(status_code=556, detail="Schedule request failed")
