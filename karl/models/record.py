@@ -21,7 +21,6 @@ class ScheduleRequest(Base):
     card_snapshots = relationship('CardSnapshotV2', order_by='CardSnapshotV2.date', back_populates='schedule_request')
     usercard_snapshots = relationship('UserCardSnapshotV2', order_by='UserCardSnapshotV2.date', back_populates='schedule_request')
 
-
 class StudyRecord(Base):
     id = Column(String, primary_key=True, index=True)  # history_id / front_end_id provided by Matthew
     debug_id = Column(String, ForeignKey(ScheduleRequest.id, ondelete='CASCADE'), index=True)

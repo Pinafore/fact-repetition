@@ -11,7 +11,8 @@ from typing import List, Dict, Union
 from datetime import datetime, timedelta
 from concurrent.futures import ProcessPoolExecutor
 from sqlalchemy.orm import Session
-from karl.models.models import FSRSCard
+from karl.models.models import FSRSCard, State, Rating
+from karl.models.fsrs import FSRS
 
 from karl.schemas import ScheduleResponseSchema,\
     ScheduleRequestSchema, UpdateRequestSchema, KarlFactSchema
@@ -584,6 +585,8 @@ class KARLScheduler:
         self.update_leitner(v_usercard, record, date, session)
         # update sm2
         self.update_sm2(v_usercard, record, date, session)
+        # update fsrs
+        self.update_fsrs(v_usercard, record, date, session)
 
         delta_user = None
         if v_user.previous_study_date is not None:
@@ -719,6 +722,42 @@ class KARLScheduler:
         v_usercard.leitner_box = max(min(v_usercard.leitner_box, 10), 1)
         interval = timedelta(days=increment_days[v_usercard.leitner_box])
         v_usercard.leitner_scheduled_date = date + interval
+
+    def update_fsrs(
+        self,
+        v_usercard: UserCardFeatureVector, 
+        record: StudyRecord,
+        date: datetime,
+        session: Session,
+    ) -> None:
+        
+        due = v_usercard.fsrs_scheduled_date # IDK if this is right. I think it is?
+
+        old_state = v_usercard.state # Added a new column for state
+
+        elapsed_days = v_usercard.previous_delta // 3600
+        reps = v_usercard.count_positive
+        lapses = v_usercard.count_negative
+        last_review = v_usercard.previous_study_date
+        stability = v_usercard.stability
+        difficulty = v_usercard.difficulty
+
+
+        f = FSRS()
+        fsrs_card = FSRSCard(due, stability, difficulty, elapsed_days, reps, lapses, old_state, last_review)
+        scheduling_cards = f.repeat(fsrs_card, date)
+        rating = Rating.Good if record.label else Rating.Again
+        card = scheduling_cards[rating].card
+
+        state_mapping = {State.New: {False: State.Learning, True: State.Review},
+                    State.Learning: {False: State.Learning, True: State.Review},
+                    State.Review: {False: State.Learning, True: State.Review}}
+        state = state_mapping[old_state][record.label] # This is how I updated the states during training
+        
+        v_usercard.fsrs_scheduled_date = card.due
+        v_usercard.stability = card.stability
+        v_usercard.difficulty = card.difficulty
+        v_usercard.state = state
 
     def update_sm2(
         self,
