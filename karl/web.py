@@ -475,12 +475,25 @@ def get_leaderboard(
 
 
 @app.post('/api/karl/schedule_v2')
-def schedule(
+def schedule_v2(
     schedule_request: ScheduleRequestSchema,
 ) -> ScheduleResponseSchema:
     date = datetime.now(pytz.utc)
     try:
         schedule_response = scheduler.schedule(schedule_request, date)
+    except Exception as e:
+        logger.info(e)
+        raise HTTPException(status_code=556, detail="Schedule request failed")
+    return schedule_response
+
+
+@app.post('/api/karl/schedule_v3')
+def schedule_v3(
+    schedule_request: ScheduleRequestSchema,
+) -> ScheduleResponseSchema:
+    date = datetime.now(pytz.utc)
+    try:
+        schedule_response = scheduler.schedule_delta(schedule_request, date)
     except Exception as e:
         logger.info(e)
         raise HTTPException(status_code=556, detail="Schedule request failed")
