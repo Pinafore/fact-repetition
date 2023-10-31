@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 import copy
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Dict
 from enum import IntEnum
 
 
@@ -44,7 +44,17 @@ class FSRSCard:
     state: State
     last_review: datetime
 
-    def __init__(self, due, stability, difficulty, elapsed_days, reps, lapses, state) -> None:
+    def __init__(self) -> None:
+        self.due = datetime.utcnow()
+        self.stability = 0
+        self.difficulty = 0
+        self.elapsed_days = 0
+        self.scheduled_days = 0
+        self.reps = 0
+        self.lapses = 0
+        self.state = State.New
+
+    def __init__(self, due, stability, difficulty, elapsed_days, reps, lapses, state, last_review) -> None:
         self.due = due
         self.stability = stability
         self.difficulty = difficulty
@@ -53,6 +63,7 @@ class FSRSCard:
         self.reps = reps
         self.lapses = lapses
         self.state = state
+        self.last_review = last_review
 
     
     def get_retrievability(self, now: datetime) -> Optional[float]:
@@ -116,7 +127,7 @@ class SchedulingFSRSCards:
         self.good.due = now + timedelta(days=good_interval)
         self.easy.due = now + timedelta(days=easy_interval)
 
-    def record_log(self, card: FSRSCard, now: datetime) -> dict[int, SchedulingInfo]:
+    def record_log(self, card: FSRSCard, now: datetime) -> Dict[int, SchedulingInfo]:
         return {
             Rating.Again: SchedulingInfo(self.again,
                                          ReviewLog(Rating.Again, self.again.scheduled_days, card.elapsed_days, now,
