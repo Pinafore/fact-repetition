@@ -71,7 +71,18 @@ class RetentionFeaturesSchema(BaseModel):
     correct_on_first_try_session: bool
     utc_datetime: datetime
     utc_date: date
-
+    fsrs_due: datetime
+    stability: float
+    difficulty: float
+# FSRS Mapping
+# elapsed_days -> usercard_delta
+# state -> ???
+# scheduled_days -> 
+# last_review -> utc_datetime minus usercard_delta # look into adding a column if thats easy
+# reps -> usercard_n_study_positive
+# lapses -> usercard_n_study_negative
+# state -> Review if there exists a Retention Feature
+# state -> Our FSRS: New or Review
 
 feature_fields = [
     field_name for field_name, field_info in RetentionFeaturesSchema.__fields__.items()
