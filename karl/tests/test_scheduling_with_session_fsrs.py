@@ -70,7 +70,7 @@ for nth_day in range(n_days):
     # schedule request for the day
     schedule_request = ScheduleRequestSchema(
         facts=facts,
-        repetition_model='karl',
+        repetition_model='fsrs',
         user_id=user_id,
         recall_target=RecallTarget(target=0.8, target_window_lowest=0, target_window_highest=1.0)
     )

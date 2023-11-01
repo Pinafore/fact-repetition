@@ -209,7 +209,7 @@ class KARLScheduler:
         # else:
         #     pass # TODO
 
-        scores, profile, order = self.karl_score_recall_batch(user, cards, date, session)
+        scores, profile, order = self.karl_score_recall_batch(user, cards, date, session, request)
 
         session.commit()
         session.close()
