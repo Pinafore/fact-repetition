@@ -25,6 +25,9 @@ class RepetitionModel(str, Enum):
     karl50 = "karl50"
     karl85 = "karl85"
     settles = "settles"
+    karl_ablation = "karl_ablation"
+    fsrs = "fsrs"
+
 
     @classmethod
     def select_model(cls):
@@ -35,6 +38,7 @@ class ScheduleRequestSchema(BaseModel):
     facts: List[KarlFactSchema]  # this list can be empty
     repetition_model: RepetitionModel
     recall_target: RecallTarget
+    test_mode: int
 
 
 class ScheduleResponseSchema(BaseModel):

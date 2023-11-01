@@ -135,14 +135,13 @@ class KARLScheduler:
         indexed_deltas = [(i, delta) for i, delta in enumerate(deltas)]
         order = [i for i, _ in sorted(indexed_deltas, key=lambda x: x[1], reverse=True)]
         deltas_ordered = [delta for _, delta in sorted(indexed_deltas, key=lambda x: x[1], reverse=True)]
-        print('*********')
-        print(len(order))
-        print(scores_no_study)
-        print(scores_correct)
-        print(scores_wrong)
-        print(deltas)
-        print(deltas_ordered)
-        print()
+        # print(len(order))
+        # print(scores_no_study)
+        # print(scores_correct)
+        # print(scores_wrong)
+        # print(deltas)
+        # print(deltas_ordered)
+        # print()
 
         session.commit()
         session.close()
