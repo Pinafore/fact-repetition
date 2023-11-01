@@ -127,7 +127,7 @@ class KARLScheduler:
 
         tomorrow = date + timedelta(days=1)
         # get prediction of cards in a days time *if* there is no study now
-        scores_no_study, profile = self.karl_score_recall_batch(user, cards, date, session)
+        scores_no_study, profile, _ = self.karl_score_recall_batch(user, cards, date, session, request)
         # get prediction of cards in a days time *if* answered correctly
         scores_correct, profile = self.karl_score_recall_batch_future(user, cards, date, tomorrow, True, session)
         # get prediction of cards in a days time *if* answered incorrectly
