@@ -2,6 +2,7 @@
 # coding: utf-8
 
 import json
+from fastapi import HTTPException
 import pytz
 import requests
 import numpy as np
@@ -10,6 +11,7 @@ from typing import List, Dict, Union
 from datetime import datetime, timedelta
 from concurrent.futures import ProcessPoolExecutor
 from sqlalchemy.orm import Session
+from karl.models.models import FSRSCard
 
 from karl.schemas import ScheduleResponseSchema,\
     ScheduleRequestSchema, UpdateRequestSchema, KarlFactSchema
@@ -206,19 +208,7 @@ class KARLScheduler:
         # else:
         #     pass # TODO
 
-        scores, profile = self.karl_score_recall_batch(user, cards, date, session)
-
-        # sort cards
-        index_score_in_window = []
-        for i, score in enumerate(scores):
-            if score >= request.recall_target.target_window_lowest and \
-                    score <= request.recall_target.target_window_highest:
-                index_score_in_window.append((i, score))
-        index_score_in_window = sorted(
-            index_score_in_window,
-            key=lambda x: abs(x[1] - request.recall_target.target),
-        )
-        order = [x[0] for x in index_score_in_window]
+        scores, profile, order = self.scheduler_score_recall_batch(user, cards, date, session, request.repetition_model)
 
         session.commit()
         session.close()
@@ -305,6 +295,7 @@ class KARLScheduler:
         cards: List[Card],
         date: datetime,
         session: Session,
+        request: ScheduleRequestSchema
     ) -> List[float]:
         t0 = datetime.now(pytz.utc)
 
@@ -336,12 +327,29 @@ class KARLScheduler:
             x['utc_date'] = str(x['utc_date'])
             x['utc_datetime'] = str(x['utc_datetime'])
 
-        scores = json.loads(
-            requests.get(
-                f'{settings.MODEL_API_URL}/api/karl/predict',
-                data=json.dumps(feature_vectors)
-            ).text
-        )
+        if request.repetition_model == RepetitionModel.fsrs:
+            scores = [index for index, _ in sorted(enumerate(feature_vectors), key=lambda x: x[1]['fsrs_due'])]
+        elif request.repetition_model == RepetitionModel.karl or request.repetition_model == RepetitionModel.karlAblation:
+            scores = json.loads(
+                requests.get(
+                    f'{settings.MODEL_API_URL}/api/karl/predict',
+                    data=json.dumps(feature_vectors)
+                ).text
+            )
+            # sort cards
+            index_score_in_window = []
+            for i, score in enumerate(scores):
+                if score >= request.recall_target.target_window_lowest and \
+                        score <= request.recall_target.target_window_highest:
+                    index_score_in_window.append((i, score))
+            index_score_in_window = sorted(
+                index_score_in_window,
+                key=lambda x: abs(x[1] - request.recall_target.target),
+            )
+            order = [x[0] for x in index_score_in_window]
+            print(len(order))
+        else:
+            raise HTTPException(status_code=557, detail="Scheduler not implemented")
 
         t2 = datetime.now(pytz.utc)
 

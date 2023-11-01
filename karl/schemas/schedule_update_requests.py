@@ -25,10 +25,8 @@ class RepetitionModel(str, Enum):
     karl50 = "karl50"
     karl85 = "karl85"
     settles = "settles"
-
-    @classmethod
-    def select_model(cls):
-        return choice([Repetition.leitner, Repetition.karl, Repetition.settles])
+    fsrs = "fsrs"
+    karlAblation = "karl-ablation"
 
 class ScheduleRequestSchema(BaseModel):
     user_id: str
