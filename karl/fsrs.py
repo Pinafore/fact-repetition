@@ -1,4 +1,4 @@
-from .models import *
+from .fsrs_models import *
 import math
 from typing import Dict
 
