@@ -220,7 +220,7 @@ class KARLScheduler:
             scores = [x[1] for x in index_score_in_window]
             index_score_in_window = sorted(
                 index_score_in_window,
-                key=lambda x: abs(x[1] - request.recall_target.target),
+                key=lambda x: abs(x[1]),
             )
             order = [x[0] for x in index_score_in_window]
             #scores = [index for index, _ in sorted(enumerate(feature_vectors), key=lambda x: x[1]['fsrs_due'])]
