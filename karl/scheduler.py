@@ -11,8 +11,8 @@ from typing import List, Dict, Union
 from datetime import datetime, timedelta
 from concurrent.futures import ProcessPoolExecutor
 from sqlalchemy.orm import Session
-from karl.models.models import FSRSCard, State, Rating
-from karl.models.fsrs import FSRS
+from karl.fsrs_models import FSRSCard, State, Rating
+from karl.fsrs import FSRS
 
 from karl.schemas import ScheduleResponseSchema,\
     ScheduleRequestSchema, UpdateRequestSchema, KarlFactSchema
