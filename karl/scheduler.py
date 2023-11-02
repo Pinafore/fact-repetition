@@ -989,7 +989,7 @@ class KARLScheduler:
 
         f = FSRS()
         fsrs_card = FSRSCard(due, stability, difficulty, elapsed_days, reps, lapses, old_state, last_review)
-        scheduling_cards = f.repeat(fsrs_card, date)
+        scheduling_cards = f.repeat(fsrs_card, due)
         rating = Rating.Good if record.label else Rating.Again
         card = scheduling_cards[rating].card
 
@@ -1004,7 +1004,7 @@ class KARLScheduler:
         v_usercard.difficulty = card.difficulty
         v_usercard.state = state
 
-        print(v_usercard.fsrs_scheduled_date)
+        #print(v_usercard.fsrs_scheduled_date)
 
     def update_sm2(
         self,
