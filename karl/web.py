@@ -491,6 +491,7 @@ def schedule_v2(
 def schedule_v3(
     schedule_request: ScheduleRequestSchema,
 ) -> ScheduleResponseSchema:
+    print("RETENTION MODEL:", schedule_request.repetition_model)
     date = datetime.now(pytz.utc)
     try:
         if schedule_request.repetition_model == RepetitionModel.fsrs:

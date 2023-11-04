@@ -114,6 +114,8 @@ class KARLScheduler:
         session.commit()
         session.close()
 
+        date_ = datetime.now(pytz.utc)
+
         if len(request.facts) == 0:
             return ScheduleResponseSchema(
                 debug_id=schedule_request_id,
@@ -128,6 +130,7 @@ class KARLScheduler:
         tomorrow = date + timedelta(days=1)
         # get prediction of cards in a days time *if* there is no study now
         scores_no_study, profile, _ = self.karl_score_recall_batch(user, cards, date, session, request)
+
         # get prediction of cards in a days time *if* answered correctly
         scores_correct, profile = self.karl_score_recall_batch_future(user, cards, date, tomorrow, True, session)
         # get prediction of cards in a days time *if* answered incorrectly
@@ -140,11 +143,11 @@ class KARLScheduler:
         deltas_ordered = [delta for _, delta in sorted(indexed_deltas, key=lambda x: x[1], reverse=True)]
         print('*********')
         print(len(order))
-        print(scores_no_study)
-        print(scores_correct)
-        print(scores_wrong)
-        print(deltas)
-        print(deltas_ordered)
+        # print(scores_no_study)
+        # print(scores_correct)
+        # print(scores_wrong)
+        # print(deltas)
+        # print(deltas_ordered)
         print()
 
         session.commit()
@@ -342,8 +345,9 @@ class KARLScheduler:
         
         index_score_in_window = []
         for index, fsrs_feature in enumerate(feature_vectors):
-            index_score_in_window.append((index, fsrs_feature['fsrs_scheduled_date'].timestamp()))
+            index_score_in_window.append((index, fsrs_feature['fsrs_scheduled_date'].date().toordinal()))
         scores = [x[1] for x in index_score_in_window]
+        print('scores:', scores)
         index_score_in_window = sorted(
             index_score_in_window,
             key=lambda x: x[1],
@@ -978,6 +982,9 @@ class KARLScheduler:
         
         due = date if v_usercard.fsrs_scheduled_date == None else v_usercard.fsrs_scheduled_date  # IDK if this is right. I think it is?
 
+        print()
+        print('OLD DATE:', due)
+
         old_state = State.New if v_usercard.state == None else v_usercard.state # Added a new column for state
 
         elapsed_days = 0 if v_usercard.previous_delta == None else v_usercard.previous_delta // 3600
@@ -1003,6 +1010,12 @@ class KARLScheduler:
         v_usercard.stability = card.stability
         v_usercard.difficulty = card.difficulty
         v_usercard.state = state
+
+        print('NEW DATE:', v_usercard.fsrs_scheduled_date)
+        print('OLD STATE:', old_state)
+        print('NEW STATE:', state)
+
+        print()
 
         #print(v_usercard.fsrs_scheduled_date)
 
