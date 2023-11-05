@@ -6,10 +6,26 @@ Make sure to use `git-lfs` to pull the model checkpoints too alongside the code.
 1. If you are using `conda`, consider creating a new environment, and make sure
    to run `conda install pip` so that the following dependencies are installed
    for your environment.
-2. Install dependencies with `poetry install`.
-3. Install Spacy module with `python -m spacy download en_core_web_lg`.
+2. It's recommended that you use python 3.11.4
+3. Install dependencies with `poetry install`.
+4. [Optional] Install Spacy module with `python -m spacy download en_core_web_lg`.
+5. Start the poetry shell `poetry shell`.
+6. If you see an error related to `psycopg2-binary`, the easiest solution is probably to install it via pip.
 
-## PostgreSQL server
+## Start PostgreSQL server
+1. Use brew to install PostgreSQL 12: `brew install postgresql@12`.
+2. The server should automatically start. You can use brew services to manage it, e.g., `brew services stop postgresql@12`.
+3. Create DB cluster `initdb`, then create DB `createdb karl-prod`.
+4. You may need to modify `alembic.ini` to specify `sqlalchemy.url` to have your name
+
+### load the dev database
+1. Restore from dump `gunzip -c data/karl-dev.gz | psql karl-prod
+
+### start from scratch
+1. Run `alembic upgrade head`
+
+## Start PostgreSQL server on UMIACS
+The default PostgreSQL runtime directory is not available on UMIACS machines, so extra steps are required to redirect it.
 1. Create DB cluster `initdb -D /fs/clip-quiz/shifeng/postgres`
 2. Create the runtime directory `/fs/clip-quiz/shifeng/postgres/run`
 3. Open `/fs/clip-quiz/shifeng/postgres/postgresql.conf`, find `unix_socket_directories` and point it to the runtime directory created above. 
@@ -19,8 +35,33 @@ Make sure to use `git-lfs` to pull the model checkpoints too alongside the code.
 7. Restore from dump `gunzip -c /fs/clip-quiz/shifeng/db-karl-backup/karl-prod_20210309.gz | psql -p 5433 karl-prod`. Need to drop existing database first.
 
 ## Run the scheduler
-1. Start the retention model: `uvicorn karl.retention_hf.web:app --log-level info --port 8001`
-2. Start the scheduler itself: `uvicorn karl.web:app --log-level debug`
+1. Start the scheduler itself: `uvicorn karl.web:app --log-level debug`
+2. If you are using a retention model hosted on UMIACS machine, you can likely use the following command to connect to it `ssh -NfL 8001:localhost:8001 your_name@nexusclip00.umiacs.umd.edu`. An alternative is to use an ssh config
+3. If you are running a local retention model, start it with: `uvicorn karl.retention_hf.web:app --log-level info --port 8001`
+
+### SSH Config
+Add the below code to ~/.ssh/config and you can call `ssh clip` going forward to connect to the retention model
+```
+Host clip
+  LocalForward  [your MODEL_API_URL] localhost:8001 # my end, other end
+  User [add user]
+  Hostname nexusclip00.umiacs.umd.edu
+```
+## Running a test
+1. After `poetry shell`, run `python -m karl.tests.test_scheduling_with_session`.
+
+## `dotenv` file
+You need a `.env` file in the `karl` directory. Modify `CODE_DIR` as needed and change `shifeng` in `SQLALCHEMY_DATABASE_URL` to your user (check via `SELECT current_user;`). 
+Change `API_URL` to match with the `INTERFACE` variable in the app.
+```
+CODE_DIR="/Users/shifeng/workspace/fact-repetition"
+# Should match with port defined in INTERFACE in karl app .env 
+API_URL="http://0.0.0.0:8000" 
+MODEL_API_URL="http://0.0.0.0:8001"
+SQLALCHEMY_DATABASE_URL="postgresql+psycopg2://shifeng@localhost:5432/karl-prod"
+USE_MULTIPROCESSING=True
+MP_CONTEXT="fork"
+```
 
 ## DB migration
 For example, to keep the development branch DB up to date with master branch.
