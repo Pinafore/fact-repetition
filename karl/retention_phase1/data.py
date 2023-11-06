@@ -72,8 +72,9 @@ def fsrs_vectors_to_features(
     v_usercard: UserCardFeatureVector,
 ) -> FSRSFeaturesSchema:
     max_datetime = datetime(9999, 12, 31)
+    fsrs_scheduled_date = v_usercard.get('fsrs_scheduled_date', max_datetime) or max_datetime
     return FSRSFeaturesSchema(
-        fsrs_scheduled_date=v_usercard.get('fsrs_scheduled_date', max_datetime)
+        fsrs_scheduled_date=fsrs_scheduled_date
     )
 
 
