@@ -509,6 +509,7 @@ def update(
     update_request: UpdateRequestSchema,
 ) -> dict:
     date = datetime.now(pytz.utc)
+    print("IN UPDATE")
     try:
         profile = scheduler.update(update_request, date)
     except Exception as e:

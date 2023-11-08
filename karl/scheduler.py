@@ -114,8 +114,6 @@ class KARLScheduler:
         session.commit()
         session.close()
 
-        date_ = datetime.now(pytz.utc)
-
         if len(request.facts) == 0:
             return ScheduleResponseSchema(
                 debug_id=schedule_request_id,
@@ -130,7 +128,6 @@ class KARLScheduler:
         tomorrow = date + timedelta(days=1)
         # get prediction of cards in a days time *if* there is no study now
         scores_no_study, profile, _ = self.karl_score_recall_batch(user, cards, date, session, request)
-
         # get prediction of cards in a days time *if* answered correctly
         scores_correct, profile = self.karl_score_recall_batch_future(user, cards, date, tomorrow, True, session)
         # get prediction of cards in a days time *if* answered incorrectly
@@ -347,7 +344,7 @@ class KARLScheduler:
         for index, fsrs_feature in enumerate(feature_vectors):
             index_score_in_window.append((index, fsrs_feature['fsrs_scheduled_date'].date().toordinal()))
         scores = [x[1] for x in index_score_in_window]
-        print('scores:', scores)
+        # print('scores:', scores)
         index_score_in_window = sorted(
             index_score_in_window,
             key=lambda x: x[1],
@@ -405,12 +402,19 @@ class KARLScheduler:
             x['utc_datetime'] = str(x['utc_datetime'])
 
         if request.repetition_model == RepetitionModel.karl or request.repetition_model == RepetitionModel.karlAblation:
-            scores = json.loads(
-                requests.get(
+            
+            time_start = datetime.now()
+            data_dump = json.dumps(feature_vectors)
+            print('\n\nTIME DUMPING:', datetime.now() - time_start, '\n\n')
+            time_start = datetime.now()
+            req = requests.get(
                     f'{settings.MODEL_API_URL}/api/karl/predict',
-                    data=json.dumps(feature_vectors)
+                    data=data_dump
                 ).text
-            )
+            print('\n\nREQUEST:', datetime.now() - time_start, '\n\n')
+            time_start = datetime.now()
+            scores = json.loads(req)
+            print('\n\nTIME LOADING:', datetime.now() - time_start, '\n\n')
             # sort cards
             index_score_in_window = []
             for i, score in enumerate(scores):
