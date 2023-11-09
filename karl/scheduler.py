@@ -493,7 +493,8 @@ class KARLScheduler:
 
         user = self.get_user(request.user_id, session)
 
-        if request.test_mode:
+        if request.test_mode is not None:
+            # `test_mode` is an integer representing a specific test set
             session.add(
                 TestRecord(
                     id=request.history_id,

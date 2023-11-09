@@ -38,7 +38,7 @@ class ScheduleRequestSchema(BaseModel):
     facts: List[KarlFactSchema]  # this list can be empty
     repetition_model: RepetitionModel
     recall_target: RecallTarget
-    test_mode: int
+    test_mode: Optional[int]
 
 
 class ScheduleResponseSchema(BaseModel):
