@@ -17,7 +17,7 @@ from concurrent.futures import ProcessPoolExecutor
 
 from karl.schemas import UserStatsSchema, RankingSchema, LeaderboardSchema, \
     ParametersSchema, ScheduleResponseSchema, Visualization, \
-    ScheduleRequestSchema, UpdateRequestSchema
+    ScheduleRequestSchema, UpdateRequestSchema, RepetitionModel
 from karl.models import User, UserStatsV2, Parameters, \
     UserCardFeatureVector, UserFeatureVector, CardFeatureVector, \
     StudyRecord, TestRecord, ScheduleRequest,\
@@ -480,7 +480,7 @@ def schedule_v2(
 ) -> ScheduleResponseSchema:
     date = datetime.now(pytz.utc)
     try:
-        schedule_response = scheduler.schedule(schedule_request, date)
+        schedule_response = scheduler.schedule_fsrs_karl_no_delta(schedule_request, date)
     except Exception as e:
         logger.info(e)
         raise HTTPException(status_code=556, detail="Schedule request failed")
@@ -493,7 +493,10 @@ def schedule_v3(
 ) -> ScheduleResponseSchema:
     date = datetime.now(pytz.utc)
     try:
-        schedule_response = scheduler.schedule_delta(schedule_request, date)
+        if schedule_request.repetition_model == RepetitionModel.fsrs:
+            schedule_response = scheduler.schedule_fsrs_karl_no_delta(schedule_request, date)
+        else:
+            schedule_response = scheduler.schedule_delta(schedule_request, date)
     except Exception as e:
         logger.info(e)
         raise HTTPException(status_code=556, detail="Schedule request failed")

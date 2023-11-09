@@ -2,6 +2,7 @@
 # coding: utf-8
 
 import json
+from fastapi import HTTPException
 import pytz
 import requests
 import numpy as np
@@ -10,6 +11,8 @@ from typing import List, Dict, Union
 from datetime import datetime, timedelta
 from concurrent.futures import ProcessPoolExecutor
 from sqlalchemy.orm import Session
+from karl.fsrs_models import FSRSCard, State, Rating
+from karl.fsrs import FSRS
 
 from karl.schemas import ScheduleResponseSchema,\
     ScheduleRequestSchema, UpdateRequestSchema, KarlFactSchema
@@ -124,7 +127,7 @@ class KARLScheduler:
 
         tomorrow = date + timedelta(days=1)
         # get prediction of cards in a days time *if* there is no study now
-        scores_no_study, profile = self.karl_score_recall_batch(user, cards, date, session)
+        scores_no_study, profile, _ = self.karl_score_recall_batch(user, cards, date, session, request)
         # get prediction of cards in a days time *if* answered correctly
         scores_correct, profile = self.karl_score_recall_batch_future(user, cards, date, tomorrow, True, session)
         # get prediction of cards in a days time *if* answered incorrectly
@@ -154,7 +157,7 @@ class KARLScheduler:
         )
 
 
-    def schedule(
+    def schedule_fsrs_karl_no_delta(
         self,
         request: ScheduleRequestSchema,
         date: datetime,
@@ -205,19 +208,7 @@ class KARLScheduler:
         # else:
         #     pass # TODO
 
-        scores, profile = self.karl_score_recall_batch(user, cards, date, session)
-
-        # sort cards
-        index_score_in_window = []
-        for i, score in enumerate(scores):
-            if score >= request.recall_target.target_window_lowest and \
-                    score <= request.recall_target.target_window_highest:
-                index_score_in_window.append((i, score))
-        index_score_in_window = sorted(
-            index_score_in_window,
-            key=lambda x: abs(x[1] - request.recall_target.target),
-        )
-        order = [x[0] for x in index_score_in_window]
+        scores, profile, order = self.karl_score_recall_batch(user, cards, date, session, request)
 
         session.commit()
         session.close()
@@ -262,48 +253,13 @@ class KARLScheduler:
         session.close()
         return vectors_to_features(v_usercard, v_user, v_card, date, card_text)
 
-    def collect_features_for_future(self, user_id, card_id, card_text, v_user, date, future, forced_result):
-        '''helper for multiprocessing'''
-        session = SessionLocal(expire_on_commit=False)
-        v_card = VCard(**self.get_card_vector(card_id, session).__dict__)
-        v_usercard = VUserCard(**self.get_usercard_vector(user_id, card_id, session).__dict__)
-        session.close()
-
-        previous_delta = None
-        if v_usercard.previous_study_date is not None:
-            previous_delta = (date - v_usercard.previous_study_date).total_seconds()
-        v_usercard.previous_delta = previous_delta 
-        v_usercard.count_positive += int(forced_result)
-        v_usercard.count_negative += int(not forced_result)
-        v_usercard.count += 1
-        v_usercard.previous_study_date = date
-        v_usercard.previous_study_response = forced_result
-        if v_usercard.correct_on_first_try is None:
-            v_usercard.correct_on_first_try = forced_result
-
-        # update leitner
-        self.update_leitner(v_usercard, forced_result, date)
-        # update sm2
-        self.update_sm2(v_usercard, forced_result, date)
-
-        previous_delta = None
-        if v_card.previous_study_date is not None:
-            previous_delta = (date - v_card.previous_study_date).total_seconds()
-        v_card.previous_delta = previous_delta
-        v_card.count_positive += int(forced_result)
-        v_card.count_negative += int(not forced_result)
-        v_card.count += 1
-        v_card.previous_study_date = date
-        v_card.previous_study_response = forced_result
-
-        return vectors_to_features(v_usercard, v_user, v_card, future, card_text)
-
     def karl_score_recall_batch(
         self,
         user: User,
         cards: List[Card],
         date: datetime,
         session: Session,
+        request: ScheduleRequestSchema
     ) -> List[float]:
         t0 = datetime.now(pytz.utc)
 
@@ -335,78 +291,38 @@ class KARLScheduler:
             x['utc_date'] = str(x['utc_date'])
             x['utc_datetime'] = str(x['utc_datetime'])
 
-        scores = json.loads(
-            requests.get(
-                f'{settings.MODEL_API_URL}/api/karl/predict',
-                data=json.dumps(feature_vectors)
-            ).text
-        )
-
-        t2 = datetime.now(pytz.utc)
-
-        profile = {
-            'schedule gather features': (t1 - t0).total_seconds(),
-            'schedule model prediction': (t2 - t1).total_seconds(),
-        }
-        return scores, profile
-
-    def karl_score_recall_batch_future(
-        self,
-        user: User,
-        cards: List[Card],
-        date: datetime,
-        future: datetime,
-        forced_result: bool,
-        session: Session,
-    ) -> List[float]:
-        '''Get predicted retention probability at *future* timestamp given
-        *forced result* at current *date*'''
-        t0 = datetime.now(pytz.utc)
-
-        # gather card features
-        feature_vectors = []
-        v_user = VUser(**self.get_user_vector(user.id, session).__dict__)
-        previous_delta = None
-        if v_user.previous_study_date is not None:
-            previous_delta = (date - v_user.previous_study_date).total_seconds()
-        v_user.previous_delta = previous_delta
-        v_user.count_positive += int(forced_result)
-        v_user.count_negative += int(not forced_result)
-        v_user.count += 1
-        v_user.previous_study_date = date
-        v_user.previous_study_response = forced_result
-
-        if not settings.USE_MULTIPROCESSING:
-            feature_vectors = [
-                self.collect_features_for_future(user.id, card.id, card.text, v_user, date, future, forced_result).__dict__
-                for card in cards
-            ]
-        else:
-            # https://docs.sqlalchemy.org/en/14/core/pooling.html#using-connection-pools-with-multiprocessing-or-os-fork
-            # https://pythonspeed.com/articles/python-multiprocessing/
-            executor = ProcessPoolExecutor(
-                mp_context=multiprocessing.get_context(settings.MP_CONTEXT),
-                initializer=engine.dispose,
+        if request.repetition_model == RepetitionModel.fsrs:
+            index_score_in_window = []
+            for index, fsrs_feature in enumerate(feature_vectors):
+                index_score_in_window.append((index, fsrs_feature['fsrs_due']))
+            scores = [x[1] for x in index_score_in_window]
+            index_score_in_window = sorted(
+                index_score_in_window,
+                key=lambda x: abs(x[1] - request.recall_target.target),
             )
-        futures = [
-            executor.submit(self.collect_features_for_future, user.id, card.id, card.text, v_user, date,
-                            future, forced_result)
-            for card in cards
-        ]
-        feature_vectors = [x.result().__dict__ for x in futures]
-
-        t1 = datetime.now(pytz.utc)
-
-        for x in feature_vectors:
-            x['utc_date'] = str(x['utc_date'])
-            x['utc_datetime'] = str(x['utc_datetime'])
-
-        scores = json.loads(
-            requests.get(
-                f'{settings.MODEL_API_URL}/api/karl/predict',
-                data=json.dumps(feature_vectors)
-            ).text
-        )
+            order = [x[0] for x in index_score_in_window]
+            #scores = [index for index, _ in sorted(enumerate(feature_vectors), key=lambda x: x[1]['fsrs_due'])]
+        elif request.repetition_model == RepetitionModel.karl or request.repetition_model == RepetitionModel.karlAblation:
+            scores = json.loads(
+                requests.get(
+                    f'{settings.MODEL_API_URL}/api/karl/predict',
+                    data=json.dumps(feature_vectors)
+                ).text
+            )
+            # sort cards
+            index_score_in_window = []
+            for i, score in enumerate(scores):
+                if score >= request.recall_target.target_window_lowest and \
+                        score <= request.recall_target.target_window_highest:
+                    index_score_in_window.append((i, score))
+            index_score_in_window = sorted(
+                index_score_in_window,
+                key=lambda x: abs(x[1] - request.recall_target.target),
+            )
+            order = [x[0] for x in index_score_in_window]
+            print(len(order))
+        else:
+            raise HTTPException(status_code=557, detail="Scheduler not implemented")
 
         t2 = datetime.now(pytz.utc)
 
@@ -414,7 +330,7 @@ class KARLScheduler:
             'schedule gather features': (t1 - t0).total_seconds(),
             'schedule model prediction': (t2 - t1).total_seconds(),
         }
-        return scores, profile
+        return scores, profile, order
 
     def score_cool_down(
         self,
@@ -745,9 +661,11 @@ class KARLScheduler:
                 v_usercard.correct_on_first_try_session = record.label
 
         # update leitner
-        self.update_leitner(v_usercard, record.label, date)
+        self.update_leitner(v_usercard, record, date, session)
         # update sm2
-        self.update_sm2(v_usercard, record.label, date)
+        self.update_sm2(v_usercard, record, date, session)
+        # update fsrs
+        self.update_fsrs(v_usercard, record, date, session)
 
         delta_user = None
         if v_user.previous_study_date is not None:
@@ -865,8 +783,9 @@ class KARLScheduler:
     def update_leitner(
         self,
         v_usercard: UserCardFeatureVector,
-        label: bool,
+        record: StudyRecord,
         date: datetime,
+        session: Session,
     ) -> None:
         # leitner boxes 1~10
         # days[0] = None as placeholder since we don't have box 0
@@ -878,16 +797,53 @@ class KARLScheduler:
             # boxes: 1 ~ 10
             v_usercard.leitner_box = 1
 
-        v_usercard.leitner_box += (1 if label else -1)
+        v_usercard.leitner_box += (1 if record.label else -1)
         v_usercard.leitner_box = max(min(v_usercard.leitner_box, 10), 1)
         interval = timedelta(days=increment_days[v_usercard.leitner_box])
         v_usercard.leitner_scheduled_date = date + interval
 
+    def update_fsrs(
+        self,
+        v_usercard: UserCardFeatureVector, 
+        record: StudyRecord,
+        date: datetime,
+        session: Session,
+    ) -> None:
+        
+        due = v_usercard.fsrs_scheduled_date # IDK if this is right. I think it is?
+
+        old_state = v_usercard.state # Added a new column for state
+
+        elapsed_days = v_usercard.previous_delta // 3600
+        reps = v_usercard.count_positive
+        lapses = v_usercard.count_negative
+        last_review = v_usercard.previous_study_date
+        stability = v_usercard.stability
+        difficulty = v_usercard.difficulty
+
+
+        f = FSRS()
+        fsrs_card = FSRSCard(due, stability, difficulty, elapsed_days, reps, lapses, old_state, last_review)
+        scheduling_cards = f.repeat(fsrs_card, date)
+        rating = Rating.Good if record.label else Rating.Again
+        card = scheduling_cards[rating].card
+
+        state_mapping = {State.New: {False: State.Learning, True: State.Review},
+                    State.Learning: {False: State.Learning, True: State.Review},
+                    State.Review: {False: State.Learning, True: State.Review}}
+        state = state_mapping[old_state][record.label] # This is how I updated the states during training
+        
+        v_usercard.fsrs_scheduled_date = card.due
+        v_usercard.stability = card.stability
+        v_usercard.difficulty = card.difficulty
+        v_usercard.state = state
+
     def update_sm2(
         self,
         v_usercard: UserCardFeatureVector, 
-        label: bool,
+        record: StudyRecord,
         date: datetime,
+        session: Session,
     ) -> None:
         def get_quality_from_response(response: bool) -> int:
             return 4 if response else 1
@@ -898,11 +854,11 @@ class KARLScheduler:
             v_usercard.sm2_interval = 1
             v_usercard.sm2_repetition = 0
 
-        q = get_quality_from_response(label)
+        q = get_quality_from_response(record.label)
         v_usercard.sm2_repetition += 1
         v_usercard.sm2_efactor = max(1.3, v_usercard.sm2_efactor + 0.1 - (5.0 - q) * (0.08 + (5.0 - q) * 0.02))
 
-        if not label:
+        if not record.label:
             v_usercard.sm2_interval = 0
             v_usercard.sm2_repetition = 0
         else:

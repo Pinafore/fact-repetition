@@ -29,6 +29,12 @@ class UserCardFeatureVector(Base):
     sm2_interval = Column(Float, default=None)
     sm2_repetition = Column(Integer, default=None)
     sm2_scheduled_date = Column(TIMESTAMP(timezone=True), default=None)
+
+    fsrs_scheduled_date = Column(TIMESTAMP(timezone=True), default=None)
+    stability = Column(Float, default=None)
+    difficulty = Column(Float, default=None)
+    state = Column(Integer, default=None)
+    
     schedule_request_id = Column(String, default=None)
 
 
