@@ -35,6 +35,7 @@ schedule_request = ScheduleRequestSchema(
     facts=[],
     repetition_model='karl',
     user_id=user_id,
+    test_mode=666,
     recall_target=RecallTarget(target=0.8, target_window_lowest=0, target_window_highest=1.0)
 )
 schedule_response = json.loads(
@@ -72,6 +73,7 @@ for nth_day in range(n_days):
         facts=facts,
         repetition_model='karl',
         user_id=user_id,
+        test_mode=666,
         recall_target=RecallTarget(target=0.8, target_window_lowest=0, target_window_highest=1.0)
     )
     schedule_response = json.loads(
@@ -81,11 +83,11 @@ for nth_day in range(n_days):
         ).text
     )
 
-    for key, value in schedule_response.get('profile', {}).items():
-        if key not in profile:
-            profile[key] = []
-        profile[key].append(value)
-
+#     for key, value in schedule_response.get('profile', {}).items():
+#         if key not in profile:
+#             profile[key] = []
+#         profile[key].append(value)
+# 
     seconds_offset = 0  # offset from the the first fact of today, in seconds
     for nth_fact in range(n_facts_per_day):
         current_date = start_date + timedelta(days=nth_day) + timedelta(seconds=seconds_offset)
@@ -110,7 +112,7 @@ for nth_day in range(n_days):
             debug_id=debug_id,
             history_id=f'sim_history_{nth_day}_{nth_fact}',
             studyset_id='dummy_studyset_' + debug_id,
-            test_mode=False,
+            test_mode=666,
             fact=schedule_request.facts[index],
         )
         update_response = json.loads(
@@ -148,7 +150,7 @@ for nth_fact in range(n_facts_per_day):
         debug_id=debug_id,
         history_id=f'sim_history_test_{nth_fact}',
         studyset_id='dummy_studyset_test',
-        test_mode=True,
+        test_mode=666,
     )
     update_response = json.loads(
         requests.post(
@@ -170,7 +172,7 @@ update_request = UpdateRequestSchema(
     debug_id=debug_id,
     history_id='295584',
     studyset_id='dummy_studyset_' + debug_id,
-    test_mode=False,
+    test_mode=666,
     fact=schedule_request.facts[index],
 )
 
