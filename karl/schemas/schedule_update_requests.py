@@ -32,7 +32,7 @@ class ScheduleRequestSchema(BaseModel):
     user_id: str
     facts: List[KarlFactSchema]  # this list can be empty
     repetition_model: RepetitionModel
-    recall_target: RecallTarget
+    recall_target: Optional[RecallTarget]
     test_mode: Optional[int]
 
 
@@ -56,7 +56,7 @@ class UpdateRequestSchema(BaseModel):
     history_id: str  # uniquely identifies a study
     studyset_id: str
     debug_id: Optional[str] # aka schedule_request_id, n/a in test updates
-    test_mode: bool
+    test_mode: Optional[int]
     fact: Optional[KarlFactSchema]
     typed: Optional[str]  # user-entered answer
     recommendation: Optional[bool]  # system's judgment of whether the user-entered answer is correct
