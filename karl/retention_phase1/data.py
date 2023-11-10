@@ -20,7 +20,7 @@ from transformers import DistilBertTokenizerFast
 
 from karl.db.session import SessionLocal, engine
 from karl.config import settings
-from karl.models import User, Card, UserCardSnapshotV2, UserSnapshotV2, CardSnapshotV2
+from karl.models import User, Card, UserCardSnapshotV2, UserSnapshotV2, CardSnapshotV2, UserCardFeatureVector
 from karl.schemas import VUserCard, VUser, VCard
 
 
@@ -59,12 +59,23 @@ class RetentionFeaturesSchema(BaseModel):
     utc_datetime: datetime
     utc_date: date
 
+class FSRSFeaturesSchema(BaseModel):
+    fsrs_scheduled_date: datetime
 
 feature_fields = [
     field_name for field_name, field_info in RetentionFeaturesSchema.__fields__.items()
     if field_info.type_ in [int, float, bool]
     and field_name != 'is_new_fact'
 ]
+
+def fsrs_vectors_to_features(
+    v_usercard: UserCardFeatureVector,
+) -> FSRSFeaturesSchema:
+    max_datetime = datetime(9999, 12, 31)
+    return_date = v_usercard.get('fsrs_scheduled_date', max_datetime)
+    return FSRSFeaturesSchema(
+        fsrs_scheduled_date=max_datetime if return_date == None else return_date
+    )
 
 
 def vectors_to_features(

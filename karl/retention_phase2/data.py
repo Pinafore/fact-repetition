@@ -71,6 +71,7 @@ class RetentionFeaturesSchema(BaseModel):
     correct_on_first_try_session: bool
     utc_datetime: datetime
     utc_date: date
+
 # FSRS Mapping
 # elapsed_days -> usercard_delta
 # state -> ???

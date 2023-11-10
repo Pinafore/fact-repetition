@@ -52,7 +52,7 @@ Host clip
 
 ## `dotenv` file
 You need a `.env` file in the `karl` directory. Modify `CODE_DIR` as needed and change `shifeng` in `SQLALCHEMY_DATABASE_URL` to your user (check via `SELECT current_user;`). 
-Change `API_URL` to match with the `INTERFACE` variable in the app.
+Change `API_URL` to match with the `INTERFACE` variable in the app. You may also need to specify a password to your database url.
 ```
 CODE_DIR="/Users/shifeng/workspace/fact-repetition"
 # Should match with port defined in INTERFACE in karl app .env 
