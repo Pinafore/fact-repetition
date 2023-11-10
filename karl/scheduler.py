@@ -197,7 +197,6 @@ class KARLScheduler:
 
         return vectors_to_features(v_usercard, v_user, v_card, future, card_text)
 
-
     def karl_score_recall_batch_future(
         self,
         user: User,
@@ -380,42 +379,6 @@ class KARLScheduler:
         session.close()
         return vectors_to_features(v_usercard, v_user, v_card, date, card_text)
     
-    def collect_features_for_future(self, user_id, card_id, card_text, v_user, date, future, forced_result):
-        '''helper for multiprocessing'''
-        session = SessionLocal(expire_on_commit=False)
-        v_card = VCard(**self.get_card_vector(card_id, session).__dict__)
-        v_usercard = VUserCard(**self.get_usercard_vector(user_id, card_id, session).__dict__)
-        session.close()
-
-        previous_delta = None
-        if v_usercard.previous_study_date is not None:
-            previous_delta = (date - v_usercard.previous_study_date).total_seconds()
-        v_usercard.previous_delta = previous_delta 
-        v_usercard.count_positive += int(forced_result)
-        v_usercard.count_negative += int(not forced_result)
-        v_usercard.count += 1
-        v_usercard.previous_study_date = date
-        v_usercard.previous_study_response = forced_result
-        if v_usercard.correct_on_first_try is None:
-            v_usercard.correct_on_first_try = forced_result
-
-        # update leitner
-        self.update_leitner(v_usercard, forced_result, date, session)
-        # update sm2
-        self.update_sm2(v_usercard, forced_result, date, session)
-
-        previous_delta = None
-        if v_card.previous_study_date is not None:
-            previous_delta = (date - v_card.previous_study_date).total_seconds()
-        v_card.previous_delta = previous_delta
-        v_card.count_positive += int(forced_result)
-        v_card.count_negative += int(not forced_result)
-        v_card.count += 1
-        v_card.previous_study_date = date
-        v_card.previous_study_response = forced_result
-
-        return vectors_to_features(v_usercard, v_user, v_card, future, card_text)
-
     def fsrs_score_recall_batch(
         self,
         user: User,
@@ -550,72 +513,6 @@ class KARLScheduler:
             'schedule model prediction': (t2 - t1).total_seconds(),
         }
         return scores, profile, order
-
-    def karl_score_recall_batch_future(
-        self,
-        user: User,
-        cards: List[Card],
-        date: datetime,
-        future: datetime,
-        forced_result: bool,
-        session: Session,
-    ) -> List[float]:
-        '''Get predicted retention probability at *future* timestamp given
-        *forced result* at current *date*'''
-        t0 = datetime.now(pytz.utc)
-
-        # gather card features
-        feature_vectors = []
-        v_user = VUser(**self.get_user_vector(user.id, session).__dict__)
-        previous_delta = None
-        if v_user.previous_study_date is not None:
-            previous_delta = (date - v_user.previous_study_date).total_seconds()
-        v_user.previous_delta = previous_delta
-        v_user.count_positive += int(forced_result)
-        v_user.count_negative += int(not forced_result)
-        v_user.count += 1
-        v_user.previous_study_date = date
-        v_user.previous_study_response = forced_result
-
-        if not settings.USE_MULTIPROCESSING:
-            feature_vectors = [
-                self.collect_features_for_future(user.id, card.id, card.text, v_user, date, future, forced_result).__dict__
-                for card in cards
-            ]
-        else:
-            # https://docs.sqlalchemy.org/en/14/core/pooling.html#using-connection-pools-with-multiprocessing-or-os-fork
-            # https://pythonspeed.com/articles/python-multiprocessing/
-            executor = ProcessPoolExecutor(
-                mp_context=multiprocessing.get_context(settings.MP_CONTEXT),
-                initializer=engine.dispose,
-            )
-        futures = [
-            executor.submit(self.collect_features_for_future, user.id, card.id, card.text, v_user, date,
-                            future, forced_result)
-            for card in cards
-        ]
-        feature_vectors = [x.result().__dict__ for x in futures]
-
-        t1 = datetime.now(pytz.utc)
-
-        for x in feature_vectors:
-            x['utc_date'] = str(x['utc_date'])
-            x['utc_datetime'] = str(x['utc_datetime'])
-
-        scores = json.loads(
-            requests.get(
-                f'{settings.MODEL_API_URL}/api/karl/predict',
-                data=json.dumps(feature_vectors)
-            ).text
-        )
-
-        t2 = datetime.now(pytz.utc)
-
-        profile = {
-            'schedule gather features': (t1 - t0).total_seconds(),
-            'schedule model prediction': (t2 - t1).total_seconds(),
-        }
-        return scores, profile
 
     def score_cool_down(
         self,
