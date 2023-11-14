@@ -90,6 +90,8 @@ class FSRS:
     def next_recall_stability(self, d: float, s: float, r: float, rating: int) -> float:
         hard_penalty = self.p.w[15] if rating == Rating.Hard else 1
         easy_bonus = self.p.w[16] if rating == Rating.Easy else 1
+        if s < 0:
+            s = self.init_difficulty(rating)
         return s * (1 + math.exp(self.p.w[8]) *
                     (11 - d) *
                     math.pow(s, -self.p.w[9]) *
@@ -98,6 +100,8 @@ class FSRS:
                     easy_bonus)
 
     def next_forget_stability(self, d: float, s: float, r: float) -> float:
+        if s < 0:
+            s = self.init_difficulty(Rating.Again)
         return self.p.w[11] * \
             math.pow(d, -self.p.w[12]) * \
             (math.pow(s + 1, self.p.w[13]) - 1) * \
