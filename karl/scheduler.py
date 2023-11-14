@@ -165,6 +165,7 @@ class KARLScheduler:
             v_card = VCard(**self.get_card_vector(card_id, session).__dict__)
         else:
             # in test mode, use no card global feature
+            # pretend no one else had seen this card
             v_card = VCard(**usercard_vector.__dict__)
         session.close()
 
@@ -307,16 +308,6 @@ class KARLScheduler:
         user = self.get_user(request.user_id, session)
         cards = [self.get_card(fact, session) for fact in request.facts]
 
-        # score cards
-        # if request.repetition_model == RepetitionModel.karl:
-        #     scores, profile = self.karl_score_recall_batch(user, cards, date, session)
-        # elif request.repetition_model == RepetitionModel.settles:
-        #     pass # TODO
-        # elif request.repetition_model == RepetitionModel.leitner:
-        #     pass
-        # else:
-        #     pass # TODO
-
         if request.repetition_model == RepetitionModel.fsrs:
             scores, profile, order = self.fsrs_score_recall_batch(user, cards, date, session, request)
         elif request.repetition_model in {RepetitionModel.karlAblation, RepetitionModel.karl}:
@@ -375,6 +366,7 @@ class KARLScheduler:
             v_card = VCard(**self.get_card_vector(card_id, session).__dict__)
         else:
             # in test mode, use no card global feature
+            # pretend no one else had seen this card
             v_card = VCard(**usercard_vector.__dict__)
         session.close()
         return vectors_to_features(v_usercard, v_user, v_card, date, card_text)
@@ -584,17 +576,22 @@ class KARLScheduler:
 
     def update(self, request: UpdateRequestSchema, date: datetime) -> dict:
         session = SessionLocal()
-        t0 = datetime.now(pytz.utc)
 
         if request.fact is not None:
             card = self.get_card(request.fact, session)
-
         user = self.get_user(request.user_id, session)
+        v_usercard = session.query(UserCardFeatureVector).get((request.user_id, request.fact_id))
+
+        count = 0
+        count_session = 0
+        if v_usercard is not None:
+            count = v_usercard.count
+            if v_usercard.schedule_request_id == request.debug_id:
+                count_session = v_usercard.count_session
 
         if request.test_mode is not None:
             # `test_mode` is an integer representing a specific test set
-            session.add(
-                TestRecord(
+            record = TestRecord(
                     id=request.history_id,
                     studyset_id=request.studyset_id,
                     user_id=request.user_id,
@@ -604,56 +601,42 @@ class KARLScheduler:
                     date=date,
                     elapsed_milliseconds_text=request.elapsed_milliseconds_text,
                     elapsed_milliseconds_answer=request.elapsed_milliseconds_answer,
-                    count=0,  # TODO
-                    count_session=0,  # TODO
+                    count=count,
+                    count_session=count_session,
                 )
-            )
-            session.commit()
-            session.close()
-            return
-
-        v_usercard = session.query(UserCardFeatureVector).get((request.user_id, request.fact_id))
-        count = 0
-        count_session = 0
-        if v_usercard is not None:
-            count = v_usercard.count
-            if v_usercard.schedule_request_id == request.debug_id:
-                count_session = v_usercard.count_session
-
-        record = StudyRecord(
-                id=request.history_id,
-                debug_id=request.debug_id,
-                studyset_id=request.studyset_id,
-                user_id=request.user_id,
-                card_id=request.fact_id,
-                deck_id=request.deck_id,
-                label=request.label,
-                date=date,
-                elapsed_milliseconds_text=request.elapsed_milliseconds_text,
-                elapsed_milliseconds_answer=request.elapsed_milliseconds_answer,
-                count=count,
-                count_session=count_session,
-                typed=request.typed,
-                recommendation=request.recommendation,
-            )
+        else:
+            record = StudyRecord(
+                    id=request.history_id,
+                    debug_id=request.debug_id,
+                    studyset_id=request.studyset_id,
+                    user_id=request.user_id,
+                    card_id=request.fact_id,
+                    deck_id=request.deck_id,
+                    label=request.label,
+                    date=date,
+                    elapsed_milliseconds_text=request.elapsed_milliseconds_text,
+                    elapsed_milliseconds_answer=request.elapsed_milliseconds_answer,
+                    count=count,
+                    count_session=count_session,
+                    typed=request.typed,
+                    recommendation=request.recommendation,
+                )
         session.add(record)
         session.commit()
 
-        schedule_request = session.query(ScheduleRequest).get(request.debug_id)
-        if schedule_request is None:
-            print('******* schedule request not found**********')
-            return
-        self.save_snapshots(request.debug_id, request.user_id, request.fact_id, schedule_request.date, session)
-        session.commit()
+        if request.test_mode is None:
+            schedule_request = session.query(ScheduleRequest).get(request.debug_id)
+            if schedule_request is None:
+                print('******* schedule request not found**********')
+                return
+            self.save_snapshots(request.debug_id, request.user_id, request.fact_id, schedule_request.date, session)
+            session.commit()
 
-        # update user stats
-        t1 = datetime.now(pytz.utc)
-        utc_date = date.astimezone(pytz.utc).date()
-        self.update_user_stats(record, deck_id='all', utc_date=utc_date, session=session)
-        t2 = datetime.now(pytz.utc)
-        if record.deck_id is not None:
-            self.update_user_stats(record, deck_id=record.deck_id, utc_date=utc_date, session=session)
-        t3 = datetime.now(pytz.utc)
+            # update user stats
+            utc_date = date.astimezone(pytz.utc).date()
+            self.update_user_stats(record, deck_id='all', utc_date=utc_date, session=session)
+            if record.deck_id is not None:
+                self.update_user_stats(record, deck_id=record.deck_id, utc_date=utc_date, session=session)
 
         # update features
         # includes leitner and sm2 updates
@@ -661,14 +644,7 @@ class KARLScheduler:
         session.commit()
         session.close()
 
-        t4 = datetime.now(pytz.utc)
-
-        return {
-            'save record': (t1 - t0).total_seconds(),
-            'update user_stats all': (t2 - t1).total_seconds(),
-            'update user_stats deck': (t3 - t2).total_seconds(),
-            'update feature vectors': (t4 - t3).total_seconds(),
-        }
+        return {} # for profiling
 
     def save_snapshots(
         self,
