@@ -28,12 +28,20 @@ class RepetitionModel(str, Enum):
     fsrs = "fsrs"
     karlAblation = "karl-ablation"
 
+
+class SetType(str, Enum):
+    normal = 'normal'
+    test = 'test'
+    post_test = 'post_test'
+
+
 class ScheduleRequestSchema(BaseModel):
     user_id: str
     facts: List[KarlFactSchema]  # this list can be empty
     repetition_model: RepetitionModel
     recall_target: Optional[RecallTarget]
     test_mode: Optional[int]
+    set_type: SetType
 
 
 class ScheduleResponseSchema(BaseModel):
@@ -60,3 +68,4 @@ class UpdateRequestSchema(BaseModel):
     fact: Optional[KarlFactSchema]
     typed: Optional[str]  # user-entered answer
     recommendation: Optional[bool]  # system's judgment of whether the user-entered answer is correct
+    set_type: Optional[SetType]

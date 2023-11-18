@@ -3,7 +3,7 @@ from sqlalchemy.orm import relationship
 
 from karl.db.base_class import Base
 from karl.models import User, Card
-from karl.schemas import RepetitionModel
+from karl.schemas import RepetitionModel, SetType
 
 
 class ScheduleRequest(Base):
@@ -15,11 +15,14 @@ class ScheduleRequest(Base):
     recall_target = Column(Float)
     recall_target_lowest = Column(Float)
     recall_target_highest = Column(Float)
+    test_mode = Column(Integer, nullable=True)
+    set_type = Column(Enum(SetType), default=SetType.normal)
 
     study_records = relationship('StudyRecord', order_by='StudyRecord.date', back_populates='schedule_request')
     user_snapshots = relationship('UserSnapshotV2', order_by='UserSnapshotV2.date', back_populates='schedule_request')
     card_snapshots = relationship('CardSnapshotV2', order_by='CardSnapshotV2.date', back_populates='schedule_request')
     usercard_snapshots = relationship('UserCardSnapshotV2', order_by='UserCardSnapshotV2.date', back_populates='schedule_request')
+
 
 class StudyRecord(Base):
     id = Column(String, primary_key=True, index=True)  # history_id / front_end_id provided by Matthew
@@ -55,6 +58,8 @@ class TestRecord(Base):
     elapsed_milliseconds_answer = Column(Integer)
     count = Column(Integer, nullable=False, default=0)
     count_session = Column(Integer, nullable=False, default=0)
+    set_type = Column(Enum(SetType), default=SetType.test)
 
     user = relationship("User", back_populates="test_records")
     card = relationship("Card", back_populates="test_records")
+    # schedule_request = relationship("ScheduleRequest", back_populates="test_records")

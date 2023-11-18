@@ -290,6 +290,8 @@ class KARLScheduler:
                 recall_target_lowest=request.recall_target.target_window_lowest,
                 recall_target_highest=request.recall_target.target_window_highest,
                 date=date,
+                test_mode=request.test_mode,
+                set_type=request.set_type,
             )
         )
         session.commit()
@@ -603,6 +605,7 @@ class KARLScheduler:
                     elapsed_milliseconds_answer=request.elapsed_milliseconds_answer,
                     count=count,
                     count_session=count_session,
+                    set_type=request.set_type,
                 )
         else:
             record = StudyRecord(

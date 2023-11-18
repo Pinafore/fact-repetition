@@ -13,7 +13,7 @@ from datetime import timedelta
 from dateutil.parser import parse as parse_date
 
 from karl.schemas import ParametersSchema, RecallTarget
-from karl.schemas import KarlFactSchema, ScheduleRequestSchema, UpdateRequestSchema
+from karl.schemas import KarlFactSchema, ScheduleRequestSchema, UpdateRequestSchema, SetType
 from karl.config import settings
 
 
@@ -36,6 +36,7 @@ schedule_request = ScheduleRequestSchema(
     repetition_model='karl',
     user_id=user_id,
     test_mode=666,
+    set_type=SetType.test,
     recall_target=RecallTarget(target=0.8, target_window_lowest=0, target_window_highest=1.0)
 )
 schedule_response = json.loads(
@@ -74,6 +75,7 @@ for nth_day in range(n_days):
         repetition_model='karl',
         user_id=user_id,
         test_mode=666,
+        set_type=SetType.test,
         recall_target=RecallTarget(target=0.8, target_window_lowest=0, target_window_highest=1.0)
     )
     schedule_response = json.loads(
@@ -113,6 +115,7 @@ for nth_day in range(n_days):
             history_id=f'sim_history_{nth_day}_{nth_fact}',
             studyset_id='dummy_studyset_' + debug_id,
             test_mode=666,
+            set_type=SetType.test,
             fact=schedule_request.facts[index],
         )
         update_response = json.loads(
@@ -151,6 +154,7 @@ for nth_fact in range(n_facts_per_day):
         history_id=f'sim_history_test_{nth_fact}',
         studyset_id='dummy_studyset_test',
         test_mode=666,
+        set_type=SetType.test,
     )
     update_response = json.loads(
         requests.post(
@@ -173,6 +177,7 @@ update_request = UpdateRequestSchema(
     history_id='295584',
     studyset_id='dummy_studyset_' + debug_id,
     test_mode=666,
+    set_type=SetType.test,
     fact=schedule_request.facts[index],
 )
 
