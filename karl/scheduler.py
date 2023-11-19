@@ -135,7 +135,7 @@ class KARLScheduler:
         scores_wrong, profile = self.karl_score_recall_batch_future(user, cards, date, tomorrow, False, session, request)
         # difference between the average prediction of correct/wrong outcomes *now* and that without studying now
         # TODO multiply by predicted retention probability?
-        deltas = [abs((a + b) / 2 - c) for a, b, c in zip(scores_correct, scores_wrong, scores_no_study)]
+        deltas = [abs((c * a + (1 - c) * b) - c) for a, b, c in zip(scores_correct, scores_wrong, scores_no_study)]
         indexed_deltas = [(i, delta) for i, delta in enumerate(deltas)]
         order = [i for i, _ in sorted(indexed_deltas, key=lambda x: x[1], reverse=True)]
         deltas_ordered = [delta for _, delta in sorted(indexed_deltas, key=lambda x: x[1], reverse=True)]
