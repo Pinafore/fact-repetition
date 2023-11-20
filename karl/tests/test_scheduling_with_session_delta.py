@@ -13,7 +13,7 @@ from datetime import timedelta
 from dateutil.parser import parse as parse_date
 
 from karl.schemas import ParametersSchema, RecallTarget
-from karl.schemas import KarlFactSchema, ScheduleRequestSchema, UpdateRequestSchema
+from karl.schemas import KarlFactSchema, ScheduleRequestSchema, UpdateRequestSchema, SetType
 from karl.config import settings
 
 
@@ -23,7 +23,7 @@ with open(f'{settings.DATA_DIR}/diagnostic_questions.pkl', 'rb') as f:
 URL = f'{settings.API_URL}/api/karl'
 n_days = 1
 n_facts_per_day = 20
-n_facts_per_query = 1000
+n_facts_per_query = 150
 user_id = 'dummy'
 start_date = parse_date('2028-06-01 08:00:00.000001 -0400')
 
@@ -35,6 +35,7 @@ schedule_request = ScheduleRequestSchema(
     facts=[],
     repetition_model='karl',
     user_id=user_id,
+    set_type=SetType.normal,
     recall_target=RecallTarget(target=0.8, target_window_lowest=0, target_window_highest=1.0)
 )
 schedule_response = json.loads(
@@ -72,6 +73,7 @@ for nth_day in range(n_days):
         facts=facts,
         repetition_model='karl',
         user_id=user_id,
+        set_type=SetType.normal,
         recall_target=RecallTarget(target=0.8, target_window_lowest=0, target_window_highest=1.0)
     )
     schedule_response = json.loads(
@@ -111,6 +113,7 @@ for nth_day in range(n_days):
             history_id=f'sim_history_{nth_day}_{nth_fact}',
             studyset_id='dummy_studyset_' + debug_id,
             test_mode=False,
+            set_type=SetType.normal,
             fact=schedule_request.facts[index],
         )
         update_response = json.loads(
@@ -148,6 +151,7 @@ for nth_fact in range(n_facts_per_day):
         debug_id=debug_id,
         history_id=f'sim_history_test_{nth_fact}',
         studyset_id='dummy_studyset_test',
+        set_type=SetType.normal,
         test_mode=True,
     )
     update_response = json.loads(
@@ -171,6 +175,7 @@ update_request = UpdateRequestSchema(
     history_id='295584',
     studyset_id='dummy_studyset_' + debug_id,
     test_mode=False,
+    set_type=SetType.normal,
     fact=schedule_request.facts[index],
 )
 

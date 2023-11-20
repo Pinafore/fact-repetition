@@ -127,6 +127,8 @@ class KARLScheduler:
         cards = [self.get_card(fact, session) for fact in request.facts]
 
         tomorrow = date + timedelta(days=1)
+        # get prediction of cards right now
+        scores_current, profile, _ = self.karl_score_recall_batch(user, cards, date, session, request)
         # get prediction of cards in a days time *if* there is no study now
         scores_no_study, profile, _ = self.karl_score_recall_batch(user, cards, date, session, request)
         # get prediction of cards in a days time *if* answered correctly
@@ -134,8 +136,7 @@ class KARLScheduler:
         # get prediction of cards in a days time *if* answered incorrectly
         scores_wrong, profile = self.karl_score_recall_batch_future(user, cards, date, tomorrow, False, session, request)
         # difference between the average prediction of correct/wrong outcomes *now* and that without studying now
-        # TODO multiply by predicted retention probability?
-        deltas = [abs((c * a + (1 - c) * b) - c) for a, b, c in zip(scores_correct, scores_wrong, scores_no_study)]
+        deltas = [abs((d * a + (1 - d) * b) - c) for a, b, c, d in zip(scores_correct, scores_wrong, scores_no_study, scores_current)]
         indexed_deltas = [(i, delta) for i, delta in enumerate(deltas)]
         order = [i for i, _ in sorted(indexed_deltas, key=lambda x: x[1], reverse=True)]
         deltas_ordered = [delta for _, delta in sorted(indexed_deltas, key=lambda x: x[1], reverse=True)]
