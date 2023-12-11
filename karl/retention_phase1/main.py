@@ -28,19 +28,19 @@ from .data import (  # noqa: F401
 )
 from .model_distilbert import DistilBertRetentionModelConfig, DistilBertRetentionModel
 from .model_bert import BertRetentionModelConfig, BertRetentionModel
-from .model_norep import NorepRetentionModelConfig, NorepRetentionModel
+# from .model_norep import NorepRetentionModelConfig, NorepRetentionModel
 
 transformers.logging.set_verbosity_info()
 
 model_cls = {
     'distilbert': DistilBertRetentionModel,
     'bert': BertRetentionModel,
-    'norep': NorepRetentionModel,
+    # 'norep': NorepRetentionModel,
 }
 config_cls = {
     'distilbert': DistilBertRetentionModelConfig,
     'bert': BertRetentionModelConfig,
-    'norep': NorepRetentionModelConfig,
+    # 'norep': NorepRetentionModelConfig,
 }
 tokenizer_cls = {
     'distilbert': DistilBertTokenizerFast,
@@ -109,13 +109,18 @@ def train(
     trainer.save_model()
 
 
-def test(model_name, output_dir=f'{settings.CODE_DIR}/output', fold='new_card', seed=1):
+def test(model_name, output_dir=f'{settings.CODE_DIR}/output', fold='new_card', seed=None):
     tokenizer = tokenizer_cls[model_name].from_pretrained(full_name[model_name])
     train_dataset = RetentionDataset(settings.DATA_DIR, f'train_{fold}', tokenizer)
     test_dataset = RetentionDataset(settings.DATA_DIR, f'test_{fold}', tokenizer)
 
+    if seed is not None:
+        output_dir = f'{output_dir}/retention_hf_{model_name}_{fold}_{seed}'
+    else:
+        output_dir = f'{output_dir}/retention_hf_{model_name}_{fold}'
+
     training_args = TrainingArguments(
-        output_dir=f'{output_dir}/retention_hf_{model_name}_{fold}_{seed}',
+        output_dir=output_dir,
         num_train_epochs=10,
         per_device_train_batch_size=8,
         per_device_eval_batch_size=64,

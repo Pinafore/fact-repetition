@@ -106,7 +106,7 @@ class DistilBertRetentionModel(DistilBertPreTrainedModel):
         x = self.classifier(x)
         x = torch.sigmoid(x)[:, 0]
 
-        outputs = (x,) + bert_output[1:]
+        outputs = (x,) + bert_output
 
         if labels is not None:
             loss = self.loss_fn(x, labels)

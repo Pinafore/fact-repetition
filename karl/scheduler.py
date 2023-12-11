@@ -4,9 +4,8 @@
 import json
 import pytz
 import requests
-import numpy as np
 import multiprocessing
-from typing import List, Dict, Union
+from typing import List, Union
 from datetime import datetime, timedelta
 from concurrent.futures import ProcessPoolExecutor
 from sqlalchemy.orm import Session
@@ -15,7 +14,6 @@ from karl.schemas import ScheduleResponseSchema,\
     ScheduleRequestSchema, UpdateRequestSchema, KarlFactSchema
 from karl.schemas import ParametersSchema
 from karl.schemas import VUser, VCard, VUserCard
-from karl.schemas import RepetitionModel
 from karl.models import User, Card, Parameters, UserStatsV2,\
     UserCardFeatureVector, UserFeatureVector, CardFeatureVector,\
     UserCardSnapshotV2, UserSnapshotV2, CardSnapshotV2,\
@@ -273,7 +271,7 @@ class KARLScheduler:
         previous_delta = None
         if v_usercard.previous_study_date is not None:
             previous_delta = (date - v_usercard.previous_study_date).total_seconds()
-        v_usercard.previous_delta = previous_delta 
+        v_usercard.previous_delta = previous_delta
         v_usercard.count_positive += int(forced_result)
         v_usercard.count_negative += int(not forced_result)
         v_usercard.count += 1

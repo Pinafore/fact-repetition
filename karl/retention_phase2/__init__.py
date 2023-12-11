@@ -5,3 +5,4 @@ from .data import RetentionInput
 # from .data_from_db import get_retention_features_df
 from .model_distilbert import DistilBertRetentionModel
 from .model_bert import BertRetentionModel
+from .retrieval import KARLRetriever

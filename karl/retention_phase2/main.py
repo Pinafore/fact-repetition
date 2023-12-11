@@ -4,7 +4,6 @@
 import argparse
 import random
 import numpy as np
-from collections import Counter
 from typing import Dict
 
 import torch

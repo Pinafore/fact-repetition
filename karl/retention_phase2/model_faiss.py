@@ -11,7 +11,7 @@ from transformers import (
 )
 
 
-class BertRetentionModelConfig(PretrainedConfig):
+class FaissRetentionModelConfig(PretrainedConfig):
     model_type = "bert"
 
     def __init__(
@@ -96,7 +96,7 @@ class BertRetentionModel(BertPreTrainedModel):
         x = self.classifier(x)
         x = torch.sigmoid(x)[:, 0]
 
-        outputs = (x,) + bert_output
+        outputs = (x,)  # + bert_output[1:]
 
         if labels is not None:
             loss = self.loss_fn(x, labels)
