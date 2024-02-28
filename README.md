@@ -2,6 +2,10 @@
 
 Make sure to use `git-lfs` to pull the model checkpoints too alongside the code.
 
+## Content-Aware Data
+
+Our data is available on huggingface [here](https://huggingface.co/datasets/nbalepur/KARL)!
+
 ## Install python dependencies
 1. If you are using `conda`, consider creating a new environment, and make sure
    to run `conda install pip` so that the following dependencies are installed
